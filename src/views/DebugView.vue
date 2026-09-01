@@ -2,12 +2,17 @@
   <div class="debug-page">
     <header class="debug-header">
       <div class="debug-header-left">
-        <router-link to="/dashboard" class="btn-back-nav">
+        <router-link to="/dashboard?tab=agents" class="btn-back-nav">
           <i class="fa-solid fa-arrow-left"></i>
           <span>返回智能体列表</span>
         </router-link>
         <div class="header-agent-badge">
-          <h2 class="header-agent-title"><span>编排</span></h2>
+          <h2 class="header-agent-title">
+            <span>编排</span>
+            <span class="header-tag-pill" :class="promptDirty ? 'draft' : 'published'">
+              {{ promptDirty ? '未发布' : '已发布' }}
+            </span>
+          </h2>
           <span style="font-size: 13px; color: var(--text-secondary); font-weight: 500;">
             {{ agent ? `${agent.avatar || '🤖'} ${agent.name}` : '智能体加载中...' }}
           </span>
@@ -127,7 +132,14 @@
             </div>
           </div>
         </div>
-        <button class="btn-publish" @click="publish"><span>发布</span><i class="fa-solid fa-chevron-down" style="font-size: 11px;"></i></button>
+        <button
+          class="btn-publish"
+          :disabled="!agent || !promptDirty"
+          :title="promptDirty ? '将当前草稿发布为线上系统提示词' : '没有未发布的更改'"
+          @click="publish"
+        >
+          <span>发布上线</span>
+        </button>
       </div>
     </header>
 
@@ -135,13 +147,13 @@
       <section class="orchestration-pane" ref="leftPane" :style="leftWidth ? { width: leftWidth + 'px' } : {}">
         <div class="config-card-section prompt-editor-card">
           <div class="section-header-row">
-            <div class="section-title"><span>提示词</span></div>
+            <div class="section-title"><span>系统提示词（草稿）</span></div>
             <button class="btn-section-action" @click="optimizePrompt"><i class="fa-solid fa-wand-magic-sparkles"></i><span>生成</span></button>
           </div>
           <textarea v-model="prompt" class="prompt-textarea" placeholder="请输入智能体的角色设定与工作流程..."></textarea>
           <div class="prompt-footer">
             <span>{{ prompt.length }} 字</span>
-            <span style="font-size: 11px;">支持变量语法如 {{ inputVar }}</span>
+            <span style="font-size: 11px;">右侧调试用这份草稿；点「发布上线」后才成为线上系统提示词</span>
           </div>
         </div>
         <div class="config-card-section">
@@ -180,7 +192,10 @@
 
       <section class="preview-pane">
         <div class="preview-header">
-          <h3 class="preview-title">调试与预览</h3>
+          <div>
+            <h3 class="preview-title">调试预览</h3>
+            <p class="preview-hint">{{ promptDirty ? '正在使用未发布的草稿提示词' : '正在使用已发布的系统提示词' }}</p>
+          </div>
           <button class="btn-icon-round" @click="resetChat"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
         <div class="chat-history-scroll" ref="streamRef">
@@ -238,6 +253,8 @@ const inputVar = '{{input}}'
 const timeVar = '{{system_time}}'
 const agent = ref(null)
 const prompt = ref('')
+const publishedPrompt = ref('')
+const promptDirty = computed(() => prompt.value !== publishedPrompt.value)
 const routedChannel = ref('')
 const routedModel = ref('')
 const routedLabel = computed(() => {
@@ -328,6 +345,7 @@ async function sendChat() {
 
   const res = await http.post(`/api/agents/${agent.value.id}/messages`, {
     message: text,
+    prompt: prompt.value,
     history: history.value.slice(-6),
     generation: buildGeneration(appliedSettings)
   })
@@ -375,7 +393,8 @@ async function publish() {
   })
   if (res.success) {
     agent.value = res.data
-    showToast('智能体编排与提示词已成功发布上线！', 'success', 2500)
+    publishedPrompt.value = prompt.value
+    showToast('已发布上线，当前草稿已成为线上系统提示词', 'success', 2500)
   } else {
     showToast(res.message || '发布失败', 'error')
   }
@@ -521,6 +540,7 @@ onMounted(async () => {
   if (res.success && res.data) {
     agent.value = res.data
     prompt.value = res.data.systemPrompt || ''
+    publishedPrompt.value = prompt.value
     applyAgentSettings(res.data)
     loadPersistedSettings(res.data.id)
     resetChat()

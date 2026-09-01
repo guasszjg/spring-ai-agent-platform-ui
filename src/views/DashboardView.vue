@@ -211,7 +211,7 @@
                 </div>
                 <div class="agent-desc">{{ a.description || '暂无描述信息' }}</div>
                 <div class="agent-specs">
-                  <span class="spec-badge spec-model"><i class="fa-solid fa-microchip"></i><span>{{ a.modelName || 'gpt-4o' }}</span></span>
+                  <span class="spec-badge spec-model"><i class="fa-solid fa-microchip"></i><span>{{ routedModelLabel }}</span></span>
                   <span class="spec-badge"><i class="fa-solid fa-temperature-half"></i><span>T:{{ a.temperature != null ? a.temperature : 0.7 }}</span></span>
                   <span class="spec-badge"><i class="fa-solid fa-tag"></i><span>{{ a.category || '通用' }}</span></span>
                 </div>
@@ -239,7 +239,7 @@
                 <tr v-for="a in agents" :key="a.id">
                   <td><div class="table-agent-meta"><div class="table-agent-avatar">{{ a.avatar || '🤖' }}</div><div><div class="table-agent-title">{{ a.name }}</div><div class="table-agent-code">{{ a.code || a.id }}</div></div></div></td>
                   <td><span class="spec-badge"><i class="fa-solid fa-tag"></i> {{ a.category || '通用' }}</span></td>
-                  <td>{{ a.modelName || 'gpt-4o' }}</td>
+                  <td>{{ routedModelLabel }}</td>
                   <td><div class="table-prompt-cell">{{ a.systemPrompt || '暂无设定' }}</div></td>
                   <td>{{ Number(a.callCount || 0).toLocaleString() }} 次</td>
                   <td><div class="badge-status" :class="statusClass(a.status)"><span class="status-dot"></span><span>{{ statusLabel(a.status) }}</span></div></td>
@@ -310,12 +310,8 @@
             </div>
             <div class="form-group">
               <label class="form-label">调度大模型</label>
-              <select v-model="form.modelName" class="form-control-styled">
-                <option v-if="!gatewayModels.length" value="gpt-4o">gpt-4o</option>
-                <option v-for="m in gatewayModels" :key="m.model" :value="m.model">
-                  {{ m.label }}{{ m.ready ? '' : ' · 未就绪' }}
-                </option>
-              </select>
+              <div class="form-control-styled" style="display:flex;align-items:center;min-height:40px;">{{ routedModelLabel }}</div>
+              <p class="section-hint" style="margin-top:6px;">由模型网关的默认通道决定，请到「模型网关路由」中修改</p>
             </div>
           </div>
           <div class="form-group">
@@ -392,7 +388,13 @@ const category = ref('全部')
 const statusFilter = ref('')
 const viewMode = ref(localStorage.getItem('agentViewMode') || 'card')
 const templates = ref([])
-const gatewayModels = ref([])
+const routedChannel = ref('')
+const routedModel = ref('')
+const routedModelLabel = computed(() => {
+  if (routedChannel.value && routedModel.value) return `${routedChannel.value} · ${routedModel.value}`
+  if (routedModel.value) return routedModel.value
+  return '未配置网关'
+})
 const agentModalOpen = ref(false)
 const deleteModalOpen = ref(false)
 const pendingDelete = ref(null)
@@ -409,7 +411,7 @@ let searchTimer = null
 const categories = ['全部', '代码研发', '运维架构', '产品策划', '知识库客服', '数据分析', '内容创作']
 const emojis = ['🤖', '🚀', '⚡', '🛡️', '✨', '🎨', '📋', '🌐', '💻', '🧠', '📊']
 const form = reactive({
-  id: '', name: '', code: '', category: '通用智能', modelName: 'gpt-4o',
+  id: '', name: '', code: '', category: '通用智能', modelName: '',
   avatar: '🤖', temperature: 0.7, status: 'RUNNING', systemPrompt: '', description: '', tagsText: ''
 })
 
@@ -478,7 +480,7 @@ function goDebug(id) {
 watch(viewMode, (mode) => localStorage.setItem('agentViewMode', mode))
 watch(currentTab, (tab) => {
   if (tab === 'overview') nextTick(renderCharts)
-  if (tab === 'gateway' || tab === 'agents') loadGatewayModels()
+  if (tab === 'gateway' || tab === 'agents') loadGatewayRoute()
 })
 
 async function loadStats() {
@@ -505,19 +507,26 @@ async function loadTemplates() {
   if (res.success) templates.value = res.data || []
 }
 
-async function loadGatewayModels() {
-  const res = await http.get('/api/model-gateway/models')
-  if (res.success) gatewayModels.value = res.data || []
+async function loadGatewayRoute() {
+  const res = await http.get('/api/model-gateway')
+  if (!res.success) return
+  const providers = res.data?.providers || []
+  const policy = res.data?.policy || {}
+  const ready = providers.filter((p) => p.enabled && p.configured)
+  const defaultId = policy.defaultProviderId || ''
+  const primary = ready.find((p) => p.id === defaultId) || ready[0]
+  routedChannel.value = primary?.name || ''
+  routedModel.value = primary?.defaultModel || ''
 }
 
 function refresh() {
   loadStats()
   loadAgents()
-  loadGatewayModels()
+  loadGatewayRoute()
 }
 
 function emptyForm() {
-  Object.assign(form, { id: '', name: '', code: '', category: '通用智能', modelName: 'gpt-4o', avatar: '🤖', temperature: 0.7, status: 'RUNNING', systemPrompt: '', description: '', tagsText: '' })
+  Object.assign(form, { id: '', name: '', code: '', category: '通用智能', modelName: routedModel.value || '', avatar: '🤖', temperature: 0.7, status: 'RUNNING', systemPrompt: '', description: '', tagsText: '' })
 }
 
 function openCreate() {
@@ -528,7 +537,7 @@ function openCreate() {
 function openEdit(agent) {
   Object.assign(form, {
     id: agent.id, name: agent.name, code: agent.code, category: agent.category || '通用智能',
-    modelName: agent.modelName || 'gpt-4o', avatar: agent.avatar || '🤖',
+    modelName: routedModel.value || agent.modelName || '', avatar: agent.avatar || '🤖',
     temperature: agent.temperature != null ? agent.temperature : 0.7,
     status: agent.status || 'RUNNING', systemPrompt: agent.systemPrompt || '',
     description: agent.description || '', tagsText: (agent.tags || []).join(', ')
@@ -542,7 +551,7 @@ function applyTemplate(index) {
   form.name = t.name || ''
   form.code = 'agent_' + (t.name || 'bot').toLowerCase().replace(/[^a-z0-9]/gi, '_')
   form.category = t.category || '通用智能'
-  form.modelName = t.modelName || 'gpt-4o'
+  form.modelName = routedModel.value || t.modelName || ''
   form.systemPrompt = t.systemPrompt || ''
   form.description = t.description || ''
   form.temperature = t.temperature != null ? t.temperature : 0.7
@@ -554,7 +563,7 @@ async function saveAgent() {
   saving.value = true
   const payload = {
     name: form.name.trim(), code: form.code.trim(), avatar: form.avatar, category: form.category,
-    modelName: form.modelName, temperature: form.temperature, status: form.status,
+    modelName: routedModel.value || form.modelName, temperature: form.temperature, status: form.status,
     systemPrompt: form.systemPrompt.trim(), description: form.description.trim(),
     tags: form.tagsText ? form.tagsText.split(/[,，]/).map((t) => t.trim()).filter(Boolean) : []
   }
@@ -654,6 +663,6 @@ onMounted(() => {
   loadStats()
   loadAgents()
   loadTemplates()
-  loadGatewayModels()
+  loadGatewayRoute()
 })
 </script>
