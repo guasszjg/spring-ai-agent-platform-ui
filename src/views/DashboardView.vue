@@ -26,8 +26,9 @@
             <span class="nav-soon-pill">RAG</span>
           </button>
           <div class="nav-section-title" style="margin-top: 20px;">企业系统治理</div>
-          <button class="sidebar-nav-item" @click="showToast('多模型智能网关调度模块为企业专享', 'info')">
+          <button class="sidebar-nav-item" :class="{ active: currentTab === 'gateway' }" @click="currentTab = 'gateway'">
             <i class="fa-solid fa-network-wired"></i><span>模型网关路由</span>
+            <span class="nav-badge-pill">LLM</span>
           </button>
           <button class="sidebar-nav-item" @click="showToast('安全审计与内容护栏模块运行正常', 'info')">
             <i class="fa-solid fa-shield-halved"></i><span>安全审计与护栏</span>
@@ -273,6 +274,10 @@
           <button class="btn-create-agent" style="margin: 0 auto;" @click="showToast('知识库向量构建模块正在接入，敬请期待！', 'info')"><i class="fa-solid fa-plus"></i><span>创建专属知识库</span></button>
         </div>
       </section>
+
+      <section v-show="currentTab === 'gateway'" class="app-subview active">
+        <GatewayPanel />
+      </section>
     </div>
   </div>
 
@@ -306,12 +311,10 @@
             <div class="form-group">
               <label class="form-label">调度大模型</label>
               <select v-model="form.modelName" class="form-control-styled">
-                <option value="gpt-4o">gpt-4o</option>
-                <option value="deepseek-chat">deepseek-chat</option>
-                <option value="claude-3-5-sonnet">claude-3-5-sonnet</option>
-                <option value="gpt-4o-mini">gpt-4o-mini</option>
-                <option value="deepseek-coder">deepseek-coder</option>
-                <option value="qwen-max">qwen-max</option>
+                <option v-if="!gatewayModels.length" value="gpt-4o">gpt-4o</option>
+                <option v-for="m in gatewayModels" :key="m.model" :value="m.model">
+                  {{ m.label }}{{ m.ready ? '' : ' · 未就绪' }}
+                </option>
               </select>
             </div>
           </div>
@@ -369,12 +372,14 @@
 
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import Chart from 'chart.js/auto'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
+import GatewayPanel from '../components/GatewayPanel.vue'
 
 const router = useRouter()
+const route = useRoute()
 const { showToast } = useToast()
 const currentTab = ref('overview')
 const timeRange = ref('7days')
@@ -387,6 +392,7 @@ const category = ref('全部')
 const statusFilter = ref('')
 const viewMode = ref(localStorage.getItem('agentViewMode') || 'card')
 const templates = ref([])
+const gatewayModels = ref([])
 const agentModalOpen = ref(false)
 const deleteModalOpen = ref(false)
 const pendingDelete = ref(null)
@@ -413,6 +419,7 @@ const user = computed(() => {
 const pageTitle = computed(() => {
   if (currentTab.value === 'overview') return '概览仪表盘 (Overview & Analytics)'
   if (currentTab.value === 'agents') return 'Agents 智能体资产管理'
+  if (currentTab.value === 'gateway') return '模型网关路由 (LLM Gateway)'
   return '企业私有知识库 (RAG)'
 })
 const totalTokens = computed(() => Number(stats.value.promptTokens || 0) + Number(stats.value.completionTokens || 0))
@@ -469,7 +476,10 @@ function goDebug(id) {
 }
 
 watch(viewMode, (mode) => localStorage.setItem('agentViewMode', mode))
-watch(currentTab, (tab) => { if (tab === 'overview') nextTick(renderCharts) })
+watch(currentTab, (tab) => {
+  if (tab === 'overview') nextTick(renderCharts)
+  if (tab === 'gateway' || tab === 'agents') loadGatewayModels()
+})
 
 async function loadStats() {
   const res = await http.get('/api/dashboard/stats', { range: timeRange.value })
@@ -495,9 +505,15 @@ async function loadTemplates() {
   if (res.success) templates.value = res.data || []
 }
 
+async function loadGatewayModels() {
+  const res = await http.get('/api/model-gateway/models')
+  if (res.success) gatewayModels.value = res.data || []
+}
+
 function refresh() {
   loadStats()
   loadAgents()
+  loadGatewayModels()
 }
 
 function emptyForm() {
@@ -631,8 +647,13 @@ function renderCharts() {
 }
 
 onMounted(() => {
+  const tab = route.query.tab
+  if (tab === 'gateway' || tab === 'agents' || tab === 'knowledge' || tab === 'overview') {
+    currentTab.value = tab
+  }
   loadStats()
   loadAgents()
   loadTemplates()
+  loadGatewayModels()
 })
 </script>

@@ -17,17 +17,115 @@
         <button class="btn-theme-toggle" @click="toggleTheme">
           <i :class="theme === 'light' ? 'fa-solid fa-sun' : 'fa-solid fa-moon'" :style="{ color: theme === 'light' ? '#f59e0b' : '#9ca3af' }"></i>
         </button>
-        <div class="model-selector-pill">
+        <router-link
+          to="/dashboard?tab=gateway"
+          class="model-selector-pill"
+          title="模型已在网关页选定，点击前往修改"
+        >
           <i class="fa-solid fa-microchip" style="color: var(--accent-purple);"></i>
-          <select v-model="modelName" class="model-dropdown-select" @change="showToast('已切换调度模型为: ' + modelName, 'info', 1500)">
-            <option value="deepseek-chat">DeepSeek-V4-Flash</option>
-            <option value="gpt-4o">GPT-4o</option>
-            <option value="gpt-4o-mini">GPT-4o-Mini</option>
-            <option value="claude-3-5-sonnet">Claude-3-5-Sonnet</option>
-            <option value="deepseek-coder">DeepSeek-Coder</option>
-            <option value="qwen-max">Qwen-Max</option>
-          </select>
+          <span class="model-current-name">{{ routedLabel }}</span>
           <span class="model-type-badge">CHAT</span>
+        </router-link>
+        <div class="model-settings-wrap" ref="settingsWrap">
+          <button class="btn-model-settings" type="button" title="模型设置" @click="toggleSettings">
+            <i class="fa-solid fa-sliders"></i>
+          </button>
+          <div v-if="settingsOpen" class="model-settings-panel">
+            <div class="ms-header">
+              <span>模型设置</span>
+              <div class="ms-header-actions">
+                <button type="button" class="ms-save" @click="saveModelSettings">保存</button>
+                <button type="button" class="ms-close" @click="discardAndClose">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+            </div>
+            <div class="ms-body">
+              <div class="ms-row">
+                <label class="switch ms-switch">
+                  <input v-model="settings.temperature.enabled" type="checkbox">
+                  <span class="slider-toggle"></span>
+                </label>
+                <div class="ms-label">温度 <i class="fa-regular fa-circle-question" title="越高输出越随机，越低越稳定"></i></div>
+                <input v-model.number="settings.temperature.value" class="ms-range" type="range" min="0" max="2" step="0.01">
+                <input v-model.number="settings.temperature.value" class="ms-num" type="number" min="0" max="2" step="0.01">
+              </div>
+              <div class="ms-row">
+                <label class="switch ms-switch">
+                  <input v-model="settings.maxTokens.enabled" type="checkbox">
+                  <span class="slider-toggle"></span>
+                </label>
+                <div class="ms-label">最大标记 <i class="fa-regular fa-circle-question" title="单次回复最多生成的 token 数"></i></div>
+                <input v-model.number="settings.maxTokens.value" class="ms-range" type="range" min="1" max="16384" step="1">
+                <input v-model.number="settings.maxTokens.value" class="ms-num" type="number" min="1" max="32768" step="1">
+              </div>
+              <div class="ms-row">
+                <label class="switch ms-switch">
+                  <input v-model="settings.topP.enabled" type="checkbox">
+                  <span class="slider-toggle"></span>
+                </label>
+                <div class="ms-label">Top P <i class="fa-regular fa-circle-question" title="核采样阈值，越小候选词越少"></i></div>
+                <input v-model.number="settings.topP.value" class="ms-range" type="range" min="0" max="1" step="0.01">
+                <input v-model.number="settings.topP.value" class="ms-num" type="number" min="0" max="1" step="0.01">
+              </div>
+              <div class="ms-row">
+                <label class="switch ms-switch">
+                  <input v-model="settings.n.enabled" type="checkbox">
+                  <span class="slider-toggle"></span>
+                </label>
+                <div class="ms-label">取样数量 <i class="fa-regular fa-circle-question" title="一次请求返回的候选回复数"></i></div>
+                <span class="ms-spacer"></span>
+                <input v-model.number="settings.n.value" class="ms-num" type="number" min="0" max="8" step="1">
+              </div>
+              <div class="ms-row">
+                <label class="switch ms-switch">
+                  <input v-model="settings.frequencyPenalty.enabled" type="checkbox">
+                  <span class="slider-toggle"></span>
+                </label>
+                <div class="ms-label">频率惩罚 <i class="fa-regular fa-circle-question" title="降低重复用词的概率"></i></div>
+                <input v-model.number="settings.frequencyPenalty.value" class="ms-range" type="range" min="0" max="2" step="0.01">
+                <input v-model.number="settings.frequencyPenalty.value" class="ms-num" type="number" min="0" max="2" step="0.01">
+              </div>
+              <div class="ms-row">
+                <label class="switch ms-switch">
+                  <input v-model="settings.responseFormat.enabled" type="checkbox">
+                  <span class="slider-toggle"></span>
+                </label>
+                <div class="ms-label">回复格式 <i class="fa-regular fa-circle-question" title="约束模型输出为普通文本或 JSON"></i></div>
+                <select v-model="settings.responseFormat.value" class="ms-select">
+                  <option value="text">文本</option>
+                  <option value="json_object">JSON</option>
+                </select>
+              </div>
+              <div class="ms-row ms-row-choice">
+                <label class="switch ms-switch">
+                  <input v-model="settings.webSearch.enabled" type="checkbox">
+                  <span class="slider-toggle"></span>
+                </label>
+                <div class="ms-label">联网搜索 <i class="fa-regular fa-circle-question" title="打开后允许模型检索网络（需供应商支持）"></i></div>
+                <span class="ms-flag">{{ settings.webSearch.enabled ? '已开启' : '已关闭' }}</span>
+              </div>
+              <div class="ms-row ms-row-choice">
+                <label class="switch ms-switch">
+                  <input v-model="settings.thinking.enabled" type="checkbox">
+                  <span class="slider-toggle"></span>
+                </label>
+                <div class="ms-label">思考模式 <i class="fa-regular fa-circle-question" title="DeepSeek V4 默认会思考。关闭后会显式关掉思考，只返回最终答案。"></i></div>
+                <span class="ms-flag">{{ settings.thinking.enabled ? '已开启' : '已关闭' }}</span>
+              </div>
+              <div class="ms-row ms-row-headers">
+                <label class="switch ms-switch">
+                  <input v-model="settings.extraHeaders.enabled" type="checkbox">
+                  <span class="slider-toggle"></span>
+                </label>
+                <input v-model="settings.extraHeaders.value" class="ms-text" type="text" placeholder="额外请求头, Json字符串格式">
+              </div>
+            </div>
+            <div class="ms-footer">
+              <button type="button" class="ms-cancel" @click="discardAndClose">取消</button>
+              <button type="button" class="ms-save" @click="saveModelSettings">保存</button>
+            </div>
+          </div>
         </div>
         <button class="btn-publish" @click="publish"><span>发布</span><i class="fa-solid fa-chevron-down" style="font-size: 11px;"></i></button>
       </div>
@@ -104,7 +202,7 @@
           <div v-if="sending" class="chat-msg-row chat-msg-bot">
             <div class="msg-avatar msg-avatar-bot">{{ agent?.avatar || '🤖' }}</div>
             <div class="msg-content-wrapper">
-              <div class="msg-bubble"><i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent-blue);"></i> 思考生成中...</div>
+              <div class="msg-bubble"><i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent-blue);"></i> {{ appliedSettings.thinking.enabled ? '思考中...' : '生成中...' }}</div>
             </div>
           </div>
         </div>
@@ -129,7 +227,7 @@
 </template>
 
 <script setup>
-import { nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
@@ -140,7 +238,16 @@ const inputVar = '{{input}}'
 const timeVar = '{{system_time}}'
 const agent = ref(null)
 const prompt = ref('')
-const modelName = ref('gpt-4o')
+const routedChannel = ref('')
+const routedModel = ref('')
+const routedLabel = computed(() => {
+  if (routedChannel.value && routedModel.value) {
+    return `${routedChannel.value} · ${routedModel.value}`
+  }
+  if (routedChannel.value) return routedChannel.value
+  if (routedModel.value) return routedModel.value
+  return '未配置网关'
+})
 const inputText = ref('')
 const sending = ref(false)
 const messages = ref([])
@@ -151,6 +258,10 @@ const leftWidth = ref(Number(localStorage.getItem('debugPaneWidth') || 0) || nul
 const layoutRef = ref(null)
 const leftPane = ref(null)
 const streamRef = ref(null)
+const settingsWrap = ref(null)
+const settingsOpen = ref(false)
+const settings = reactive(createDefaultSettings())
+const appliedSettings = reactive(createDefaultSettings())
 const drag = reactive({ active: false, startX: 0, startWidth: 0 })
 
 const tools = reactive([
@@ -189,7 +300,7 @@ function resetChat() {
   messages.value = [{
     role: 'assistant',
     html: `你好！我是 <strong>${escapeHtml(agent.value?.name)}</strong>。<br>我已就绪，当前挂载了 <strong>Spring AI 2.0.1 ChatClient</strong>。`,
-    meta: { model: agent.value?.modelName || 'gpt-4o', latencyMs: 0, tokensUsed: 0 }
+    meta: { model: routedModel.value || agent.value?.modelName || '未配置', latencyMs: 0, tokensUsed: 0 }
   }]
 }
 
@@ -217,7 +328,8 @@ async function sendChat() {
 
   const res = await http.post(`/api/agents/${agent.value.id}/messages`, {
     message: text,
-    history: history.value.slice(-6)
+    history: history.value.slice(-6),
+    generation: buildGeneration(appliedSettings)
   })
   sending.value = false
   if (res.success && res.data) {
@@ -232,7 +344,7 @@ async function sendChat() {
       role: 'assistant',
       html: formatHtml(reply, false),
       tool,
-      meta: { model: res.data.model || modelName.value, latencyMs: res.data.latencyMs || 240, tokensUsed: res.data.tokensUsed || 150 }
+      meta: { model: res.data.model || routedModel.value, latencyMs: res.data.latencyMs || 240, tokensUsed: res.data.tokensUsed || 150 }
     })
     history.value.push({ role: 'assistant', content: reply })
     speedText.value = `↑ 0.1 K/s  ↓ ${(Math.random() * 2.2 + 1.1).toFixed(1)} K/s`
@@ -257,7 +369,9 @@ async function publish() {
   const res = await http.put(`/api/agents/${agent.value.id}`, {
     ...agent.value,
     systemPrompt: prompt.value,
-    modelName: modelName.value
+    temperature: Number(appliedSettings.temperature.value),
+    topP: Number(appliedSettings.topP.value),
+    maxTokens: Number(appliedSettings.maxTokens.value)
   })
   if (res.success) {
     agent.value = res.data
@@ -291,14 +405,124 @@ function onUp() {
   if (leftWidth.value) localStorage.setItem('debugPaneWidth', String(leftWidth.value))
 }
 
+function applyGatewayRoute(overview) {
+  const providers = overview?.providers || []
+  const policy = overview?.policy || {}
+  const ready = providers.filter((p) => p.enabled && p.configured)
+  const defaultId = policy.defaultProviderId || ''
+  const primary = ready.find((p) => p.id === defaultId) || ready[0]
+  routedChannel.value = primary?.name || ''
+  routedModel.value = primary?.defaultModel || ''
+}
+
+function createDefaultSettings() {
+  return {
+    temperature: { enabled: false, value: 1 },
+    maxTokens: { enabled: false, value: 4096 },
+    topP: { enabled: false, value: 1 },
+    n: { enabled: false, value: 0 },
+    frequencyPenalty: { enabled: false, value: 0 },
+    responseFormat: { enabled: false, value: 'text' },
+    webSearch: { enabled: false },
+    thinking: { enabled: false },
+    extraHeaders: { enabled: false, value: '' }
+  }
+}
+
+function copySettings(from, to) {
+  Object.keys(to).forEach((key) => {
+    if (from[key]) Object.assign(to[key], from[key])
+  })
+}
+
+function settingsKey(id) {
+  return 'debug-model-settings:' + id
+}
+
+function applyAgentSettings(data) {
+  settings.temperature.value = data.temperature ?? 1
+  settings.maxTokens.value = data.maxTokens ?? 4096
+  settings.topP.value = data.topP ?? 1
+  appliedSettings.temperature.value = settings.temperature.value
+  appliedSettings.maxTokens.value = settings.maxTokens.value
+  appliedSettings.topP.value = settings.topP.value
+}
+
+function loadPersistedSettings(agentId) {
+  try {
+    const raw = localStorage.getItem(settingsKey(agentId))
+    if (!raw) return
+    const parsed = JSON.parse(raw)
+    copySettings(parsed, appliedSettings)
+    copySettings(parsed, settings)
+  } catch {
+    // ignore broken local cache
+  }
+}
+
+function buildGeneration(source) {
+  const generation = {
+    thinking: !!source.thinking.enabled,
+    webSearch: !!source.webSearch.enabled
+  }
+  if (source.temperature.enabled) generation.temperature = Number(source.temperature.value)
+  if (source.maxTokens.enabled) generation.maxTokens = Number(source.maxTokens.value)
+  if (source.topP.enabled) generation.topP = Number(source.topP.value)
+  if (source.n.enabled) generation.n = Number(source.n.value)
+  if (source.frequencyPenalty.enabled) generation.frequencyPenalty = Number(source.frequencyPenalty.value)
+  if (source.responseFormat.enabled) generation.responseFormat = source.responseFormat.value
+  if (source.extraHeaders.enabled) generation.extraHeaders = source.extraHeaders.value
+  return generation
+}
+
+function toggleSettings() {
+  if (settingsOpen.value) {
+    discardAndClose()
+    return
+  }
+  copySettings(appliedSettings, settings)
+  settingsOpen.value = true
+}
+
+function discardAndClose() {
+  copySettings(appliedSettings, settings)
+  settingsOpen.value = false
+}
+
+async function saveModelSettings() {
+  copySettings(settings, appliedSettings)
+  if (agent.value?.id) {
+    localStorage.setItem(settingsKey(agent.value.id), JSON.stringify(appliedSettings))
+    await http.put(`/api/agents/${agent.value.id}`, {
+      ...agent.value,
+      temperature: Number(appliedSettings.temperature.value),
+      topP: Number(appliedSettings.topP.value),
+      maxTokens: Number(appliedSettings.maxTokens.value)
+    })
+  }
+  settingsOpen.value = false
+  showToast(appliedSettings.thinking.enabled ? '模型设置已保存' : '模型设置已保存，已关闭思考模式', 'success', 2200)
+}
+
+function onDocClick(e) {
+  if (!settingsOpen.value) return
+  if (settingsWrap.value && !settingsWrap.value.contains(e.target)) {
+    discardAndClose()
+  }
+}
+
 onMounted(async () => {
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp)
+  document.addEventListener('mousedown', onDocClick)
+  const overviewRes = await http.get('/api/model-gateway')
+  if (overviewRes.success) applyGatewayRoute(overviewRes.data)
   const res = await http.get(`/api/agents/${route.params.id}`)
   if (res.success && res.data) {
     agent.value = res.data
     prompt.value = res.data.systemPrompt || ''
-    modelName.value = res.data.modelName || 'gpt-4o'
+    applyAgentSettings(res.data)
+    loadPersistedSettings(res.data.id)
     resetChat()
   } else {
     showToast('未能加载智能体信息', 'error')
@@ -308,5 +532,6 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('mousemove', onMove)
   document.removeEventListener('mouseup', onUp)
+  document.removeEventListener('mousedown', onDocClick)
 })
 </script>
