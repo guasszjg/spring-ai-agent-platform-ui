@@ -8,14 +8,16 @@
         </router-link>
         <div class="header-agent-badge">
           <h2 class="header-agent-title">
-            <span>编排</span>
-            <span class="header-tag-pill" :class="promptDirty ? 'draft' : 'published'">
+            <span>{{ agent ? `${agent.avatar || '🤖'} ${agent.name}` : '智能体加载中...' }}</span>
+            <span v-if="pageTab === 'orchestrate'" class="header-tag-pill" :class="promptDirty ? 'draft' : 'published'">
               {{ promptDirty ? '未发布' : '已发布' }}
             </span>
           </h2>
-          <span style="font-size: 13px; color: var(--text-secondary); font-weight: 500;">
-            {{ agent ? `${agent.avatar || '🤖'} ${agent.name}` : '智能体加载中...' }}
-          </span>
+          <div class="debug-tabs">
+            <button type="button" class="debug-tab" :class="{ active: pageTab === 'orchestrate' }" @click="pageTab = 'orchestrate'">编排</button>
+            <button type="button" class="debug-tab" :class="{ active: pageTab === 'logs' }" @click="pageTab = 'logs'">日志</button>
+            <button type="button" class="debug-tab" :class="{ active: pageTab === 'monitor' }" @click="pageTab = 'monitor'">监测</button>
+          </div>
         </div>
       </div>
       <div class="debug-header-right">
@@ -31,7 +33,7 @@
           <span class="model-current-name">{{ routedLabel }}</span>
           <span class="model-type-badge">CHAT</span>
         </router-link>
-        <div class="model-settings-wrap" ref="settingsWrap">
+        <div v-if="pageTab === 'orchestrate'" class="model-settings-wrap" ref="settingsWrap">
           <button class="btn-model-settings" type="button" title="模型设置" @click="toggleSettings">
             <i class="fa-solid fa-sliders"></i>
           </button>
@@ -133,6 +135,7 @@
           </div>
         </div>
         <button
+          v-if="pageTab === 'orchestrate'"
           class="btn-publish"
           :disabled="!agent || !promptDirty"
           :title="promptDirty ? '将当前草稿发布为线上系统提示词' : '没有未发布的更改'"
@@ -143,7 +146,7 @@
       </div>
     </header>
 
-    <main class="debug-main-layout" ref="layoutRef">
+    <main v-show="pageTab === 'orchestrate'" class="debug-main-layout" ref="layoutRef">
       <section class="orchestration-pane" ref="leftPane" :style="leftWidth ? { width: leftWidth + 'px' } : {}">
         <div class="config-card-section prompt-editor-card">
           <div class="section-header-row">
@@ -238,6 +241,9 @@
         </div>
       </section>
     </main>
+
+    <AgentLogsPanel v-if="pageTab === 'logs' && agent" :agent-id="agent.id" />
+    <AgentMonitorPanel v-if="pageTab === 'monitor' && agent" :agent-id="agent.id" />
   </div>
 </template>
 
@@ -246,11 +252,14 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
+import AgentLogsPanel from '../components/AgentLogsPanel.vue'
+import AgentMonitorPanel from '../components/AgentMonitorPanel.vue'
 
 const route = useRoute()
 const { showToast } = useToast()
 const inputVar = '{{input}}'
 const timeVar = '{{system_time}}'
+const pageTab = ref('orchestrate')
 const agent = ref(null)
 const prompt = ref('')
 const publishedPrompt = ref('')
@@ -267,6 +276,7 @@ const routedLabel = computed(() => {
 })
 const inputText = ref('')
 const sending = ref(false)
+const conversationId = ref('')
 const messages = ref([])
 const history = ref([])
 const speedText = ref('↑ 0 K/s  ↓ 2 K/s')
@@ -313,6 +323,7 @@ function toggleTheme() {
 }
 
 function resetChat() {
+  conversationId.value = ''
   history.value = []
   messages.value = [{
     role: 'assistant',
@@ -343,14 +354,20 @@ async function sendChat() {
     tool = 'bocha.web_search (联网深度检索)'
   }
 
+  const user = (() => {
+    try { return JSON.parse(localStorage.getItem('user') || '{}') } catch { return {} }
+  })()
   const res = await http.post(`/api/agents/${agent.value.id}/messages`, {
     message: text,
     prompt: prompt.value,
     history: history.value.slice(-6),
-    generation: buildGeneration(appliedSettings)
+    generation: buildGeneration(appliedSettings),
+    conversationId: conversationId.value || undefined,
+    account: user.username || user.nickname || undefined
   })
   sending.value = false
   if (res.success && res.data) {
+    if (res.data.conversationId) conversationId.value = res.data.conversationId
     let reply = res.data.reply
     if (tool && tool.includes('time')) {
       const now = new Date()
