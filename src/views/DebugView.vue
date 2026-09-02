@@ -202,6 +202,7 @@
           <button class="btn-icon-round" @click="resetChat"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
         <div class="chat-history-scroll" ref="streamRef">
+          <div v-if="!messages.length && !sending" class="chat-empty">在下方输入内容开始调试</div>
           <div v-for="(msg, i) in messages" :key="i" class="chat-msg-row" :class="msg.role === 'user' ? 'chat-msg-user' : 'chat-msg-bot'">
             <div class="msg-avatar" :class="msg.role === 'user' ? 'msg-avatar-user' : 'msg-avatar-bot'">
               <i v-if="msg.role === 'user'" class="fa-regular fa-user"></i>
@@ -325,11 +326,7 @@ function toggleTheme() {
 function resetChat() {
   conversationId.value = ''
   history.value = []
-  messages.value = [{
-    role: 'assistant',
-    html: `你好！我是 <strong>${escapeHtml(agent.value?.name)}</strong>。<br>我已就绪，当前挂载了 <strong>Spring AI 2.0.1 ChatClient</strong>。`,
-    meta: { model: routedModel.value || agent.value?.modelName || '未配置', latencyMs: 0, tokensUsed: 0 }
-  }]
+  messages.value = []
 }
 
 function sendQuick(text) {

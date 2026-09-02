@@ -1126,6 +1126,12 @@ input:checked + .slider-toggle:before {
   gap: 18px;
 }
 
+.chat-empty {
+  margin: auto;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 .chat-msg-row {
   display: flex;
   gap: 12px;

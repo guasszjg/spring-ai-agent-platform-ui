@@ -221,7 +221,7 @@
               <div class="agent-footer">
                 <div class="agent-stats-metric">
                   <span><i class="fa-regular fa-comment-dots"></i> {{ Number(a.callCount || 0).toLocaleString() }}</span>
-                  <span><i class="fa-regular fa-clock"></i> {{ a.avgResponseTimeMs || 300 }}ms</span>
+                  <span><i class="fa-regular fa-clock"></i> {{ a.avgResponseTimeMs || 0 }}ms</span>
                 </div>
                 <div class="agent-actions">
                   <button class="btn-card-action btn-chat-primary" @click="goDebug(a.id)"><i class="fa-solid fa-sliders"></i><span>调试</span></button>
