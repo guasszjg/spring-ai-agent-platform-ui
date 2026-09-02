@@ -47,7 +47,8 @@
             <td>
               <div class="gateway-name-cell">
                 <div class="gateway-vendor-mark" :class="'mark-' + (p.vendor || '').toLowerCase()">
-                  <i :class="vendorIcon(p.vendor)"></i>
+                  <img v-if="vendorLogo(p.vendor)" :src="vendorLogo(p.vendor)" :alt="vendorLabel(p.vendor)" class="gateway-vendor-logo">
+                  <i v-else class="fa-solid fa-plug"></i>
                 </div>
                 <div>
                   <div class="table-agent-title">{{ p.name }}</div>
@@ -158,6 +159,10 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
+import logoDeepseek from '../assets/vendors/deepseek-color.svg'
+import logoQwen from '../assets/vendors/qwen-color.svg'
+import logoHunyuan from '../assets/vendors/hunyuan-color.svg'
+import logoDoubao from '../assets/vendors/doubao-color.svg'
 
 const { showToast } = useToast()
 const overview = ref({ providers: [], policy: {}, configuredCount: 0, enabledCount: 0, readyCount: 0 })
@@ -206,14 +211,13 @@ function applyFetchedModels(models) {
   }
 }
 
-function vendorIcon(vendor) {
+function vendorLogo(vendor) {
   return {
-    DEEPSEEK: 'fa-solid fa-water',
-    QIANWEN: 'fa-solid fa-cloud',
-    TENCENT: 'fa-solid fa-comment-dots',
-    BYTEDANCE: 'fa-solid fa-bolt',
-    CUSTOM: 'fa-solid fa-plug'
-  }[vendor] || 'fa-solid fa-microchip'
+    DEEPSEEK: logoDeepseek,
+    QIANWEN: logoQwen,
+    TENCENT: logoHunyuan,
+    BYTEDANCE: logoDoubao
+  }[vendor]
 }
 
 function vendorLabel(vendor) {
