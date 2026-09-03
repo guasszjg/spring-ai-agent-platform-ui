@@ -42,7 +42,7 @@
         </div>
         <div class="sidebar-user-box">
           <div class="user-meta-left">
-            <img :src="user.avatar" class="user-avatar-sidebar" alt="Admin">
+            <img :src="userAvatar" class="user-avatar-sidebar" alt="Admin">
             <div class="user-text-info">
               <span class="user-name-text">{{ user.nickname || '管理员' }}</span>
               <span class="user-role-text">租户主账号</span>
@@ -65,7 +65,7 @@
             <i :class="theme === 'light' ? 'fa-solid fa-sun' : 'fa-solid fa-moon'" :style="{ color: theme === 'light' ? '#f59e0b' : '#9ca3af' }"></i>
           </button>
           <div class="topbar-user-menu">
-            <img class="topbar-user-avatar" :src="user.avatar" alt="Avatar">
+            <img class="topbar-user-avatar" :src="userAvatar" alt="Avatar">
             <div class="topbar-user-info">
               <span class="topbar-user-name">{{ user.nickname || '管理员' }}</span>
               <span class="topbar-user-tag">租户主账号</span>
@@ -374,6 +374,8 @@ import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import GatewayPanel from '../components/GatewayPanel.vue'
 import AgentLogo from '../components/AgentLogo.vue'
+import defaultAdminAvatar from '../assets/avatar-admin.jpg'
+import defaultDevAvatar from '../assets/avatar-dev.jpg'
 
 const router = useRouter()
 const route = useRoute()
@@ -418,6 +420,13 @@ const form = reactive({
 
 const user = computed(() => {
   try { return JSON.parse(localStorage.getItem('user') || '{}') } catch { return {} }
+})
+const userAvatar = computed(() => {
+  const av = user.value?.avatar
+  if (!av || av.includes('dicebear') || av.includes('bottts')) {
+    return user.value?.username === 'developer' ? defaultDevAvatar : defaultAdminAvatar
+  }
+  return av
 })
 const pageTitle = computed(() => {
   if (currentTab.value === 'overview') return '概览仪表盘 (Overview & Analytics)'

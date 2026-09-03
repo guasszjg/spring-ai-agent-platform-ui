@@ -222,6 +222,7 @@
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   flex-shrink: 0;
+  object-fit: cover;
 }
 
 .user-text-info {
@@ -324,6 +325,7 @@
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   flex-shrink: 0;
+  object-fit: cover;
 }
 
 .topbar-user-info {
