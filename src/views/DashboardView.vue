@@ -111,10 +111,10 @@
             <div class="token-card-val">{{ formatToken(stats.completionTokens) }}</div>
             <div class="token-card-footer"><span>占总体消耗 {{ completionShare }}%</span></div>
           </div>
-          <div class="token-stat-card token-card-amber">
-            <div class="token-card-header"><span class="token-card-title">预估推理成本 (USD)</span><div class="token-card-icon icon-amber"><i class="fa-solid fa-coins"></i></div></div>
-            <div class="token-card-val">${{ Number(stats.estimatedCostUsd || 0).toFixed(2) }}</div>
-            <div class="token-card-footer"><span style="color: var(--accent-emerald); font-weight: 600;"><i class="fa-solid fa-piggy-bank"></i> 节省 34.2%</span><span>(通过模型路由)</span></div>
+            <div class="token-stat-card token-card-amber">
+            <div class="token-card-header"><span class="token-card-title">预估推理成本 (CNY)</span><div class="token-card-icon icon-amber"><i class="fa-solid fa-coins"></i></div></div>
+            <div class="token-card-val">{{ formatCny(stats.estimatedCostCny) }}</div>
+            <div class="token-card-footer"><span>按各模型官方挂牌价估算</span><span>DeepSeek 取高峰时段</span></div>
           </div>
         </div>
         <div class="charts-grid-row">
@@ -433,6 +433,12 @@ function formatToken(value) {
   if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M'
   if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
   return String(n)
+}
+function formatCny(value) {
+  const n = Number(value || 0)
+  if (n === 0) return '¥0.00'
+  if (n < 0.01) return '¥' + n.toFixed(4)
+  return '¥' + n.toFixed(2)
 }
 function statusLabel(s) { return s === 'IDLE' ? '空闲中' : s === 'DISABLED' ? '已停用' : '运行中' }
 function statusClass(s) { return s === 'IDLE' ? 'badge-warning' : s === 'DISABLED' ? 'badge-danger' : 'badge-success' }
