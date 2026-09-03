@@ -4,7 +4,7 @@
       <div>
         <div class="sidebar-header">
           <a class="sidebar-brand" @click.prevent="currentTab = 'overview'">
-            <div class="brand-logo"><i class="fa-solid fa-brain"></i></div>
+            <AgentLogo :size="32" />
             <div class="brand-text">
               <span class="brand-title">AgentMatrix</span>
               <span class="brand-edition">Enterprise v2.6</span>
@@ -373,6 +373,7 @@ import Chart from 'chart.js/auto'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import GatewayPanel from '../components/GatewayPanel.vue'
+import AgentLogo from '../components/AgentLogo.vue'
 
 const router = useRouter()
 const route = useRoute()
