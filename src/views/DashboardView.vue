@@ -3,27 +3,17 @@
     <aside class="app-sidebar" :class="{ collapsed: sidebarCollapsed }">
       <div>
         <div class="sidebar-header">
-          <div class="sidebar-header-row">
-            <a
-              class="sidebar-brand"
-              :title="sidebarCollapsed ? '点击展开侧边栏' : 'AgentMatrix Enterprise'"
-              @click.prevent="sidebarCollapsed ? toggleSidebar() : (currentTab = 'overview')"
-            >
-              <AgentLogo :size="sidebarCollapsed ? 28 : 32" />
-              <div v-show="!sidebarCollapsed" class="brand-text">
-                <span class="brand-title">AgentMatrix</span>
-                <span class="brand-edition">Enterprise v2.6</span>
-              </div>
-            </a>
-            <button
-              type="button"
-              class="btn-sidebar-collapse"
-              :title="sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'"
-              @click.stop="toggleSidebar"
-            >
-              <i :class="sidebarCollapsed ? 'fa-solid fa-angles-right' : 'fa-solid fa-angles-left'"></i>
-            </button>
-          </div>
+          <a
+            class="sidebar-brand"
+            :title="sidebarCollapsed ? '点击展开侧边栏' : 'AgentMatrix Enterprise'"
+            @click.prevent="sidebarCollapsed ? toggleSidebar() : (currentTab = 'overview')"
+          >
+            <AgentLogo :size="sidebarCollapsed ? 28 : 32" />
+            <div v-show="!sidebarCollapsed" class="brand-text">
+              <span class="brand-title">AgentMatrix</span>
+              <span class="brand-edition">Enterprise v2.6</span>
+            </div>
+          </a>
         </div>
         <nav class="sidebar-nav">
           <div v-show="!sidebarCollapsed" class="nav-section-title">核心业务枢纽</div>
