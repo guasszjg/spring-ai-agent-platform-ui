@@ -21,6 +21,10 @@
             <i class="fa-solid fa-robot"></i><span>Agents 智能体</span>
             <span class="nav-count-pill">{{ stats.totalAgents || 0 }}</span>
           </button>
+          <button class="sidebar-nav-item" :class="{ active: currentTab === 'templates' }" @click="currentTab = 'templates'">
+            <i class="fa-solid fa-shapes"></i><span>模板管理</span>
+            <span class="nav-badge-pill">场景</span>
+          </button>
           <button class="sidebar-nav-item" :class="{ active: currentTab === 'knowledge' }" @click="currentTab = 'knowledge'">
             <i class="fa-solid fa-book-bookmark"></i><span>企业知识库</span>
             <span class="nav-soon-pill">RAG</span>
@@ -266,6 +270,10 @@
         </section>
       </section>
 
+      <section v-show="currentTab === 'templates'" class="app-subview active">
+        <AgentTemplatesPanel @use-template="onUseTemplateFromPanel" @templates-updated="loadTemplates" />
+      </section>
+
       <section v-show="currentTab === 'knowledge'" class="app-subview active">
         <div class="knowledge-hero-box">
           <div class="knowledge-icon-large"><i class="fa-solid fa-book-bookmark"></i></div>
@@ -293,7 +301,7 @@
             <label class="form-label">行业场景模版预设</label>
             <select class="form-control-styled" @change="applyTemplate($event.target.value)">
               <option value="">-- 选择预设专家智能体模版 --</option>
-              <option v-for="(t, i) in templates" :key="i" :value="i">{{ t.avatar }} {{ t.name }}</option>
+              <option v-for="t in templates" :key="t.id || t.name" :value="t.id || t.name">{{ t.avatar }} {{ t.name }} ({{ t.category }})</option>
             </select>
           </div>
           <div class="form-row-2">
@@ -376,6 +384,7 @@ import Chart from 'chart.js/auto'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import GatewayPanel from '../components/GatewayPanel.vue'
+import AgentTemplatesPanel from '../components/AgentTemplatesPanel.vue'
 import AgentLogo from '../components/AgentLogo.vue'
 import defaultAdminAvatar from '../assets/avatar-admin.jpg'
 import defaultDevAvatar from '../assets/avatar-dev.jpg'
@@ -434,6 +443,7 @@ const userAvatar = computed(() => {
 const pageTitle = computed(() => {
   if (currentTab.value === 'overview') return '概览仪表盘 (Overview & Analytics)'
   if (currentTab.value === 'agents') return 'Agents 智能体资产管理'
+  if (currentTab.value === 'templates') return '行业场景模版中心 (Agent Templates)'
   if (currentTab.value === 'gateway') return '模型网关路由 (LLM Gateway)'
   return '企业私有知识库 (RAG)'
 })
@@ -500,6 +510,7 @@ watch(viewMode, (mode) => localStorage.setItem('agentViewMode', mode))
 watch(currentTab, (tab) => {
   if (tab === 'overview') nextTick(renderCharts)
   if (tab === 'gateway' || tab === 'agents') loadGatewayRoute()
+  if (tab === 'templates') loadTemplates()
 })
 
 async function loadStats() {
@@ -564,8 +575,24 @@ function openEdit(agent) {
   agentModalOpen.value = true
 }
 
-function applyTemplate(index) {
-  const t = templates.value[Number(index)]
+function onUseTemplateFromPanel(t) {
+  if (!t) return
+  emptyForm()
+  form.name = t.name || ''
+  form.code = 'agent_' + (t.name || 'bot').toLowerCase().replace(/[^a-z0-9]/gi, '_')
+  form.category = t.category || '通用智能'
+  form.modelName = routedModel.value || t.modelName || ''
+  form.systemPrompt = t.systemPrompt || ''
+  form.description = t.description || ''
+  form.temperature = t.temperature != null ? t.temperature : 0.7
+  form.avatar = t.avatar || '🤖'
+  form.tagsText = Array.isArray(t.tags) ? t.tags.join(', ') : (t.tags || '')
+  agentModalOpen.value = true
+}
+
+function applyTemplate(val) {
+  if (!val) return
+  const t = templates.value.find(item => item.id === val || item.name === val) || templates.value[Number(val)]
   if (!t) return
   form.name = t.name || ''
   form.code = 'agent_' + (t.name || 'bot').toLowerCase().replace(/[^a-z0-9]/gi, '_')
@@ -575,7 +602,7 @@ function applyTemplate(index) {
   form.description = t.description || ''
   form.temperature = t.temperature != null ? t.temperature : 0.7
   form.avatar = t.avatar || '🤖'
-  form.tagsText = (t.tags || []).join(', ')
+  form.tagsText = Array.isArray(t.tags) ? t.tags.join(', ') : (t.tags || '')
 }
 
 async function saveAgent() {
