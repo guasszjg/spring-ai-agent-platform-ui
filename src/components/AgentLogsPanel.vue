@@ -73,10 +73,24 @@
       </table>
     </div>
 
-    <div v-if="totalPages > 1" class="logs-pager">
-      <button type="button" :disabled="page <= 1" @click="changePage(page - 1)">上一页</button>
-      <span>{{ page }} / {{ totalPages }}</span>
-      <button type="button" :disabled="page >= totalPages" @click="changePage(page + 1)">下一页</button>
+    <div v-if="records.length > 0" class="logs-pager">
+      <div class="logs-pager-info">
+        <span>共 {{ total }} 条会话记录</span>
+        <select v-model.number="pageSize" class="logs-size-select" @change="onSizeChange">
+          <option :value="10">10 条/页</option>
+          <option :value="20">20 条/页</option>
+          <option :value="50">50 条/页</option>
+        </select>
+      </div>
+      <div class="logs-pager-controls">
+        <button type="button" :disabled="page <= 1" @click="changePage(page - 1)">
+          <i class="fa-solid fa-chevron-left"></i> 上一页
+        </button>
+        <span class="logs-page-indicator">第 {{ page }} / {{ totalPages }} 页</span>
+        <button type="button" :disabled="page >= totalPages" @click="changePage(page + 1)">
+          下一页 <i class="fa-solid fa-chevron-right"></i>
+        </button>
+      </div>
     </div>
 
     <div v-if="detail" class="logs-drawer-mask" @click.self="detail = null">
@@ -118,6 +132,8 @@ const keyword = ref('')
 const sort = ref('createdAt')
 const order = ref('desc')
 const page = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
 const records = ref([])
 const totalPages = ref(1)
 const detail = ref(null)
@@ -144,15 +160,22 @@ async function reload() {
     sort: sort.value,
     order: order.value,
     page: page.value,
-    size: 20
+    size: pageSize.value
   })
   if (res.success && res.data) {
     records.value = res.data.records || []
+    total.value = res.data.total || 0
     totalPages.value = res.data.totalPages || 1
   } else {
     records.value = []
+    total.value = 0
     totalPages.value = 1
   }
+}
+
+function onSizeChange() {
+  page.value = 1
+  reload()
 }
 
 function onSearch() {
