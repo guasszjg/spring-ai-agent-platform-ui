@@ -67,7 +67,7 @@
           >
             <i class="fa-solid fa-book-bookmark"></i>
             <span v-show="!sidebarCollapsed">企业知识库</span>
-            <span v-show="!sidebarCollapsed" class="nav-soon-pill">RAG</span>
+            <span v-show="!sidebarCollapsed" class="nav-badge-pill">RAG</span>
           </button>
           <div v-show="!sidebarCollapsed" class="nav-section-title" style="margin-top: 20px;">企业系统治理</div>
           <div v-show="sidebarCollapsed" class="nav-section-divider"></div>
@@ -340,12 +340,7 @@
       </section>
 
       <section v-show="currentTab === 'knowledge'" class="app-subview active">
-        <div class="knowledge-hero-box">
-          <div class="knowledge-icon-large"><i class="fa-solid fa-book-bookmark"></i></div>
-          <h2 class="knowledge-hero-title">企业私有知识库与 RAG 检索增强引擎</h2>
-          <p class="knowledge-hero-desc">支持企业非结构化文档深度切分向量化，无缝挂载至智能体工作流。</p>
-          <button class="btn-create-agent" style="margin: 0 auto;" @click="showToast('知识库向量构建模块正在接入，敬请期待！', 'info')"><i class="fa-solid fa-plus"></i><span>创建专属知识库</span></button>
-        </div>
+        <KnowledgeBasePanel />
       </section>
 
       <section v-show="currentTab === 'gateway'" class="app-subview active">
@@ -450,6 +445,7 @@ import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import GatewayPanel from '../components/GatewayPanel.vue'
 import AgentTemplatesPanel from '../components/AgentTemplatesPanel.vue'
+import KnowledgeBasePanel from '../components/KnowledgeBasePanel.vue'
 import AgentLogo from '../components/AgentLogo.vue'
 import defaultAdminAvatar from '../assets/avatar-admin.jpg'
 import defaultDevAvatar from '../assets/avatar-dev.jpg'

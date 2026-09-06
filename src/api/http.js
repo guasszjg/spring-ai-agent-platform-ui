@@ -39,5 +39,20 @@ export const http = {
   post: (url, body) => request('POST', url, { body }),
   put: (url, body) => request('PUT', url, { body }),
   patch: (url, body) => request('PATCH', url, { body }),
-  del: (url) => request('DELETE', url)
+  del: (url) => request('DELETE', url),
+  upload: async (url, formData) => {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData
+      })
+      const contentType = res.headers.get('content-type') || ''
+      return contentType.includes('application/json')
+        ? await res.json()
+        : { success: false, message: `请求失败 (HTTP ${res.status})` }
+    } catch (err) {
+      return { success: false, message: '网络请求失败: ' + err.message }
+    }
+  }
 }
