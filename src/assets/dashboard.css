@@ -261,6 +261,125 @@
   color: var(--accent-rose);
 }
 
+/* Sidebar Header Collapse Button & Header Row */
+.sidebar-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.btn-sidebar-collapse {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-sidebar-collapse:hover {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.btn-topbar-collapse {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-topbar-collapse:hover {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.nav-section-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 8px 4px;
+  opacity: 0.6;
+}
+
+/* Collapsed Sidebar Styles */
+.app-sidebar.collapsed {
+  width: 68px;
+}
+
+.app-sidebar.collapsed .sidebar-header {
+  padding: 16px 8px;
+}
+
+.app-sidebar.collapsed .sidebar-header-row {
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+}
+
+.app-sidebar.collapsed .sidebar-brand {
+  justify-content: center;
+  gap: 0;
+}
+
+.app-sidebar.collapsed .sidebar-nav {
+  padding: 14px 8px;
+  align-items: center;
+}
+
+.app-sidebar.collapsed .sidebar-nav-item {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+}
+
+.app-sidebar.collapsed .sidebar-nav-item i {
+  font-size: 18px;
+  width: auto;
+  margin: 0;
+}
+
+.app-sidebar.collapsed .sidebar-footer {
+  padding: 14px 8px;
+}
+
+.app-sidebar.collapsed .sidebar-cluster-status {
+  padding: 8px 0;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.app-sidebar.collapsed .sidebar-user-box {
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-sidebar.collapsed .user-meta-left {
+  justify-content: center;
+}
+
 /* ========================================================
    2. Main Content Wrapper
    ======================================================== */

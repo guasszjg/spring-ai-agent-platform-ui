@@ -1,53 +1,104 @@
 <template>
   <div class="app-layout">
-    <aside class="app-sidebar">
+    <aside class="app-sidebar" :class="{ collapsed: sidebarCollapsed }">
       <div>
         <div class="sidebar-header">
-          <a class="sidebar-brand" @click.prevent="currentTab = 'overview'">
-            <AgentLogo :size="32" />
-            <div class="brand-text">
-              <span class="brand-title">AgentMatrix</span>
-              <span class="brand-edition">Enterprise v2.6</span>
-            </div>
-          </a>
+          <div class="sidebar-header-row">
+            <a
+              class="sidebar-brand"
+              :title="sidebarCollapsed ? '点击展开侧边栏' : 'AgentMatrix Enterprise'"
+              @click.prevent="sidebarCollapsed ? toggleSidebar() : (currentTab = 'overview')"
+            >
+              <AgentLogo :size="sidebarCollapsed ? 28 : 32" />
+              <div v-show="!sidebarCollapsed" class="brand-text">
+                <span class="brand-title">AgentMatrix</span>
+                <span class="brand-edition">Enterprise v2.6</span>
+              </div>
+            </a>
+            <button
+              type="button"
+              class="btn-sidebar-collapse"
+              :title="sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'"
+              @click.stop="toggleSidebar"
+            >
+              <i :class="sidebarCollapsed ? 'fa-solid fa-angles-right' : 'fa-solid fa-angles-left'"></i>
+            </button>
+          </div>
         </div>
         <nav class="sidebar-nav">
-          <div class="nav-section-title">核心业务枢纽</div>
-          <button class="sidebar-nav-item" :class="{ active: currentTab === 'overview' }" @click="currentTab = 'overview'">
-            <i class="fa-solid fa-chart-pie"></i><span>概览分析 (主页)</span>
-            <span class="nav-badge-pill">实时</span>
+          <div v-show="!sidebarCollapsed" class="nav-section-title">核心业务枢纽</div>
+          <div v-show="sidebarCollapsed" class="nav-section-divider"></div>
+          <button
+            class="sidebar-nav-item"
+            :class="{ active: currentTab === 'overview' }"
+            title="概览分析 (主页)"
+            @click="currentTab = 'overview'"
+          >
+            <i class="fa-solid fa-chart-pie"></i>
+            <span v-show="!sidebarCollapsed">概览分析 (主页)</span>
+            <span v-show="!sidebarCollapsed" class="nav-badge-pill">实时</span>
           </button>
-          <button class="sidebar-nav-item" :class="{ active: currentTab === 'agents' }" @click="currentTab = 'agents'">
-            <i class="fa-solid fa-robot"></i><span>Agents 智能体</span>
-            <span class="nav-count-pill">{{ stats.totalAgents || 0 }}</span>
+          <button
+            class="sidebar-nav-item"
+            :class="{ active: currentTab === 'agents' }"
+            :title="'Agents 智能体 (' + (stats.totalAgents || 0) + ')'"
+            @click="currentTab = 'agents'"
+          >
+            <i class="fa-solid fa-robot"></i>
+            <span v-show="!sidebarCollapsed">Agents 智能体</span>
+            <span v-show="!sidebarCollapsed" class="nav-count-pill">{{ stats.totalAgents || 0 }}</span>
           </button>
-          <button class="sidebar-nav-item" :class="{ active: currentTab === 'templates' }" @click="currentTab = 'templates'">
-            <i class="fa-solid fa-shapes"></i><span>模板管理</span>
-            <span class="nav-badge-pill">场景</span>
+          <button
+            class="sidebar-nav-item"
+            :class="{ active: currentTab === 'templates' }"
+            title="模板管理"
+            @click="currentTab = 'templates'"
+          >
+            <i class="fa-solid fa-shapes"></i>
+            <span v-show="!sidebarCollapsed">模板管理</span>
+            <span v-show="!sidebarCollapsed" class="nav-badge-pill">场景</span>
           </button>
-          <button class="sidebar-nav-item" :class="{ active: currentTab === 'knowledge' }" @click="currentTab = 'knowledge'">
-            <i class="fa-solid fa-book-bookmark"></i><span>企业知识库</span>
-            <span class="nav-soon-pill">RAG</span>
+          <button
+            class="sidebar-nav-item"
+            :class="{ active: currentTab === 'knowledge' }"
+            title="企业知识库 (RAG)"
+            @click="currentTab = 'knowledge'"
+          >
+            <i class="fa-solid fa-book-bookmark"></i>
+            <span v-show="!sidebarCollapsed">企业知识库</span>
+            <span v-show="!sidebarCollapsed" class="nav-soon-pill">RAG</span>
           </button>
-          <div class="nav-section-title" style="margin-top: 20px;">企业系统治理</div>
-          <button class="sidebar-nav-item" :class="{ active: currentTab === 'gateway' }" @click="currentTab = 'gateway'">
-            <i class="fa-solid fa-network-wired"></i><span>模型网关路由</span>
-            <span class="nav-badge-pill">LLM</span>
+          <div v-show="!sidebarCollapsed" class="nav-section-title" style="margin-top: 20px;">企业系统治理</div>
+          <div v-show="sidebarCollapsed" class="nav-section-divider"></div>
+          <button
+            class="sidebar-nav-item"
+            :class="{ active: currentTab === 'gateway' }"
+            title="模型网关路由 (LLM)"
+            @click="currentTab = 'gateway'"
+          >
+            <i class="fa-solid fa-network-wired"></i>
+            <span v-show="!sidebarCollapsed">模型网关路由</span>
+            <span v-show="!sidebarCollapsed" class="nav-badge-pill">LLM</span>
           </button>
-          <button class="sidebar-nav-item" @click="showToast('安全审计与内容护栏模块运行正常', 'info')">
-            <i class="fa-solid fa-shield-halved"></i><span>安全审计与护栏</span>
+          <button
+            class="sidebar-nav-item"
+            title="安全审计与护栏"
+            @click="showToast('安全审计与内容护栏模块运行正常', 'info')"
+          >
+            <i class="fa-solid fa-shield-halved"></i>
+            <span v-show="!sidebarCollapsed">安全审计与护栏</span>
           </button>
         </nav>
       </div>
       <div class="sidebar-footer">
-        <div class="sidebar-cluster-status">
+        <div class="sidebar-cluster-status" :title="'集群状态: 99.99% 在线'">
           <span class="pulse-dot-green"></span>
-          <span>集群状态: 99.99% 在线</span>
+          <span v-show="!sidebarCollapsed">集群状态: 99.99% 在线</span>
         </div>
         <div class="sidebar-user-box">
-          <div class="user-meta-left">
+          <div class="user-meta-left" :title="user.nickname || '管理员'">
             <img :src="userAvatar" class="user-avatar-sidebar" alt="Admin">
-            <div class="user-text-info">
+            <div v-show="!sidebarCollapsed" class="user-text-info">
               <span class="user-name-text">{{ user.nickname || '管理员' }}</span>
               <span class="user-role-text">租户主账号</span>
             </div>
@@ -62,6 +113,14 @@
     <div class="app-main-wrapper">
       <header class="app-topbar">
         <div class="topbar-left">
+          <button
+            type="button"
+            class="btn-topbar-collapse"
+            :title="sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'"
+            @click="toggleSidebar"
+          >
+            <i :class="sidebarCollapsed ? 'fa-solid fa-bars-staggered' : 'fa-solid fa-bars'"></i>
+          </button>
           <h2 class="topbar-page-title">{{ pageTitle }}</h2>
         </div>
         <div class="topbar-right">
@@ -402,8 +461,17 @@ const pageResult = ref({})
 const page = ref(1)
 const keyword = ref('')
 const category = ref('全部')
-const statusFilter = ref('')
 const viewMode = ref(localStorage.getItem('agentViewMode') || 'card')
+const sidebarCollapsed = ref(localStorage.getItem('sidebarCollapsed') === 'true')
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem('sidebarCollapsed', String(sidebarCollapsed.value))
+  setTimeout(() => {
+    window.dispatchEvent(new Event('resize'))
+  }, 320)
+}
+
 const templates = ref([])
 const routedChannel = ref('')
 const routedModel = ref('')
