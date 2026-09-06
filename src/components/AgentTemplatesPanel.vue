@@ -212,16 +212,16 @@
 
     <!-- Table / List View -->
     <div v-else class="table-view-card">
-      <table class="agent-table">
+      <table class="agent-table template-table">
         <thead>
           <tr>
-            <th>模板信息</th>
-            <th>业务分类</th>
-            <th>场景功能描述</th>
-            <th>系统提示词</th>
-            <th>建议温度</th>
-            <th>业务标签</th>
-            <th style="text-align: right;">操作管理</th>
+            <th style="min-width: 190px;">模板信息</th>
+            <th style="min-width: 110px;">业务分类</th>
+            <th style="min-width: 170px;">场景功能描述</th>
+            <th style="min-width: 200px;">系统提示词</th>
+            <th style="min-width: 95px;">建议温度</th>
+            <th style="min-width: 170px;">业务标签</th>
+            <th style="min-width: 210px; text-align: right;">操作管理</th>
           </tr>
         </thead>
         <tbody>
@@ -230,45 +230,45 @@
               <div class="table-agent-meta">
                 <div class="table-agent-avatar">{{ tpl.avatar || '🤖' }}</div>
                 <div>
-                  <div style="display: flex; align-items: center; gap: 6px;">
+                  <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                     <span class="table-agent-title">{{ tpl.name }}</span>
-                    <span v-if="tpl.isBuiltin" class="tpl-badge builtin-badge" style="font-size: 10px; padding: 1px 6px;">预设</span>
-                    <span v-else class="tpl-badge custom-badge" style="font-size: 10px; padding: 1px 6px;">自定义</span>
+                    <span v-if="tpl.isBuiltin" class="tpl-badge builtin-badge" style="font-size: 10px; padding: 1px 6px; white-space: nowrap;">预设</span>
+                    <span v-else class="tpl-badge custom-badge" style="font-size: 10px; padding: 1px 6px; white-space: nowrap;">自定义</span>
                   </div>
                   <div class="table-agent-code">排序权重: {{ tpl.sortOrder || 0 }}</div>
                 </div>
               </div>
             </td>
-            <td>
+            <td class="col-category">
               <span class="spec-badge"><i class="fa-solid fa-tag"></i> {{ tpl.category || '通用智能' }}</span>
             </td>
-            <td>
+            <td class="col-desc">
               <div class="table-desc-cell" :title="tpl.description">
                 {{ tpl.description || '暂无场景功能描述' }}
               </div>
             </td>
-            <td>
+            <td class="col-prompt">
               <div class="table-prompt-cell" :title="tpl.systemPrompt">
                 {{ tpl.systemPrompt || '暂未设定 System Prompt' }}
               </div>
             </td>
-            <td>
+            <td class="col-temp">
               <span class="spec-badge">
                 <i class="fa-solid fa-temperature-half"></i>
                 T:{{ tpl.temperature != null ? tpl.temperature : 0.7 }}
               </span>
             </td>
-            <td>
-              <div class="agent-tags" style="margin: 0; flex-wrap: nowrap; max-width: 140px; overflow: hidden;">
-                <span v-for="t in getTagArray(tpl.tags).slice(0, 2)" :key="t" class="tag-item">#{{ t }}</span>
-                <span v-if="getTagArray(tpl.tags).length > 2" class="tag-item" style="opacity: 0.7;">+{{ getTagArray(tpl.tags).length - 2 }}</span>
+            <td class="col-tags">
+              <div class="table-tags-box">
+                <span v-for="t in getTagArray(tpl.tags).slice(0, 2)" :key="t" class="table-tag-item">#{{ t }}</span>
+                <span v-if="getTagArray(tpl.tags).length > 2" class="table-tag-more">+{{ getTagArray(tpl.tags).length - 2 }}</span>
               </div>
             </td>
-            <td style="text-align: right;">
-              <div class="agent-actions" style="justify-content: flex-end;">
+            <td class="col-actions">
+              <div class="agent-actions" style="justify-content: flex-end; flex-wrap: nowrap;">
                 <button
                   type="button"
-                  class="btn-card-action btn-chat-primary"
+                  class="btn-card-action btn-chat-primary btn-use-tpl-table"
                   title="基于此模板快速注册智能体"
                   @click="useTemplateToCreate(tpl)"
                 >
@@ -278,6 +278,7 @@
                 <button
                   type="button"
                   class="btn-card-action btn-action-icon"
+                  style="flex-shrink: 0;"
                   title="复制系统提示词"
                   @click.stop="copyText(tpl.systemPrompt, '提示词已复制到剪贴板')"
                 >
@@ -286,6 +287,7 @@
                 <button
                   type="button"
                   class="btn-card-action btn-action-icon"
+                  style="flex-shrink: 0;"
                   title="编辑模板"
                   @click.stop="openEditModal(tpl)"
                 >
@@ -294,6 +296,7 @@
                 <button
                   type="button"
                   class="btn-card-action btn-action-icon btn-action-danger"
+                  style="flex-shrink: 0;"
                   title="删除模板"
                   @click.stop="openDeleteModal(tpl)"
                 >
@@ -1362,13 +1365,81 @@ onMounted(loadTemplates)
   line-height: 1.6;
 }
 
+.table-view-card {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.template-table {
+  min-width: 1080px;
+  width: 100%;
+}
+
+.col-category .spec-badge,
+.col-temp .spec-badge {
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 .table-desc-cell {
-  max-width: 240px;
+  max-width: 220px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--text-secondary);
   font-size: 12.5px;
+}
+
+.table-prompt-cell {
+  max-width: 240px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.table-tags-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.table-tag-item {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--accent-blue);
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.4;
+  word-break: keep-all;
+}
+
+.table-tag-more {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+.col-actions {
+  white-space: nowrap;
+}
+
+.btn-use-tpl-table {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 @media (max-width: 768px) {
