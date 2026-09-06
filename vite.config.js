@@ -19,7 +19,7 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: fileURLToPath(new URL('../spring_ai/src/main/resources/static', import.meta.url)),
+    outDir: fileURLToPath(new URL('../spring-ai-agent-platform/src/main/resources/static', import.meta.url)),
     emptyOutDir: true
   }
 })
