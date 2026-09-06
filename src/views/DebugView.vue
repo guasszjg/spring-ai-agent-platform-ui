@@ -17,6 +17,7 @@
             <button type="button" class="debug-tab" :class="{ active: pageTab === 'orchestrate' }" @click="pageTab = 'orchestrate'">编排</button>
             <button type="button" class="debug-tab" :class="{ active: pageTab === 'logs' }" @click="pageTab = 'logs'">日志</button>
             <button type="button" class="debug-tab" :class="{ active: pageTab === 'monitor' }" @click="pageTab = 'monitor'">监测</button>
+            <button type="button" class="debug-tab" :class="{ active: pageTab === 'api' }" @click="pageTab = 'api'">访问 API</button>
           </div>
         </div>
       </div>
@@ -300,6 +301,7 @@
 
     <AgentLogsPanel v-if="pageTab === 'logs' && agent" :agent-id="agent.id" />
     <AgentMonitorPanel v-if="pageTab === 'monitor' && agent" :agent-id="agent.id" />
+    <AgentApiPanel v-if="pageTab === 'api' && agent" :agent="agent" @agent-updated="onAgentUpdated" />
 
     <!-- Tool Settings Modal -->
     <div v-if="toolSettingsModalOpen" class="tool-modal-backdrop" @click.self="toolSettingsModalOpen = false">
@@ -538,6 +540,7 @@ import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import AgentLogsPanel from '../components/AgentLogsPanel.vue'
 import AgentMonitorPanel from '../components/AgentMonitorPanel.vue'
+import AgentApiPanel from '../components/AgentApiPanel.vue'
 
 const route = useRoute()
 const { showToast } = useToast()
@@ -545,6 +548,12 @@ const inputVar = '{{input}}'
 const timeVar = '{{system_time}}'
 const pageTab = ref('orchestrate')
 const agent = ref(null)
+
+function onAgentUpdated(updatedAgent) {
+  if (updatedAgent) {
+    agent.value = { ...agent.value, ...updatedAgent }
+  }
+}
 const prompt = ref('')
 const publishedPrompt = ref('')
 const promptDirty = computed(() => prompt.value !== publishedPrompt.value)
