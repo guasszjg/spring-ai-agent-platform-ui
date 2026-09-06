@@ -115,7 +115,7 @@
                   <i class="fa-solid fa-link"></i> Dify
                 </span>
                 <span class="search-method-badge" :class="kb.searchMethod || 'hybrid_search'">
-                  <i :class="getSearchMethodIcon(kb.searchMethod)"></i> {{ getSearchMethodLabel(kb.searchMethod) }}
+                  <i :class="getSearchMethodIcon(kb.searchMethod)"></i> {{ getSearchMethodLabel(kb.searchMethod, kb) }}
                 </span>
                 <span class="model-badge" title="Embedding 向量模型">
                   <i class="fa-solid fa-cube"></i> {{ kb.embeddingModel || 'text-embedding-v3' }}
@@ -208,7 +208,7 @@
               <td>
                 <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
                   <span class="search-method-badge" :class="kb.searchMethod || 'hybrid_search'">
-                    <i :class="getSearchMethodIcon(kb.searchMethod)"></i> {{ getSearchMethodLabel(kb.searchMethod) }}
+                    <i :class="getSearchMethodIcon(kb.searchMethod)"></i> {{ getSearchMethodLabel(kb.searchMethod, kb) }}
                   </span>
                   <span class="model-badge-sub">
                     <i class="fa-solid fa-cube"></i> {{ kb.embeddingModel || 'text-embedding-v3' }}
@@ -316,7 +316,7 @@
               <h2>{{ selectedKb?.name }}</h2>
               <span class="provider-badge dify"><i class="fa-solid fa-link"></i> Dify: {{ selectedKb?.externalDatasetId ? selectedKb.externalDatasetId.substring(0, 14) + '...' : '未绑定' }}</span>
               <span class="search-method-badge" :class="selectedKb?.searchMethod || 'hybrid_search'">
-                <i :class="getSearchMethodIcon(selectedKb?.searchMethod)"></i> {{ getSearchMethodLabel(selectedKb?.searchMethod) }} (Top {{ selectedKb?.topK || 3 }})
+                <i :class="getSearchMethodIcon(selectedKb?.searchMethod)"></i> {{ getSearchMethodLabel(selectedKb?.searchMethod, selectedKb) }} (Top {{ selectedKb?.topK || 3 }})
               </span>
               <span class="model-badge" title="Embedding 向量模型">
                 <i class="fa-solid fa-cube"></i> {{ selectedKb?.embeddingModel || 'text-embedding-v3' }}
@@ -844,15 +844,82 @@
                 <div class="input-hint">向智能体对话上下文注入的最佳匹配段落数（建议 3~5）</div>
               </div>
 
-              <div class="form-group" v-if="kbForm.searchMethod === 'hybrid_search'">
-                <label class="form-label">重排序设置 (Reranking)</label>
-                <label class="checkbox-setting-card">
-                  <input type="checkbox" v-model="kbForm.rerankEnabled">
-                  <div class="checkbox-text-wrap">
-                    <span class="setting-title"><i class="fa-solid fa-arrows-spin"></i> 启用 Rerank 二次重排</span>
-                    <span class="setting-sub">混合召回后使用交叉编码器重评分，显著提高排序准确性</span>
-                  </div>
+            </div>
+
+            <!-- 混合检索重排与权重设置 -->
+            <div v-if="kbForm.searchMethod === 'hybrid_search'" class="hybrid-rerank-container">
+              <div class="rerank-mode-header">
+                <label class="form-label" style="margin-bottom: 0;">
+                  <i class="fa-solid fa-sliders text-blue"></i> 混合检索重排机制 (Reranking)
                 </label>
+                <div class="rerank-mode-tabs">
+                  <button
+                    type="button"
+                    class="mode-tab-btn"
+                    :class="{ active: kbForm.rerankMode === 'weighted_score' }"
+                    @click="kbForm.rerankMode = 'weighted_score'"
+                  >
+                    <i class="fa-solid fa-scale-balanced"></i> 权重设置 (推荐)
+                  </button>
+                  <button
+                    type="button"
+                    class="mode-tab-btn"
+                    :class="{ active: kbForm.rerankMode === 'reranking_model' }"
+                    @click="kbForm.rerankMode = 'reranking_model'"
+                  >
+                    <i class="fa-solid fa-arrows-spin"></i> Rerank 模型
+                  </button>
+                </div>
+              </div>
+
+              <!-- 方案 1: 权重设置 (Weighted score) -->
+              <div v-if="kbForm.rerankMode === 'weighted_score'" class="weights-control-card">
+                <div class="weights-labels-row">
+                  <div class="weight-label-item">
+                    <span class="weight-title"><i class="fa-solid fa-brain" style="color: #3b82f6;"></i> 语义检索权重 (Vector)</span>
+                    <span class="weight-value" style="color: #3b82f6;">{{ Math.round((kbForm.vectorWeight || 0.7) * 100) }}% ({{ kbForm.vectorWeight || 0.7 }})</span>
+                  </div>
+                  <div class="weight-label-item" style="text-align: right;">
+                    <span class="weight-title"><i class="fa-solid fa-font" style="color: #10b981;"></i> 关键字检索权重 (Keyword)</span>
+                    <span class="weight-value" style="color: #10b981;">{{ Math.round((kbForm.keywordWeight || 0.3) * 100) }}% ({{ kbForm.keywordWeight || 0.3 }})</span>
+                  </div>
+                </div>
+
+                <div class="weight-slider-wrap">
+                  <input
+                    type="range"
+                    v-model.number="kbForm.vectorWeight"
+                    min="0.1"
+                    max="0.9"
+                    step="0.1"
+                    class="form-range-styled weight-range"
+                    @input="onVectorWeightChange"
+                  >
+                </div>
+
+                <div class="weights-ratio-bar">
+                  <div class="ratio-segment vector-segment" :style="{ width: ((kbForm.vectorWeight || 0.7) * 100) + '%' }">
+                    语义 {{ Math.round((kbForm.vectorWeight || 0.7) * 100) }}%
+                  </div>
+                  <div class="ratio-segment keyword-segment" :style="{ width: ((kbForm.keywordWeight || 0.3) * 100) + '%' }">
+                    关键词 {{ Math.round((kbForm.keywordWeight || 0.3) * 100) }}%
+                  </div>
+                </div>
+
+                <div class="input-hint">
+                  <i class="fa-solid fa-circle-info"></i> 默认 7:3 黄金权重：语义权重保障概念和上下文泛化召回，关键词权重保障专有名词与精确匹配。
+                </div>
+              </div>
+
+              <!-- 方案 2: Rerank 模型 (Reranking model) -->
+              <div v-else class="rerank-model-card">
+                <div class="model-info-row">
+                  <span class="model-name"><i class="fa-solid fa-arrows-spin" style="color: #6366f1;"></i> {{ kbForm.rerankModel || 'qwen3-rerank' }}</span>
+                  <span class="tag-recommend">通义千问重排模型</span>
+                </div>
+                <div class="model-desc">
+                  通义千问专有二次重排序模型 (Provider: 通义千问)，对混合召回候选切片进行交叉重排打分，大幅提升复杂长文的检索精度。
+                </div>
               </div>
             </div>
 
@@ -1073,7 +1140,12 @@ const kbForm = reactive({
   embeddingProvider: 'langgenius/tongyi/tongyi',
   searchMethod: 'hybrid_search',
   topK: 3,
-  rerankEnabled: true
+  rerankEnabled: true,
+  rerankMode: 'weighted_score',
+  rerankModel: 'qwen3-rerank',
+  rerankModelProvider: 'langgenius/tongyi/tongyi',
+  vectorWeight: 0.7,
+  keywordWeight: 0.3
 })
 
 const faqModalOpen = ref(false)
@@ -1163,10 +1235,18 @@ async function syncFromDify() {
   }
 }
 
-function getSearchMethodLabel(method) {
+function getSearchMethodLabel(method, kb) {
   switch (method) {
     case 'hybrid_search':
-      return '混合检索'
+      if (kb && kb.rerankMode === 'reranking_model') {
+        return '混合检索 (Rerank)'
+      }
+      if (kb && (kb.vectorWeight != null || kb.keywordWeight != null)) {
+        const vw = Math.round((kb.vectorWeight ?? 0.7) * 10)
+        const kw = Math.round((kb.keywordWeight ?? 0.3) * 10)
+        return `混合检索 (权重 ${vw}:${kw})`
+      }
+      return '混合检索 (权重 7:3)'
     case 'semantic_search':
       return '向量检索'
     case 'full_text_search':
@@ -1189,6 +1269,11 @@ function getSearchMethodIcon(method) {
   }
 }
 
+function onVectorWeightChange() {
+  kbForm.vectorWeight = Math.round(Number(kbForm.vectorWeight || 0.7) * 10) / 10
+  kbForm.keywordWeight = Math.round((1.0 - kbForm.vectorWeight) * 10) / 10
+}
+
 function openCreateKb() {
   Object.assign(kbForm, {
     id: '',
@@ -1200,7 +1285,12 @@ function openCreateKb() {
     embeddingProvider: 'langgenius/tongyi/tongyi',
     searchMethod: 'hybrid_search',
     topK: 3,
-    rerankEnabled: true
+    rerankEnabled: true,
+    rerankMode: 'weighted_score',
+    rerankModel: 'qwen3-rerank',
+    rerankModelProvider: 'langgenius/tongyi/tongyi',
+    vectorWeight: 0.7,
+    keywordWeight: 0.3
   })
   kbModalOpen.value = true
 }
@@ -1217,7 +1307,12 @@ function openEditKb(kb) {
     embeddingProvider: kb.embeddingProvider || 'langgenius/tongyi/tongyi',
     searchMethod: kb.searchMethod || 'hybrid_search',
     topK: kb.topK !== undefined && kb.topK !== null ? kb.topK : 3,
-    rerankEnabled: kb.rerankEnabled !== undefined && kb.rerankEnabled !== null ? kb.rerankEnabled : true
+    rerankEnabled: kb.rerankEnabled !== undefined && kb.rerankEnabled !== null ? kb.rerankEnabled : true,
+    rerankMode: kb.rerankMode || 'weighted_score',
+    rerankModel: kb.rerankModel || 'qwen3-rerank',
+    rerankModelProvider: kb.rerankModelProvider || 'langgenius/tongyi/tongyi',
+    vectorWeight: kb.vectorWeight !== undefined && kb.vectorWeight !== null ? kb.vectorWeight : 0.7,
+    keywordWeight: kb.keywordWeight !== undefined && kb.keywordWeight !== null ? kb.keywordWeight : 0.3
   })
   kbModalOpen.value = true
 }
@@ -1236,7 +1331,12 @@ async function saveKnowledgeBase() {
       avatar: kbForm.avatar,
       searchMethod: kbForm.searchMethod,
       topK: kbForm.topK,
-      rerankEnabled: kbForm.rerankEnabled
+      rerankEnabled: kbForm.rerankEnabled,
+      rerankMode: kbForm.rerankMode,
+      rerankModel: kbForm.rerankModel,
+      rerankModelProvider: kbForm.rerankModelProvider,
+      vectorWeight: kbForm.vectorWeight,
+      keywordWeight: kbForm.keywordWeight
     })
   } else {
     res = await http.post('/api/knowledge-bases', {
@@ -1248,7 +1348,12 @@ async function saveKnowledgeBase() {
       embeddingProvider: kbForm.embeddingProvider,
       searchMethod: kbForm.searchMethod,
       topK: kbForm.topK,
-      rerankEnabled: kbForm.rerankEnabled
+      rerankEnabled: kbForm.rerankEnabled,
+      rerankMode: kbForm.rerankMode,
+      rerankModel: kbForm.rerankModel,
+      rerankModelProvider: kbForm.rerankModelProvider,
+      vectorWeight: kbForm.vectorWeight,
+      keywordWeight: kbForm.keywordWeight
     })
   }
   savingKb.value = false
@@ -1264,6 +1369,11 @@ async function saveKnowledgeBase() {
       selectedKb.value.searchMethod = kbForm.searchMethod
       selectedKb.value.topK = kbForm.topK
       selectedKb.value.rerankEnabled = kbForm.rerankEnabled
+      selectedKb.value.rerankMode = kbForm.rerankMode
+      selectedKb.value.rerankModel = kbForm.rerankModel
+      selectedKb.value.rerankModelProvider = kbForm.rerankModelProvider
+      selectedKb.value.vectorWeight = kbForm.vectorWeight
+      selectedKb.value.keywordWeight = kbForm.keywordWeight
     }
   } else {
     showToast(res.message || '保存知识库失败', 'error')
