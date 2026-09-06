@@ -229,9 +229,10 @@
                 </div>
                 <div class="agent-actions">
                   <button class="btn-card-action btn-chat-primary" @click="goDebug(a.id)"><i class="fa-solid fa-sliders"></i><span>调试</span></button>
-                  <button class="btn-card-action btn-action-icon" @click="openEdit(a)"><i class="fa-regular fa-pen-to-square"></i></button>
-                  <button class="btn-card-action btn-action-icon" @click="toggleStatus(a)"><i class="fa-solid fa-power-off"></i></button>
-                  <button class="btn-card-action btn-action-icon btn-action-danger" @click="openDelete(a)"><i class="fa-regular fa-trash-can"></i></button>
+                  <button class="btn-card-action btn-action-icon" title="编辑智能体" @click="openEdit(a)"><i class="fa-regular fa-pen-to-square"></i></button>
+                  <button class="btn-card-action btn-action-icon" title="复制智能体" :disabled="copying" @click="copyAgent(a)"><i class="fa-regular fa-copy"></i></button>
+                  <button class="btn-card-action btn-action-icon" :title="a.status === 'RUNNING' ? '停用智能体' : '启用智能体'" @click="toggleStatus(a)"><i class="fa-solid fa-power-off"></i></button>
+                  <button class="btn-card-action btn-action-icon btn-action-danger" title="删除智能体" @click="openDelete(a)"><i class="fa-regular fa-trash-can"></i></button>
                 </div>
               </div>
             </div>
@@ -247,12 +248,13 @@
                   <td><div class="table-prompt-cell">{{ a.systemPrompt || '暂无设定' }}</div></td>
                   <td>{{ Number(a.callCount || 0).toLocaleString() }} 次</td>
                   <td><div class="badge-status" :class="statusClass(a.status)"><span class="status-dot"></span><span>{{ statusLabel(a.status) }}</span></div></td>
-                  <td style="text-align:right;">
-                    <div class="agent-actions" style="justify-content:flex-end;">
+                  <td style="text-align:right; white-space: nowrap;">
+                    <div class="agent-actions" style="justify-content:flex-end; flex-wrap: nowrap;">
                       <button class="btn-card-action btn-chat-primary" @click="goDebug(a.id)"><i class="fa-solid fa-sliders"></i><span>调试</span></button>
-                      <button class="btn-card-action btn-action-icon" @click="openEdit(a)"><i class="fa-regular fa-pen-to-square"></i></button>
-                      <button class="btn-card-action btn-action-icon" @click="toggleStatus(a)"><i class="fa-solid fa-power-off"></i></button>
-                      <button class="btn-card-action btn-action-icon btn-action-danger" @click="openDelete(a)"><i class="fa-regular fa-trash-can"></i></button>
+                      <button class="btn-card-action btn-action-icon" title="编辑智能体" @click="openEdit(a)"><i class="fa-regular fa-pen-to-square"></i></button>
+                      <button class="btn-card-action btn-action-icon" title="复制智能体" :disabled="copying" @click="copyAgent(a)"><i class="fa-regular fa-copy"></i></button>
+                      <button class="btn-card-action btn-action-icon" :title="a.status === 'RUNNING' ? '停用智能体' : '启用智能体'" @click="toggleStatus(a)"><i class="fa-solid fa-power-off"></i></button>
+                      <button class="btn-card-action btn-action-icon btn-action-danger" title="删除智能体" @click="openDelete(a)"><i class="fa-regular fa-trash-can"></i></button>
                     </div>
                   </td>
                 </tr>
@@ -651,6 +653,26 @@ async function confirmDelete() {
     refresh()
   } else {
     showToast(res.message || '删除失败', 'error')
+  }
+}
+
+const copying = ref(false)
+
+async function copyAgent(agent) {
+  if (!agent?.id || copying.value) return
+  copying.value = true
+  try {
+    const res = await http.post(`/api/agents/${agent.id}/copy`)
+    if (res.success) {
+      showToast(`已成功复制智能体「${res.data?.name || agent.name}」`, 'success')
+      refresh()
+    } else {
+      showToast(res.message || '复制智能体失败', 'error')
+    }
+  } catch (err) {
+    showToast('复制失败: ' + (err.message || '网络错误'), 'error')
+  } finally {
+    copying.value = false
   }
 }
 
