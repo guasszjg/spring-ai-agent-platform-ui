@@ -179,7 +179,6 @@ async function handleLogin() {
       password: password.value
     })
     if (res && res.success && res.data) {
-      localStorage.setItem('token', res.data.token)
       localStorage.setItem('user', JSON.stringify(res.data))
       showToast('登录成功，正在进入控制台...', 'success', 1200)
       setTimeout(() => router.push('/dashboard'), 500)

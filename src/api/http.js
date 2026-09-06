@@ -16,12 +16,19 @@ async function request(method, url, { params, body } = {}) {
       method,
       credentials: 'include',
       headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token') || ''}`
+        'Content-Type': 'application/json'
       },
       body: body !== undefined ? JSON.stringify(body) : undefined
     })
-    return await res.json()
+    const contentType = res.headers.get('content-type') || ''
+    const payload = contentType.includes('application/json')
+      ? await res.json()
+      : { success: false, message: `请求失败 (HTTP ${res.status})` }
+    if (res.status === 401) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+    }
+    return payload
   } catch (err) {
     return { success: false, message: '网络请求失败: ' + err.message }
   }

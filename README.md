@@ -1,5 +1,23 @@
-# Vue 3 + Vite
+# Spring AI Agent Platform UI
 
-This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+Vue 3 + Vite 管理端，包含登录、智能体管理、模型网关、调试工作台、会话日志与监控页面。
 
-Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://vuejs.org/guide/scaling-up/tooling.html#ide-support).
+## 本地开发
+
+先启动后端 `http://localhost:8080`，再执行：
+
+```bash
+npm install
+npm run dev
+```
+
+开发地址为 `http://localhost:5173`，`/api` 会代理到后端。
+
+## 生产构建
+
+```bash
+npm run build
+```
+
+构建产物会写入相邻后端仓库的 `src/main/resources/static`，由 Spring Boot 统一提供。
+身份认证使用服务端 Session；API Key 不会持久化到 `localStorage`。

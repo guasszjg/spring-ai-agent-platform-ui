@@ -343,7 +343,10 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-secondary" @click="agentModalOpen = false">取消</button>
-          <button type="submit" class="btn-create-agent" :disabled="saving">{{ saving ? '保存中...' : '保存并生效' }}</button>
+          <button type="submit" class="btn-create-agent" :disabled="saving">
+            <i :class="saving ? 'fa-solid fa-spinner fa-spin' : (form.id ? 'fa-solid fa-floppy-disk' : 'fa-solid fa-check')"></i>
+            <span>{{ saving ? '保存中...' : (form.id ? '保存修改' : '保存并生效') }}</span>
+          </button>
         </div>
       </form>
     </div>

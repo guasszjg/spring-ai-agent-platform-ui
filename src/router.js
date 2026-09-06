@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from './views/LoginView.vue'
 import DashboardView from './views/DashboardView.vue'
 import DebugView from './views/DebugView.vue'
+import { http } from './api/http'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -13,14 +14,12 @@ const router = createRouter({
   ]
 })
 
-router.beforeEach((to) => {
-  const token = localStorage.getItem('token')
-  if (to.meta.requiresAuth && !token) {
-    return '/login'
-  }
-  if (to.name === 'login' && token) {
-    return '/dashboard'
-  }
+router.beforeEach(async (to) => {
+  if (!to.meta.requiresAuth && to.name !== 'login') return true
+
+  const session = await http.get('/api/auth/me')
+  if (to.meta.requiresAuth && !session.success) return '/login'
+  if (to.name === 'login' && session.success) return '/dashboard'
   return true
 })
 

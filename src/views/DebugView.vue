@@ -200,8 +200,9 @@
                 <div class="tool-icon" :class="tool.iconClass">
                   <template v-if="tool.customIcon === 'bocha'">
                     <svg class="bocha-icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M12 2C12 7.52 7.52 12 2 12C7.52 12 12 16.48 12 22C12 16.48 16.48 12 22 12C16.48 12 12 7.52 12 2Z" fill="#0284c7"/>
-                      <circle cx="12" cy="12" r="3.2" fill="#38bdf8"/>
+                      <path d="M6.98 2c2.351.265 3.905 1.955 3.987 4.31a.035.035 0 00.019.031.036.036 0 00.036-.001c5.432-3.05 12.168.3 12.921 6.48.31 2.535-.668 5.04-2.33 6.946-1.41 1.619-3.653 2.561-5.763 2.738h-.996c-3.945-.28-7.106-2.99-7.99-6.805a.302.302 0 00-.078-.145l.013-.027a.114.114 0 00.01-.055l-.162-2.05.014-8.569L6.666 2h.314zm14.102 17.852c-.32-.386-.527-.643-.62-.773-.74-1.011-1.058-2.195-.952-3.552.044-.57.296-1.117.263-1.744-.146-2.74-2.503-4.64-5.21-4.232-1.772.268-3.215 1.678-3.61 3.4a4.44 4.44 0 001.574 4.488c1.119.879 2.37 1.166 3.753.86.675-.15 1.04-.226 1.096-.23 1.126-.083 2.098.273 2.918 1.069.486.472.74.718.763.738a.017.017 0 00.024 0 .017.017 0 000-.024z" fill="#006EFF"/>
+                      <path d="M6.661 4.854l-.014 8.568-2.921-5.847-1.488-3.048a.106.106 0 01.022-.124.11.11 0 01.037-.024c1.57-.602 3.025-.444 4.364.475z" fill="#A5CCFF"/>
+                      <path d="M3.726 7.575l2.921 5.847.161 2.05a.114.114 0 01-.01.055l-.012.027L.02 8.821a.07.07 0 01.001-.1C1.064 7.747 2.3 7.365 3.726 7.576z" fill="#A5CCFF" fill-opacity=".647"/>
                     </svg>
                   </template>
                   <i v-else :class="tool.icon"></i>
@@ -235,7 +236,7 @@
                   <input
                     v-model="tool.enabled"
                     type="checkbox"
-                    @change="showToast(`工具 [${tool.prefix} ${tool.title}] 已${tool.enabled ? '启用' : '禁用'}`, 'info', 1500)"
+                    @change="toggleToolEnabled(tool)"
                   >
                   <span class="slider-toggle"></span>
                 </label>
@@ -308,8 +309,9 @@
             <div class="tool-icon" :class="editingTool?.iconClass">
               <template v-if="editingTool?.customIcon === 'bocha'">
                 <svg class="bocha-icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 2C12 7.52 7.52 12 2 12C7.52 12 12 16.48 12 22C12 16.48 16.48 12 22 12C16.48 12 12 7.52 12 2Z" fill="#0284c7"/>
-                  <circle cx="12" cy="12" r="3.2" fill="#38bdf8"/>
+                  <path d="M6.98 2c2.351.265 3.905 1.955 3.987 4.31a.035.035 0 00.019.031.036.036 0 00.036-.001c5.432-3.05 12.168.3 12.921 6.48.31 2.535-.668 5.04-2.33 6.946-1.41 1.619-3.653 2.561-5.763 2.738h-.996c-3.945-.28-7.106-2.99-7.99-6.805a.302.302 0 00-.078-.145l.013-.027a.114.114 0 00.01-.055l-.162-2.05.014-8.569L6.666 2h.314zm14.102 17.852c-.32-.386-.527-.643-.62-.773-.74-1.011-1.058-2.195-.952-3.552.044-.57.296-1.117.263-1.744-.146-2.74-2.503-4.64-5.21-4.232-1.772.268-3.215 1.678-3.61 3.4a4.44 4.44 0 001.574 4.488c1.119.879 2.37 1.166 3.753.86.675-.15 1.04-.226 1.096-.23 1.126-.083 2.098.273 2.918 1.069.486.472.74.718.763.738a.017.017 0 00.024 0 .017.017 0 000-.024z" fill="#006EFF"/>
+                  <path d="M6.661 4.854l-.014 8.568-2.921-5.847-1.488-3.048a.106.106 0 01.022-.124.11.11 0 01.037-.024c1.57-.602 3.025-.444 4.364.475z" fill="#A5CCFF"/>
+                  <path d="M3.726 7.575l2.921 5.847.161 2.05a.114.114 0 01-.01.055l-.012.027L.02 8.821a.07.07 0 01.001-.1C1.064 7.747 2.3 7.365 3.726 7.576z" fill="#A5CCFF" fill-opacity=".647"/>
                 </svg>
               </template>
               <i v-else :class="editingTool?.icon"></i>
@@ -484,42 +486,20 @@
           </button>
         </div>
         <div class="tool-modal-body">
-          <div v-if="removedTools.length" class="tool-catalog-section">
-            <h4 class="catalog-section-title">已移除的工具</h4>
-            <div class="tool-catalog-list">
-              <div v-for="rTool in removedTools" :key="rTool.name" class="catalog-item-card">
-                <div class="catalog-item-left">
-                  <div class="tool-icon" :class="rTool.iconClass">
-                    <template v-if="rTool.customIcon === 'bocha'">
-                      <svg class="bocha-icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2C12 7.52 7.52 12 2 12C7.52 12 12 16.48 12 22C12 16.48 16.48 12 22 12C16.48 12 12 7.52 12 2Z" fill="#0284c7"/>
-                        <circle cx="12" cy="12" r="3.2" fill="#38bdf8"/>
-                      </svg>
-                    </template>
-                    <i v-else :class="rTool.icon"></i>
-                  </div>
-                  <div>
-                    <div class="tool-info-text">
-                      <span class="tool-prefix">{{ rTool.prefix }}</span>
-                      <span class="tool-title">{{ rTool.title }}</span>
-                    </div>
-                    <div class="catalog-item-desc">{{ rTool.description }}</div>
-                  </div>
-                </div>
-                <button type="button" class="btn-catalog-add" @click="addToolFromCatalog(rTool)">
-                  <i class="fa-solid fa-rotate-left"></i> 恢复
-                </button>
-              </div>
-            </div>
-          </div>
-
           <div class="tool-catalog-section">
-            <h4 class="catalog-section-title">可用扩展插件与工具库</h4>
+            <h4 class="catalog-section-title">平台内置扩展工具库 (共 {{ standardToolCatalog.length }} 项)</h4>
             <div class="tool-catalog-list">
-              <div v-for="catTool in availableCatalog" :key="catTool.name" class="catalog-item-card">
+              <div v-for="catTool in standardToolCatalog" :key="catTool.name" class="catalog-item-card">
                 <div class="catalog-item-left">
                   <div class="tool-icon" :class="catTool.iconClass">
-                    <i :class="catTool.icon"></i>
+                    <template v-if="catTool.customIcon === 'bocha'">
+                      <svg class="bocha-icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M6.98 2c2.351.265 3.905 1.955 3.987 4.31a.035.035 0 00.019.031.036.036 0 00.036-.001c5.432-3.05 12.168.3 12.921 6.48.31 2.535-.668 5.04-2.33 6.946-1.41 1.619-3.653 2.561-5.763 2.738h-.996c-3.945-.28-7.106-2.99-7.99-6.805a.302.302 0 00-.078-.145l.013-.027a.114.114 0 00.01-.055l-.162-2.05.014-8.569L6.666 2h.314zm14.102 17.852c-.32-.386-.527-.643-.62-.773-.74-1.011-1.058-2.195-.952-3.552.044-.57.296-1.117.263-1.744-.146-2.74-2.503-4.64-5.21-4.232-1.772.268-3.215 1.678-3.61 3.4a4.44 4.44 0 001.574 4.488c1.119.879 2.37 1.166 3.753.86.675-.15 1.04-.226 1.096-.23 1.126-.083 2.098.273 2.918 1.069.486.472.74.718.763.738a.017.017 0 00.024 0 .017.017 0 000-.024z" fill="#006EFF"/>
+                        <path d="M6.661 4.854l-.014 8.568-2.921-5.847-1.488-3.048a.106.106 0 01.022-.124.11.11 0 01.037-.024c1.57-.602 3.025-.444 4.364.475z" fill="#A5CCFF"/>
+                        <path d="M3.726 7.575l2.921 5.847.161 2.05a.114.114 0 01-.01.055l-.012.027L.02 8.821a.07.07 0 01.001-.1C1.064 7.747 2.3 7.365 3.726 7.576z" fill="#A5CCFF" fill-opacity=".647"/>
+                      </svg>
+                    </template>
+                    <i v-else :class="catTool.icon"></i>
                   </div>
                   <div>
                     <div class="tool-info-text">
@@ -748,9 +728,16 @@ function saveToolSettings() {
     }
     editingTool.value.description = editingToolConfig.description
 
-    // 1. If Bocha key filled, persist globally to localStorage
-    if (editingTool.value.customIcon === 'bocha' && editingToolConfig.apiKey) {
-      localStorage.setItem(GLOBAL_BOCHA_KEY, editingToolConfig.apiKey.trim())
+    // 1. If Bocha key filled, persist globally to localStorage and backend secret store
+    if (editingTool.value.customIcon === 'bocha') {
+      if (editingToolConfig.apiKey) {
+        const trimmedKey = editingToolConfig.apiKey.trim()
+        localStorage.setItem(GLOBAL_BOCHA_KEY, trimmedKey)
+        if (agent.value?.id) {
+          http.put(`/api/agents/${agent.value.id}/tool-secrets/bocha`, { apiKey: trimmedKey })
+            .catch(err => console.warn('Sync bocha secret failed:', err))
+        }
+      }
     }
 
     // 2. Persist this agent's tools configuration to localStorage
@@ -783,56 +770,100 @@ function resetToolSettings() {
   showToast('已恢复默认配置', 'info', 1500)
 }
 
+function toggleToolEnabled(tool) {
+  if (agent.value?.id) {
+    localStorage.setItem(toolsStorageKey(agent.value.id), JSON.stringify(tools))
+    http.put(`/api/agents/${agent.value.id}`, {
+      ...agent.value,
+      toolsConfig: JSON.stringify(tools)
+    }).catch(err => console.warn('Auto sync toolsConfig failed:', err))
+  }
+  showToast(`工具 [${tool.prefix} ${tool.title}] 已${tool.enabled ? '启用' : '禁用'}`, 'info', 1500)
+}
+
 function deleteTool(tool) {
   const idx = tools.findIndex(t => t.name === tool.name)
   if (idx !== -1) {
-    removedTools.value.push({ ...tools[idx] })
     tools.splice(idx, 1)
-    showToast(`已移除工具 [${tool.prefix} ${tool.title}]，可在「+ 添加」中恢复`, 'info', 2500)
+    if (agent.value?.id) {
+      localStorage.setItem(toolsStorageKey(agent.value.id), JSON.stringify(tools))
+      http.put(`/api/agents/${agent.value.id}`, {
+        ...agent.value,
+        toolsConfig: JSON.stringify(tools)
+      }).catch(err => console.warn('Auto sync toolsConfig failed:', err))
+    }
+    showToast(`已移除工具 [${tool.prefix} ${tool.title}]，可在「+ 添加」中重新添加`, 'info', 2500)
   }
 }
 
 const addToolModalOpen = ref(false)
-const availableCatalog = ref([
+
+const standardToolCatalog = ref([
   {
-    name: 'Python代码沙箱',
-    prefix: 'python',
-    title: 'Code Interpreter',
-    icon: 'fa-brands fa-python',
-    iconClass: 'icon-blue-tool',
-    help: '安全执行 Python 3.11 代码计算与数据分析',
-    enabled: true,
-    description: '在安全隔离沙箱中执行 Python 代码脚本，用于复杂数学计算、数据处理与算法验证。'
-  },
-  {
-    name: '实时天气查询',
-    prefix: 'weather',
-    title: 'Weather Query',
-    icon: 'fa-solid fa-cloud-sun',
+    name: '时区转换',
+    prefix: 'time',
+    title: '时区转换',
+    icon: 'fa-solid fa-clock',
     iconClass: 'icon-orange',
-    help: '获取全球各大城市的实时天气预报与空气质量',
+    help: '将指定时间在不同时区（如北京、纽约、伦敦等）之间进行转换计算',
     enabled: true,
-    description: '查询指定城市的实时天气状况、气温、湿度、风向与多日天气预测。'
+    description: '将指定时间在不同时区之间进行换算转换。例如将北京时间转换为纽约时间、东京时间或伦敦时间。',
+    config: { timezone: 'Asia/Shanghai', format: 'yyyy-MM-dd HH:mm:ss' }
   },
   {
-    name: '精确数学计算器',
-    prefix: 'math',
-    title: 'Calculator',
-    icon: 'fa-solid fa-calculator',
-    iconClass: 'icon-purple-tool',
-    help: '支持高精度复杂数学公式计算与统计分析',
+    name: '时间戳转换',
+    prefix: 'time',
+    title: '时间戳转换',
+    icon: 'fa-solid fa-clock',
+    iconClass: 'icon-orange',
+    help: '毫秒级/秒级 Unix 时间戳与标准日期时间字符串相互转换',
     enabled: true,
-    description: '执行高精度四则运算、三角函数、微积分与统计学公式运算。'
+    description: 'Unix时间戳与格式化时间字符串之间的相互转换。可将秒级/毫秒级时间戳转为日期时间，或将日期时间转为时间戳。',
+    config: { timezone: 'Asia/Shanghai', format: 'yyyy-MM-dd HH:mm:ss' }
   },
   {
-    name: '业务数据库查询',
-    prefix: 'db',
-    title: 'Database Query',
-    icon: 'fa-solid fa-database',
-    iconClass: 'icon-emerald-tool',
-    help: '安全只读查询业务数据库并生成分析数据',
+    name: '获取当前时间',
+    prefix: 'time',
+    title: '获取当前时间',
+    icon: 'fa-solid fa-clock',
+    iconClass: 'icon-orange',
+    help: '获取当前系统的精确年月日、时分秒与时区时间',
     enabled: true,
-    description: '执行只读 SQL 查询，分析数据库中的表结构、统计业务指标并支持图表可视化。'
+    description: '获取指定时区的当前精确日期和时间（包含年月日、时分秒以及星期几）。当用户询问当前时间、现在几点、今天几号等问题时调用。',
+    config: { timezone: 'Asia/Shanghai', format: 'yyyy-MM-dd HH:mm:ss' }
+  },
+  {
+    name: '获取时间戳',
+    prefix: 'time',
+    title: '获取时间戳',
+    icon: 'fa-solid fa-clock',
+    iconClass: 'icon-orange',
+    help: '计算日期偏移与两个日期相隔天数',
+    enabled: true,
+    description: '计算两个日期之间相隔的天数，或者计算基准日期增加/减少若干天后的新日期。',
+    config: { timezone: 'Asia/Shanghai', format: 'yyyy-MM-dd HH:mm:ss' }
+  },
+  {
+    name: '星期几计算器',
+    prefix: 'time',
+    title: '星期几计算器',
+    icon: 'fa-solid fa-calendar-days',
+    iconClass: 'icon-orange',
+    help: '计算历史上或未来的任意特定日期属于星期几',
+    enabled: true,
+    description: '计算历史上或未来的某个具体日期是星期几。当用户询问某一天是周几或星期几时调用。',
+    config: { timezone: 'Asia/Shanghai', format: 'yyyy-MM-dd HH:mm:ss' }
+  },
+  {
+    name: '联网检索',
+    prefix: 'bocha',
+    title: 'Bocha Web Search',
+    customIcon: 'bocha',
+    iconClass: 'icon-bocha-badge',
+    help: '博查 AI 搜索引擎，提供全网实时网页、新闻与知识检索',
+    enabled: true,
+    description: '联网检索博查搜索引擎，获取最新互联网信息与知识。',
+    config: { count: 5, freshness: 'noLimit', summary: true }
   }
 ])
 
@@ -845,13 +876,22 @@ function addToolFromCatalog(toolItem) {
     showToast(`工具 [${toolItem.title}] 已经存在`, 'warning', 2000)
     return
   }
-  tools.push({
-    ...toolItem,
-    enabled: true
-  })
-  const rIdx = removedTools.value.findIndex(t => t.name === toolItem.name)
-  if (rIdx !== -1) {
-    removedTools.value.splice(rIdx, 1)
+  const newTool = JSON.parse(JSON.stringify(toolItem))
+  newTool.enabled = true
+  if (newTool.customIcon === 'bocha') {
+    const savedGlobalKey = localStorage.getItem(GLOBAL_BOCHA_KEY)
+    if (savedGlobalKey) {
+      if (!newTool.config) newTool.config = {}
+      newTool.config.apiKey = savedGlobalKey
+    }
+  }
+  tools.push(newTool)
+  if (agent.value?.id) {
+    localStorage.setItem(toolsStorageKey(agent.value.id), JSON.stringify(tools))
+    http.put(`/api/agents/${agent.value.id}`, {
+      ...agent.value,
+      toolsConfig: JSON.stringify(tools)
+    }).catch(err => console.warn('Auto sync toolsConfig failed:', err))
   }
   showToast(`已成功添加工具 [${toolItem.prefix} ${toolItem.title}]`, 'success', 2000)
 }
@@ -1109,14 +1149,20 @@ function loadPersistedTools(agentData) {
       }
     }
     if (Array.isArray(saved) && saved.length) {
+      const loadedList = []
       saved.forEach(st => {
-        const target = tools.find(t => t.name === st.name)
-        if (target) {
-          if (st.enabled !== undefined) target.enabled = st.enabled
-          if (st.config) target.config = { ...st.config }
-          if (st.description) target.description = st.description
+        const standard = standardToolCatalog.value.find(t => t.name === st.name)
+        if (standard) {
+          loadedList.push({
+            ...standard,
+            ...st,
+            config: { ...standard.config, ...(st.config || {}) }
+          })
         }
       })
+      if (loadedList.length > 0) {
+        tools.splice(0, tools.length, ...loadedList)
+      }
     }
     const bocha = tools.find(t => t.customIcon === 'bocha')
     if (bocha) {

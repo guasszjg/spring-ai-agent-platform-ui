@@ -8,5 +8,7 @@ import './assets/debug.css'
 
 const savedTheme = localStorage.getItem('theme') || 'dark'
 document.documentElement.setAttribute('data-theme', savedTheme)
+// Remove the deprecated plaintext API-key cache from older releases.
+localStorage.removeItem('global-bocha-api-key')
 
 createApp(App).use(router).mount('#app')
