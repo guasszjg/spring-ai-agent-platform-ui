@@ -55,7 +55,29 @@
             <i class="fa-solid fa-xmark"></i>
           </button>
         </div>
-        <span class="count-badge">共 {{ templates.length }} 个模板</span>
+        <div class="view-mode-group">
+          <button
+            type="button"
+            class="btn-view-mode"
+            :class="{ active: viewMode === 'card' }"
+            title="卡片视图"
+            @click="viewMode = 'card'"
+          >
+            <i class="fa-solid fa-table-cells-large"></i>
+          </button>
+          <button
+            type="button"
+            class="btn-view-mode"
+            :class="{ active: viewMode === 'list' }"
+            title="列表表格视图"
+            @click="viewMode = 'list'"
+          >
+            <i class="fa-solid fa-list-ul"></i>
+          </button>
+        </div>
+        <button type="button" class="btn-refresh" title="刷新模板列表" @click="loadTemplates">
+          <i class="fa-solid fa-rotate"></i>
+        </button>
       </div>
     </div>
 
@@ -75,7 +97,7 @@
       </button>
     </div>
 
-    <div v-else class="templates-grid">
+    <div v-else-if="viewMode === 'card'" class="templates-grid">
       <div
         v-for="tpl in templates"
         :key="tpl.id"
@@ -187,6 +209,144 @@
         </div>
       </div>
     </div>
+
+    <!-- Table / List View -->
+    <div v-else class="table-view-card">
+      <table class="agent-table">
+        <thead>
+          <tr>
+            <th>模板信息</th>
+            <th>业务分类</th>
+            <th>场景功能描述</th>
+            <th>系统提示词</th>
+            <th>建议温度</th>
+            <th>业务标签</th>
+            <th style="text-align: right;">操作管理</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="tpl in templates" :key="tpl.id">
+            <td>
+              <div class="table-agent-meta">
+                <div class="table-agent-avatar">{{ tpl.avatar || '🤖' }}</div>
+                <div>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span class="table-agent-title">{{ tpl.name }}</span>
+                    <span v-if="tpl.isBuiltin" class="tpl-badge builtin-badge" style="font-size: 10px; padding: 1px 6px;">预设</span>
+                    <span v-else class="tpl-badge custom-badge" style="font-size: 10px; padding: 1px 6px;">自定义</span>
+                  </div>
+                  <div class="table-agent-code">排序权重: {{ tpl.sortOrder || 0 }}</div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <span class="spec-badge"><i class="fa-solid fa-tag"></i> {{ tpl.category || '通用智能' }}</span>
+            </td>
+            <td>
+              <div class="table-desc-cell" :title="tpl.description">
+                {{ tpl.description || '暂无场景功能描述' }}
+              </div>
+            </td>
+            <td>
+              <div class="table-prompt-cell" :title="tpl.systemPrompt">
+                {{ tpl.systemPrompt || '暂未设定 System Prompt' }}
+              </div>
+            </td>
+            <td>
+              <span class="spec-badge">
+                <i class="fa-solid fa-temperature-half"></i>
+                T:{{ tpl.temperature != null ? tpl.temperature : 0.7 }}
+              </span>
+            </td>
+            <td>
+              <div class="agent-tags" style="margin: 0; flex-wrap: nowrap; max-width: 140px; overflow: hidden;">
+                <span v-for="t in getTagArray(tpl.tags).slice(0, 2)" :key="t" class="tag-item">#{{ t }}</span>
+                <span v-if="getTagArray(tpl.tags).length > 2" class="tag-item" style="opacity: 0.7;">+{{ getTagArray(tpl.tags).length - 2 }}</span>
+              </div>
+            </td>
+            <td style="text-align: right;">
+              <div class="agent-actions" style="justify-content: flex-end;">
+                <button
+                  type="button"
+                  class="btn-card-action btn-chat-primary"
+                  title="基于此模板快速注册智能体"
+                  @click="useTemplateToCreate(tpl)"
+                >
+                  <i class="fa-solid fa-wand-magic-sparkles"></i>
+                  <span>以此注册</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn-card-action btn-action-icon"
+                  title="复制系统提示词"
+                  @click.stop="copyText(tpl.systemPrompt, '提示词已复制到剪贴板')"
+                >
+                  <i class="fa-regular fa-copy"></i>
+                </button>
+                <button
+                  type="button"
+                  class="btn-card-action btn-action-icon"
+                  title="编辑模板"
+                  @click.stop="openEditModal(tpl)"
+                >
+                  <i class="fa-regular fa-pen-to-square"></i>
+                </button>
+                <button
+                  type="button"
+                  class="btn-card-action btn-action-icon btn-action-danger"
+                  title="删除模板"
+                  @click.stop="openDeleteModal(tpl)"
+                >
+                  <i class="fa-regular fa-trash-can"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination Section -->
+    <section v-if="total > 0" class="pagination-container">
+      <div class="page-summary">
+        共 {{ total }} 个场景模板 · 第 {{ page }} / {{ totalPages }} 页
+        <select v-model.number="pageSize" class="status-select" style="margin-left: 12px; padding: 4px 8px; font-size: 12px;" @change="onPageSizeChange">
+          <option :value="6">6 条/页</option>
+          <option :value="12">12 条/页</option>
+          <option :value="24">24 条/页</option>
+        </select>
+      </div>
+      <div class="pagination-controls">
+        <button
+          type="button"
+          class="btn-page"
+          :disabled="page <= 1"
+          title="上一页"
+          @click="changePage(-1)"
+        >
+          <i class="fa-solid fa-chevron-left"></i>
+        </button>
+        <button
+          v-for="n in totalPages"
+          :key="n"
+          type="button"
+          class="btn-page"
+          :class="{ active: n === page }"
+          @click="goToPage(n)"
+        >
+          {{ n }}
+        </button>
+        <button
+          type="button"
+          class="btn-page"
+          :disabled="page >= totalPages"
+          title="下一页"
+          @click="changePage(1)"
+        >
+          <i class="fa-solid fa-chevron-right"></i>
+        </button>
+      </div>
+    </section>
 
     <!-- Create / Edit Template Modal -->
     <div v-if="modalOpen" class="modal-backdrop" :class="{ open: modalOpen }">
@@ -386,7 +546,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 
@@ -403,6 +563,16 @@ const loading = ref(false)
 const saving = ref(false)
 const deleting = ref(false)
 const expandedPrompts = reactive({})
+
+// View Mode ('card' | 'list')
+const viewMode = ref(localStorage.getItem('templateViewMode') || 'card')
+watch(viewMode, (v) => localStorage.setItem('templateViewMode', v))
+
+// Pagination
+const page = ref(1)
+const pageSize = ref(Number(localStorage.getItem('templatePageSize')) || 6)
+const total = ref(0)
+const totalPages = ref(1)
 
 // Modal States
 const modalOpen = ref(false)
@@ -432,18 +602,42 @@ function getTagArray(tags) {
 
 function selectCategory(cat) {
   currentCategory.value = cat
+  page.value = 1
   loadTemplates()
 }
 
 function debounceSearch() {
   clearTimeout(searchDebounceTimer)
   searchDebounceTimer = setTimeout(() => {
+    page.value = 1
     loadTemplates()
   }, 300)
 }
 
 function clearSearch() {
   searchKeyword.value = ''
+  page.value = 1
+  loadTemplates()
+}
+
+function changePage(delta) {
+  const target = page.value + delta
+  if (target >= 1 && target <= totalPages.value) {
+    page.value = target
+    loadTemplates()
+  }
+}
+
+function goToPage(n) {
+  if (n >= 1 && n <= totalPages.value) {
+    page.value = n
+    loadTemplates()
+  }
+}
+
+function onPageSizeChange() {
+  localStorage.setItem('templatePageSize', String(pageSize.value))
+  page.value = 1
   loadTemplates()
 }
 
@@ -469,7 +663,10 @@ function copyText(text, msg) {
 async function loadTemplates() {
   loading.value = true
   try {
-    const params = {}
+    const params = {
+      page: page.value,
+      size: pageSize.value
+    }
     if (searchKeyword.value.trim()) {
       params.keyword = searchKeyword.value.trim()
     }
@@ -478,12 +675,24 @@ async function loadTemplates() {
     }
     const res = await http.get('/api/agent-templates', params)
     if (res.success && res.data) {
-      templates.value = res.data
+      if (res.data.records !== undefined) {
+        templates.value = res.data.records || []
+        total.value = res.data.total || 0
+        totalPages.value = Math.max(1, res.data.totalPages || 1)
+        page.value = res.data.page || 1
+      } else if (Array.isArray(res.data)) {
+        templates.value = res.data
+        total.value = res.data.length
+        totalPages.value = 1
+        page.value = 1
+      }
     } else {
       templates.value = []
+      total.value = 0
+      totalPages.value = 1
     }
   } catch (err) {
-    showToast('加载场景模板失败: ' + err.message, 'error')
+    showToast('加载场景模板失败: ' + (err.message || '网络错误'), 'error')
   } finally {
     loading.value = false
   }
@@ -573,6 +782,9 @@ async function saveTemplate() {
     if (res.success) {
       showToast(editingId.value ? '场景模板已成功更新' : '场景模板创建成功', 'success')
       closeModal()
+      if (!editingId.value) {
+        page.value = 1
+      }
       await loadTemplates()
       emit('templates-updated')
     } else {
@@ -598,6 +810,9 @@ async function confirmDelete() {
     if (res.success) {
       showToast('场景模板已成功删除', 'success')
       deleteModalOpen.value = false
+      if (templates.value.length === 1 && page.value > 1) {
+        page.value -= 1
+      }
       await loadTemplates()
       emit('templates-updated')
     } else {
@@ -1145,6 +1360,15 @@ onMounted(loadTemplates)
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12.5px;
   line-height: 1.6;
+}
+
+.table-desc-cell {
+  max-width: 240px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-secondary);
+  font-size: 12.5px;
 }
 
 @media (max-width: 768px) {
