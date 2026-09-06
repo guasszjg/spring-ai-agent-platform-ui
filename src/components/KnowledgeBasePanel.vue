@@ -139,16 +139,32 @@
           </div>
 
           <div class="kb-card-footer" @click.stop>
-            <span class="kb-updated-at">更新于 {{ formatTime(kb.updatedAt) }}</span>
-            <div class="kb-card-actions">
-              <button class="btn-kb-action" title="进入管理文档与FAQ" @click="openKbDetail(kb)">
-                <i class="fa-solid fa-arrow-right-to-bracket"></i> <span>进入管理</span>
+            <span class="kb-updated-at"><i class="fa-regular fa-clock"></i> 更新于 {{ formatTime(kb.updatedAt) }}</span>
+            <div class="agent-actions" style="justify-content: flex-end; flex-wrap: nowrap;">
+              <button
+                type="button"
+                class="btn-card-action btn-chat-primary"
+                title="进入管理知识库文档与问答"
+                @click="openKbDetail(kb)"
+              >
+                <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                <span>进入管理</span>
               </button>
-              <button class="btn-kb-icon" title="编辑知识库" @click="openEditKb(kb)">
-                <i class="fa-solid fa-pen-to-square"></i>
+              <button
+                type="button"
+                class="btn-card-action btn-action-icon"
+                title="编辑知识库信息"
+                @click="openEditKb(kb)"
+              >
+                <i class="fa-regular fa-pen-to-square"></i>
               </button>
-              <button class="btn-kb-icon danger" title="删除知识库" @click="confirmDeleteKb(kb)">
-                <i class="fa-solid fa-trash-can"></i>
+              <button
+                type="button"
+                class="btn-card-action btn-action-icon btn-action-danger"
+                title="删除知识库"
+                @click="confirmDeleteKb(kb)"
+              >
+                <i class="fa-regular fa-trash-can"></i>
               </button>
             </div>
           </div>
@@ -187,16 +203,32 @@
               <td><strong class="text-emerald">{{ kb.faqCount || 0 }}</strong> 条</td>
               <td>{{ formatWordCount(kb.wordCount) }}</td>
               <td>{{ formatTime(kb.updatedAt) }}</td>
-              <td style="text-align: right;" @click.stop>
-                <div class="table-actions-right">
-                  <button class="btn-table-action" @click="openKbDetail(kb)">
-                    <i class="fa-solid fa-arrow-right-to-bracket"></i> <span>进入</span>
+              <td style="text-align: right; white-space: nowrap;" @click.stop>
+                <div class="agent-actions" style="justify-content: flex-end; flex-wrap: nowrap;">
+                  <button
+                    type="button"
+                    class="btn-card-action btn-chat-primary"
+                    title="进入管理知识库"
+                    @click="openKbDetail(kb)"
+                  >
+                    <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                    <span>进入管理</span>
                   </button>
-                  <button class="btn-icon-soft" title="编辑" @click="openEditKb(kb)">
-                    <i class="fa-solid fa-pen-to-square"></i>
+                  <button
+                    type="button"
+                    class="btn-card-action btn-action-icon"
+                    title="编辑知识库信息"
+                    @click="openEditKb(kb)"
+                  >
+                    <i class="fa-regular fa-pen-to-square"></i>
                   </button>
-                  <button class="btn-icon-soft danger" title="删除" @click="confirmDeleteKb(kb)">
-                    <i class="fa-solid fa-trash-can"></i>
+                  <button
+                    type="button"
+                    class="btn-card-action btn-action-icon btn-action-danger"
+                    title="删除知识库"
+                    @click="confirmDeleteKb(kb)"
+                  >
+                    <i class="fa-regular fa-trash-can"></i>
                   </button>
                 </div>
               </td>
@@ -206,15 +238,51 @@
       </div>
 
       <!-- 分页控制 -->
-      <div v-if="kbTotalPages > 1" class="kb-pagination">
-        <button class="btn-page" :disabled="kbPage <= 1" @click="changeKbPage(-1)">
-          <i class="fa-solid fa-chevron-left"></i>
-        </button>
-        <span class="page-info">第 {{ kbPage }} / {{ kbTotalPages }} 页 (共 {{ totalKbCount }} 个)</span>
-        <button class="btn-page" :disabled="kbPage >= kbTotalPages" @click="changeKbPage(1)">
-          <i class="fa-solid fa-chevron-right"></i>
-        </button>
-      </div>
+      <section v-if="totalKbCount > 0" class="pagination-container">
+        <div class="page-summary">
+          共 {{ totalKbCount }} 个知识库 · 第 {{ kbPage }} / {{ kbTotalPages }} 页
+          <select
+            v-model.number="kbPageSize"
+            class="status-select"
+            style="margin-left: 12px; padding: 4px 8px; font-size: 12px;"
+            @change="onKbPageSizeChange"
+          >
+            <option :value="6">6 条/页</option>
+            <option :value="12">12 条/页</option>
+            <option :value="24">24 条/页</option>
+          </select>
+        </div>
+        <div class="pagination-controls">
+          <button
+            type="button"
+            class="btn-page"
+            :disabled="kbPage <= 1"
+            title="上一页"
+            @click="changeKbPage(-1)"
+          >
+            <i class="fa-solid fa-chevron-left"></i>
+          </button>
+          <button
+            v-for="n in kbTotalPages"
+            :key="n"
+            type="button"
+            class="btn-page"
+            :class="{ active: n === kbPage }"
+            @click="goToKbPage(n)"
+          >
+            {{ n }}
+          </button>
+          <button
+            type="button"
+            class="btn-page"
+            :disabled="kbPage >= kbTotalPages"
+            title="下一页"
+            @click="changeKbPage(1)"
+          >
+            <i class="fa-solid fa-chevron-right"></i>
+          </button>
+        </div>
+      </section>
     </div>
 
     <!-- 2. 知识库详情与文档/FAQ管理视图 -->
@@ -406,13 +474,23 @@
                   </span>
                 </td>
                 <td>{{ formatTime(doc.createdAt) }}</td>
-                <td style="text-align: right;">
-                  <div class="table-actions-right">
-                    <button class="btn-icon-soft" title="刷新最新索引状态" @click="refreshDocStatus(doc)">
+                <td style="text-align: right; white-space: nowrap;">
+                  <div class="agent-actions" style="justify-content: flex-end; flex-wrap: nowrap;">
+                    <button
+                      type="button"
+                      class="btn-card-action btn-action-icon"
+                      title="刷新最新索引状态"
+                      @click="refreshDocStatus(doc)"
+                    >
                       <i class="fa-solid fa-rotate"></i>
                     </button>
-                    <button class="btn-icon-soft danger" title="删除文档" @click="confirmDeleteDoc(doc)">
-                      <i class="fa-solid fa-trash-can"></i>
+                    <button
+                      type="button"
+                      class="btn-card-action btn-action-icon btn-action-danger"
+                      title="删除文档"
+                      @click="confirmDeleteDoc(doc)"
+                    >
+                      <i class="fa-regular fa-trash-can"></i>
                     </button>
                   </div>
                 </td>
@@ -421,15 +499,51 @@
           </table>
 
           <!-- 文档分页 -->
-          <div v-if="docTotalPages > 1" class="kb-pagination">
-            <button class="btn-page" :disabled="docPage <= 1" @click="changeDocPage(-1)">
-              <i class="fa-solid fa-chevron-left"></i>
-            </button>
-            <span class="page-info">第 {{ docPage }} / {{ docTotalPages }} 页 (共 {{ docTotalCount }} 篇)</span>
-            <button class="btn-page" :disabled="docPage >= docTotalPages" @click="changeDocPage(1)">
-              <i class="fa-solid fa-chevron-right"></i>
-            </button>
-          </div>
+          <section v-if="docTotalCount > 0" class="pagination-container" style="margin-top: 16px;">
+            <div class="page-summary">
+              共 {{ docTotalCount }} 篇知识文档 · 第 {{ docPage }} / {{ docTotalPages }} 页
+              <select
+                v-model.number="docPageSize"
+                class="status-select"
+                style="margin-left: 12px; padding: 4px 8px; font-size: 12px;"
+                @change="onDocPageSizeChange"
+              >
+                <option :value="10">10 条/页</option>
+                <option :value="20">20 条/页</option>
+                <option :value="50">50 条/页</option>
+              </select>
+            </div>
+            <div class="pagination-controls">
+              <button
+                type="button"
+                class="btn-page"
+                :disabled="docPage <= 1"
+                title="上一页"
+                @click="changeDocPage(-1)"
+              >
+                <i class="fa-solid fa-chevron-left"></i>
+              </button>
+              <button
+                v-for="n in docTotalPages"
+                :key="n"
+                type="button"
+                class="btn-page"
+                :class="{ active: n === docPage }"
+                @click="goToDocPage(n)"
+              >
+                {{ n }}
+              </button>
+              <button
+                type="button"
+                class="btn-page"
+                :disabled="docPage >= docTotalPages"
+                title="下一页"
+                @click="changeDocPage(1)"
+              >
+                <i class="fa-solid fa-chevron-right"></i>
+              </button>
+            </div>
+          </section>
         </div>
       </div>
 
@@ -512,13 +626,23 @@
             </div>
 
             <div class="faq-card-footer">
-              <span class="faq-time">创建于 {{ formatTime(faq.createdAt) }}</span>
-              <div class="faq-actions">
-                <button class="btn-icon-soft" title="编辑问答" @click="openEditFaq(faq)">
-                  <i class="fa-solid fa-pen-to-square"></i>
+              <span class="faq-time"><i class="fa-regular fa-clock"></i> 创建于 {{ formatTime(faq.createdAt) }}</span>
+              <div class="agent-actions" style="justify-content: flex-end; flex-wrap: nowrap;">
+                <button
+                  type="button"
+                  class="btn-card-action btn-action-icon"
+                  title="编辑问答"
+                  @click="openEditFaq(faq)"
+                >
+                  <i class="fa-regular fa-pen-to-square"></i>
                 </button>
-                <button class="btn-icon-soft danger" title="删除问答" @click="confirmDeleteFaq(faq)">
-                  <i class="fa-solid fa-trash-can"></i>
+                <button
+                  type="button"
+                  class="btn-card-action btn-action-icon btn-action-danger"
+                  title="删除问答"
+                  @click="confirmDeleteFaq(faq)"
+                >
+                  <i class="fa-regular fa-trash-can"></i>
                 </button>
               </div>
             </div>
@@ -526,15 +650,51 @@
         </div>
 
         <!-- FAQ 分页 -->
-        <div v-if="faqTotalPages > 1" class="kb-pagination">
-          <button class="btn-page" :disabled="faqPage <= 1" @click="changeFaqPage(-1)">
-            <i class="fa-solid fa-chevron-left"></i>
-          </button>
-          <span class="page-info">第 {{ faqPage }} / {{ faqTotalPages }} 页 (共 {{ faqTotalCount }} 条)</span>
-          <button class="btn-page" :disabled="faqPage >= faqTotalPages" @click="changeFaqPage(1)">
-            <i class="fa-solid fa-chevron-right"></i>
-          </button>
-        </div>
+        <section v-if="faqTotalCount > 0" class="pagination-container" style="margin-top: 16px;">
+          <div class="page-summary">
+            共 {{ faqTotalCount }} 条问答 FAQ · 第 {{ faqPage }} / {{ faqTotalPages }} 页
+            <select
+              v-model.number="faqPageSize"
+              class="status-select"
+              style="margin-left: 12px; padding: 4px 8px; font-size: 12px;"
+              @change="onFaqPageSizeChange"
+            >
+              <option :value="10">10 条/页</option>
+              <option :value="20">20 条/页</option>
+              <option :value="50">50 条/页</option>
+            </select>
+          </div>
+          <div class="pagination-controls">
+            <button
+              type="button"
+              class="btn-page"
+              :disabled="faqPage <= 1"
+              title="上一页"
+              @click="changeFaqPage(-1)"
+            >
+              <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <button
+              v-for="n in faqTotalPages"
+              :key="n"
+              type="button"
+              class="btn-page"
+              :class="{ active: n === faqPage }"
+              @click="goToFaqPage(n)"
+            >
+              {{ n }}
+            </button>
+            <button
+              type="button"
+              class="btn-page"
+              :disabled="faqPage >= faqTotalPages"
+              title="下一页"
+              @click="changeFaqPage(1)"
+            >
+              <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+        </section>
       </div>
     </div>
 
@@ -853,8 +1013,23 @@ function debounceSearch() {
 }
 
 function changeKbPage(delta) {
-  kbPage.value = Math.max(1, Math.min(kbTotalPages.value, kbPage.value + delta))
+  const target = kbPage.value + delta
+  if (target >= 1 && target <= kbTotalPages.value) {
+    kbPage.value = target
+    loadKnowledgeBases()
+  }
+}
+
+function onKbPageSizeChange() {
+  kbPage.value = 1
   loadKnowledgeBases()
+}
+
+function goToKbPage(p) {
+  if (p >= 1 && p <= kbTotalPages.value) {
+    kbPage.value = p
+    loadKnowledgeBases()
+  }
 }
 
 async function syncFromDify() {
@@ -970,8 +1145,23 @@ function debounceDocSearch() {
 }
 
 function changeDocPage(delta) {
-  docPage.value = Math.max(1, Math.min(docTotalPages.value, docPage.value + delta))
+  const target = docPage.value + delta
+  if (target >= 1 && target <= docTotalPages.value) {
+    docPage.value = target
+    loadDocuments()
+  }
+}
+
+function onDocPageSizeChange() {
+  docPage.value = 1
   loadDocuments()
+}
+
+function goToDocPage(p) {
+  if (p >= 1 && p <= docTotalPages.value) {
+    docPage.value = p
+    loadDocuments()
+  }
 }
 
 function triggerFileInput() {
@@ -1093,8 +1283,23 @@ function debounceFaqSearch() {
 }
 
 function changeFaqPage(delta) {
-  faqPage.value = Math.max(1, Math.min(faqTotalPages.value, faqPage.value + delta))
+  const target = faqPage.value + delta
+  if (target >= 1 && target <= faqTotalPages.value) {
+    faqPage.value = target
+    loadFaqs()
+  }
+}
+
+function onFaqPageSizeChange() {
+  faqPage.value = 1
   loadFaqs()
+}
+
+function goToFaqPage(p) {
+  if (p >= 1 && p <= faqTotalPages.value) {
+    faqPage.value = p
+    loadFaqs()
+  }
 }
 
 function openCreateFaq() {
