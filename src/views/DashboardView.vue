@@ -3,17 +3,28 @@
     <aside class="app-sidebar" :class="{ collapsed: sidebarCollapsed }">
       <div>
         <div class="sidebar-header">
-          <a
-            class="sidebar-brand"
-            :title="sidebarCollapsed ? '点击展开侧边栏' : 'AgentMatrix Enterprise'"
-            @click.prevent="sidebarCollapsed ? toggleSidebar() : (currentTab = 'overview')"
-          >
-            <AgentLogo :size="sidebarCollapsed ? 28 : 32" />
-            <div v-show="!sidebarCollapsed" class="brand-text">
-              <span class="brand-title">AgentMatrix</span>
-              <span class="brand-edition">Enterprise v2.6</span>
-            </div>
-          </a>
+          <div class="sidebar-header-row">
+            <a
+              class="sidebar-brand"
+              :title="sidebarCollapsed ? '点击展开侧边栏' : 'AgentMatrix Enterprise'"
+              @click.prevent="sidebarCollapsed ? toggleSidebar() : (currentTab = 'overview')"
+            >
+              <AgentLogo :size="sidebarCollapsed ? 28 : 32" />
+              <div v-show="!sidebarCollapsed" class="brand-text">
+                <span class="brand-title">AgentMatrix</span>
+                <span class="brand-edition">Enterprise v2.6</span>
+              </div>
+            </a>
+            <button
+              v-show="!sidebarCollapsed"
+              type="button"
+              class="btn-sidebar-header-toggle"
+              title="收起侧边栏"
+              @click.stop="toggleSidebar"
+            >
+              <i class="fa-solid fa-chevron-left"></i>
+            </button>
+          </div>
         </div>
         <nav class="sidebar-nav">
           <div v-show="!sidebarCollapsed" class="nav-section-title">核心业务枢纽</div>
@@ -97,20 +108,23 @@
             <i class="fa-solid fa-arrow-right-from-bracket"></i>
           </button>
         </div>
+        <div class="sidebar-collapse-bar">
+          <button
+            type="button"
+            class="sidebar-collapse-btn"
+            :title="sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'"
+            @click="toggleSidebar"
+          >
+            <i :class="sidebarCollapsed ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-left'"></i>
+            <span v-show="!sidebarCollapsed">收起侧边栏</span>
+          </button>
+        </div>
       </div>
     </aside>
 
     <div class="app-main-wrapper">
       <header class="app-topbar">
         <div class="topbar-left">
-          <button
-            type="button"
-            class="btn-topbar-collapse"
-            :title="sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'"
-            @click="toggleSidebar"
-          >
-            <i :class="sidebarCollapsed ? 'fa-solid fa-bars-staggered' : 'fa-solid fa-bars'"></i>
-          </button>
           <h2 class="topbar-page-title">{{ pageTitle }}</h2>
         </div>
         <div class="topbar-right">
@@ -451,6 +465,7 @@ const pageResult = ref({})
 const page = ref(1)
 const keyword = ref('')
 const category = ref('全部')
+const statusFilter = ref('')
 const viewMode = ref(localStorage.getItem('agentViewMode') || 'card')
 const sidebarCollapsed = ref(localStorage.getItem('sidebarCollapsed') === 'true')
 
