@@ -112,9 +112,14 @@
               <h3 class="kb-card-name" :title="kb.name">{{ kb.name }}</h3>
               <div class="kb-card-badges">
                 <span class="provider-badge dify">
-                  <i class="fa-solid fa-link"></i> Dify 外挂 RAG
+                  <i class="fa-solid fa-link"></i> Dify
                 </span>
-                <span class="indexing-badge">高质量向量</span>
+                <span class="search-method-badge" :class="kb.searchMethod || 'hybrid_search'">
+                  <i :class="getSearchMethodIcon(kb.searchMethod)"></i> {{ getSearchMethodLabel(kb.searchMethod) }}
+                </span>
+                <span class="model-badge" title="Embedding 向量模型">
+                  <i class="fa-solid fa-cube"></i> {{ kb.embeddingModel || 'text-embedding-v3' }}
+                </span>
               </div>
             </div>
           </div>
@@ -178,6 +183,7 @@
             <tr>
               <th>知识库名称</th>
               <th>提供方</th>
+              <th>检索模式 / 向量模型</th>
               <th>文档数量</th>
               <th>问答(FAQ)</th>
               <th>预估字数</th>
@@ -198,6 +204,16 @@
               </td>
               <td>
                 <span class="provider-badge dify">Dify 外挂</span>
+              </td>
+              <td>
+                <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+                  <span class="search-method-badge" :class="kb.searchMethod || 'hybrid_search'">
+                    <i :class="getSearchMethodIcon(kb.searchMethod)"></i> {{ getSearchMethodLabel(kb.searchMethod) }}
+                  </span>
+                  <span class="model-badge-sub">
+                    <i class="fa-solid fa-cube"></i> {{ kb.embeddingModel || 'text-embedding-v3' }}
+                  </span>
+                </div>
               </td>
               <td><strong class="text-blue">{{ kb.documentCount || 0 }}</strong> 篇</td>
               <td><strong class="text-emerald">{{ kb.faqCount || 0 }}</strong> 条</td>
@@ -298,8 +314,16 @@
           <div class="kb-detail-meta">
             <div class="kb-title-row">
               <h2>{{ selectedKb?.name }}</h2>
-              <span class="provider-badge dify"><i class="fa-solid fa-link"></i> Dify 关联数据集: {{ selectedKb?.externalDatasetId ? selectedKb.externalDatasetId.substring(0, 14) + '...' : '未绑定' }}</span>
-              <span class="indexing-badge"><i class="fa-solid fa-microchip"></i> High Quality 语义切片</span>
+              <span class="provider-badge dify"><i class="fa-solid fa-link"></i> Dify: {{ selectedKb?.externalDatasetId ? selectedKb.externalDatasetId.substring(0, 14) + '...' : '未绑定' }}</span>
+              <span class="search-method-badge" :class="selectedKb?.searchMethod || 'hybrid_search'">
+                <i :class="getSearchMethodIcon(selectedKb?.searchMethod)"></i> {{ getSearchMethodLabel(selectedKb?.searchMethod) }} (Top {{ selectedKb?.topK || 3 }})
+              </span>
+              <span class="model-badge" title="Embedding 向量模型">
+                <i class="fa-solid fa-cube"></i> {{ selectedKb?.embeddingModel || 'text-embedding-v3' }}
+              </span>
+              <span v-if="selectedKb?.rerankEnabled" class="indexing-badge" title="重排序已开启">
+                <i class="fa-solid fa-arrows-spin"></i> Rerank 开启
+              </span>
             </div>
             <p class="kb-desc-text">{{ selectedKb?.description || '暂无业务描述' }}</p>
           </div>
@@ -700,9 +724,9 @@
 
     <!-- 模态框 1: 创建/编辑知识库 -->
     <div class="modal-backdrop" :class="{ open: kbModalOpen }">
-      <div class="modal-dialog">
+      <div class="modal-dialog" style="max-width: 680px;">
         <div class="modal-header">
-          <h3>{{ kbForm.id ? '编辑知识库信息' : '创建新知识库' }}</h3>
+          <h3>{{ kbForm.id ? '编辑知识库配置' : '创建新知识库 (Dify RAG)' }}</h3>
           <button class="btn-modal-close" @click="kbModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <form @submit.prevent="saveKnowledgeBase">
@@ -736,9 +760,99 @@
                     <i class="fa-solid fa-link text-blue"></i> Dify 外挂 RAG 知识库
                   </div>
                   <div class="provider-radio-desc">
-                    与配置好的 Dify (120.79.38.143) 双向 1:1 映射并自动创建数据集
+                    与后端配置好的 Dify 引擎双向 1:1 映射并自动创建数据集
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <!-- Embedding 向量模型 -->
+            <div class="form-group">
+              <label class="form-label">Embedding 向量模型</label>
+              <div class="embedding-model-box">
+                <div class="embedding-model-item">
+                  <div class="model-info-row">
+                    <span class="model-name"><i class="fa-solid fa-cube text-blue"></i> text-embedding-v3</span>
+                    <span class="tag-recommend">官方推荐</span>
+                  </div>
+                  <div class="model-desc">
+                    通义千问高质量向量模型 (Provider: 通义千问)，适配 Dify 高精度语义切片与向量索引。
+                  </div>
+                </div>
+                <div v-if="kbForm.id" class="input-hint text-amber" style="margin-top: 6px;">
+                  <i class="fa-solid fa-circle-info"></i> Dify 规则：已建立知识库的 Embedding 模型在初始化后不可变更
+                </div>
+              </div>
+            </div>
+
+            <!-- 检索设置 (混合检索 / 向量检索 / 全文检索) -->
+            <div class="form-group">
+              <label class="form-label">检索设置 (Retrieval Setting) *</label>
+              <div class="retrieval-method-grid">
+                <div
+                  class="retrieval-card"
+                  :class="{ active: kbForm.searchMethod === 'hybrid_search' }"
+                  @click="kbForm.searchMethod = 'hybrid_search'"
+                >
+                  <div class="retrieval-card-top">
+                    <i class="fa-solid fa-layer-group" style="color: #6366f1;"></i>
+                    <span class="retrieval-card-title">混合检索 (Hybrid)</span>
+                    <span class="tag-recommend">推荐</span>
+                  </div>
+                  <p class="retrieval-card-desc">结合向量检索与全文检索双路召回，综合重排评分(Rerank)，精度与泛化能力最佳</p>
+                </div>
+                <div
+                  class="retrieval-card"
+                  :class="{ active: kbForm.searchMethod === 'semantic_search' }"
+                  @click="kbForm.searchMethod = 'semantic_search'"
+                >
+                  <div class="retrieval-card-top">
+                    <i class="fa-solid fa-brain" style="color: #0284c7;"></i>
+                    <span class="retrieval-card-title">向量检索 (Semantic)</span>
+                  </div>
+                  <p class="retrieval-card-desc">生成查询向量并搜索最相似文本分段，擅长理解语义、意图和近义表达</p>
+                </div>
+                <div
+                  class="retrieval-card"
+                  :class="{ active: kbForm.searchMethod === 'full_text_search' }"
+                  @click="kbForm.searchMethod = 'full_text_search'"
+                >
+                  <div class="retrieval-card-top">
+                    <i class="fa-solid fa-font" style="color: #059669;"></i>
+                    <span class="retrieval-card-title">全文检索 (Full-text)</span>
+                  </div>
+                  <p class="retrieval-card-desc">基于传统分词与倒排索引，擅长精准匹配专有名词、产品型号与特定编号</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- 检索参数微调 -->
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label">Top K 召回条数: <strong>{{ kbForm.topK }}</strong> 条</label>
+                <div class="slider-control-row">
+                  <input
+                    type="range"
+                    v-model.number="kbForm.topK"
+                    min="1"
+                    max="10"
+                    step="1"
+                    class="form-range-styled"
+                  >
+                  <span class="slider-num-pill">{{ kbForm.topK }}</span>
+                </div>
+                <div class="input-hint">向智能体对话上下文注入的最佳匹配段落数（建议 3~5）</div>
+              </div>
+
+              <div class="form-group" v-if="kbForm.searchMethod === 'hybrid_search'">
+                <label class="form-label">重排序设置 (Reranking)</label>
+                <label class="checkbox-setting-card">
+                  <input type="checkbox" v-model="kbForm.rerankEnabled">
+                  <div class="checkbox-text-wrap">
+                    <span class="setting-title"><i class="fa-solid fa-arrows-spin"></i> 启用 Rerank 二次重排</span>
+                    <span class="setting-sub">混合召回后使用交叉编码器重评分，显著提高排序准确性</span>
+                  </div>
+                </label>
               </div>
             </div>
 
@@ -756,7 +870,7 @@
             <button type="button" class="btn-secondary" @click="kbModalOpen = false">取消</button>
             <button type="submit" class="btn-create-agent" :disabled="savingKb">
               <i :class="savingKb ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-check'"></i>
-              <span>{{ savingKb ? '正在提交 Dify 同步...' : (kbForm.id ? '保存修改' : '立即创建知识库') }}</span>
+              <span>{{ savingKb ? '正在提交 Dify 同步...' : (kbForm.id ? '保存配置修改' : '立即创建知识库') }}</span>
             </button>
           </div>
         </form>
@@ -954,7 +1068,12 @@ const kbForm = reactive({
   name: '',
   description: '',
   avatar: '📚',
-  provider: 'DIFY'
+  provider: 'DIFY',
+  embeddingModel: 'text-embedding-v3',
+  embeddingProvider: 'langgenius/tongyi/tongyi',
+  searchMethod: 'hybrid_search',
+  topK: 3,
+  rerankEnabled: true
 })
 
 const faqModalOpen = ref(false)
@@ -1044,8 +1163,45 @@ async function syncFromDify() {
   }
 }
 
+function getSearchMethodLabel(method) {
+  switch (method) {
+    case 'hybrid_search':
+      return '混合检索'
+    case 'semantic_search':
+      return '向量检索'
+    case 'full_text_search':
+      return '全文检索'
+    default:
+      return '混合检索'
+  }
+}
+
+function getSearchMethodIcon(method) {
+  switch (method) {
+    case 'hybrid_search':
+      return 'fa-solid fa-layer-group'
+    case 'semantic_search':
+      return 'fa-solid fa-brain'
+    case 'full_text_search':
+      return 'fa-solid fa-font'
+    default:
+      return 'fa-solid fa-layer-group'
+  }
+}
+
 function openCreateKb() {
-  Object.assign(kbForm, { id: '', name: '', description: '', avatar: '📚', provider: 'DIFY' })
+  Object.assign(kbForm, {
+    id: '',
+    name: '',
+    description: '',
+    avatar: '📚',
+    provider: 'DIFY',
+    embeddingModel: 'text-embedding-v3',
+    embeddingProvider: 'langgenius/tongyi/tongyi',
+    searchMethod: 'hybrid_search',
+    topK: 3,
+    rerankEnabled: true
+  })
   kbModalOpen.value = true
 }
 
@@ -1056,7 +1212,12 @@ function openEditKb(kb) {
     name: kb.name,
     description: kb.description || '',
     avatar: kb.avatar || '📚',
-    provider: kb.provider || 'DIFY'
+    provider: kb.provider || 'DIFY',
+    embeddingModel: kb.embeddingModel || 'text-embedding-v3',
+    embeddingProvider: kb.embeddingProvider || 'langgenius/tongyi/tongyi',
+    searchMethod: kb.searchMethod || 'hybrid_search',
+    topK: kb.topK !== undefined && kb.topK !== null ? kb.topK : 3,
+    rerankEnabled: kb.rerankEnabled !== undefined && kb.rerankEnabled !== null ? kb.rerankEnabled : true
   })
   kbModalOpen.value = true
 }
@@ -1072,14 +1233,22 @@ async function saveKnowledgeBase() {
     res = await http.put(`/api/knowledge-bases/${kbForm.id}`, {
       name: kbForm.name,
       description: kbForm.description,
-      avatar: kbForm.avatar
+      avatar: kbForm.avatar,
+      searchMethod: kbForm.searchMethod,
+      topK: kbForm.topK,
+      rerankEnabled: kbForm.rerankEnabled
     })
   } else {
     res = await http.post('/api/knowledge-bases', {
       name: kbForm.name,
       description: kbForm.description,
       avatar: kbForm.avatar,
-      provider: kbForm.provider
+      provider: kbForm.provider,
+      embeddingModel: kbForm.embeddingModel,
+      embeddingProvider: kbForm.embeddingProvider,
+      searchMethod: kbForm.searchMethod,
+      topK: kbForm.topK,
+      rerankEnabled: kbForm.rerankEnabled
     })
   }
   savingKb.value = false
@@ -1092,6 +1261,9 @@ async function saveKnowledgeBase() {
       selectedKb.value.name = kbForm.name
       selectedKb.value.description = kbForm.description
       selectedKb.value.avatar = kbForm.avatar
+      selectedKb.value.searchMethod = kbForm.searchMethod
+      selectedKb.value.topK = kbForm.topK
+      selectedKb.value.rerankEnabled = kbForm.rerankEnabled
     }
   } else {
     showToast(res.message || '保存知识库失败', 'error')
