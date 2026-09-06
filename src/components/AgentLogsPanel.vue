@@ -131,8 +131,19 @@ const statusFilter = ref('all')
 const keyword = ref('')
 const sort = ref('createdAt')
 const order = ref('desc')
+const LOGS_PAGE_SIZE_KEY = 'agent_logs_page_size'
+
+function getInitialPageSize() {
+  const saved = localStorage.getItem(LOGS_PAGE_SIZE_KEY)
+  const num = Number(saved)
+  if ([10, 20, 50].includes(num)) {
+    return num
+  }
+  return 20
+}
+
 const page = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(getInitialPageSize())
 const total = ref(0)
 const records = ref([])
 const totalPages = ref(1)
@@ -174,6 +185,7 @@ async function reload() {
 }
 
 function onSizeChange() {
+  localStorage.setItem(LOGS_PAGE_SIZE_KEY, String(pageSize.value))
   page.value = 1
   reload()
 }
