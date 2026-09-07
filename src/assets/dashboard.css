@@ -547,7 +547,7 @@
 /* Subviews Container */
 .app-subview {
   display: none;
-  padding: 28px 36px 60px 36px;
+  padding: 28px 36px 32px 36px;
   max-width: 1520px;
   width: 100%;
   margin: 0 auto;
@@ -1183,7 +1183,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
   gap: 22px;
-  margin-bottom: 28px;
+  margin-bottom: 0;
 }
 
 .agent-card {
@@ -1443,7 +1443,7 @@
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-card);
-  margin-bottom: 28px;
+  margin-bottom: 0;
 }
 
 .agent-table {
@@ -1524,13 +1524,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 10px 16px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   color: var(--text-secondary);
   font-size: 13px;
-  box-shadow: var(--shadow-card);
 }
 
 .pagination-controls {
@@ -1831,7 +1833,17 @@
 .kb-panel {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
+}
+
+.kb-list-view {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.kb-list-view > .pagination-container {
+  margin-top: -12px;
 }
 
 .kb-hero-toolbar {
@@ -1846,12 +1858,6 @@
   font-size: 20px;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 4px;
-}
-
-.kb-page-subtitle {
-  font-size: 13px;
-  color: var(--text-secondary);
 }
 
 .kb-hero-actions {
@@ -1869,76 +1875,57 @@
   font-size: 13px;
 }
 
-/* Stats strip */
-.kb-stats-strip {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+.kb-stats-grid {
+  margin-bottom: 0;
+  gap: 16px;
 }
 
-.kb-stat-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  font-size: 12.5px;
-  color: var(--text-secondary);
-}
-
-.kb-stat-pill strong {
-  color: var(--text-primary);
-}
-
-.dify-status-pill {
-  background: rgba(16, 185, 129, 0.08);
-  border-color: rgba(16, 185, 129, 0.25);
+.kb-engine-status {
+  font-size: 22px;
+  letter-spacing: 0;
   color: var(--accent-emerald);
 }
 
-/* Filter bar */
-.kb-filter-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  flex-wrap: wrap;
+.kb-engine-status.offline {
+  color: var(--text-muted);
 }
 
-.kb-search-box {
-  position: relative;
-  flex: 1;
-  max-width: 360px;
+.kb-engine-host {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.kb-toolbar {
+  margin-bottom: 0;
+}
+
+.kb-search-wide {
+  max-width: none;
   min-width: 240px;
 }
 
-.kb-search-box i {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-muted);
-  font-size: 13px;
+.kb-toolbar .search-input {
+  height: 40px;
+  padding: 10px 40px 10px 40px;
+  font-size: 13.5px;
+  background: rgba(2, 6, 23, 0.45);
+  border-color: var(--border-hover);
 }
 
-.kb-search-box input {
-  width: 100%;
-  padding: 9px 36px 9px 38px;
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 9px;
-  color: var(--text-primary);
-  font-size: 13px;
-  outline: none;
-  transition: all 0.2s;
+.kb-toolbar .search-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.9;
 }
 
-.kb-search-box input:focus {
-  border-color: var(--accent-blue);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+.kb-toolbar .search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+
+[data-theme="light"] .kb-toolbar .search-input {
+  background: #f8fafc;
+  border-color: #cbd5e1;
 }
 
 .btn-clear-search {
@@ -1953,42 +1940,17 @@
   padding: 4px;
 }
 
-.kb-filter-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.kb-view-toggle {
-  display: inline-flex;
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 2px;
-}
-
-.view-toggle-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-  transition: all 0.2s;
-}
-
-.view-toggle-btn.active {
-  background: var(--bg-card);
-  color: var(--accent-blue);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+@media (max-width: 1100px) {
+  .kb-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 /* KB Grid & Card */
 .kb-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 18px;
+  gap: 20px;
 }
 
 .kb-card {

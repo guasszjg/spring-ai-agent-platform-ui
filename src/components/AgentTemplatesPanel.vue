@@ -378,24 +378,14 @@
               </div>
               <div class="form-group">
                 <label class="form-label">行业分类 <span class="required-star">*</span></label>
-                <input
-                  v-model="form.category"
-                  type="text"
-                  list="category-suggestions"
-                  class="form-control-styled"
-                  placeholder="可选择或输入新分类"
-                  required
-                >
-                <datalist id="category-suggestions">
-                  <option value="代码研发" />
-                  <option value="内容创作" />
-                  <option value="数据分析" />
-                  <option value="客户服务" />
-                  <option value="金融风控" />
-                  <option value="通用智能" />
-                  <option value="行政法务" />
-                  <option value="教育培训" />
-                </datalist>
+                <select v-model="form.category" class="form-control-styled category-select" required>
+                  <option disabled value="">请选择行业分类</option>
+                  <option v-for="cat in industryCategories" :key="cat" :value="cat">{{ cat }}</option>
+                  <option
+                    v-if="form.category && !industryCategories.includes(form.category)"
+                    :value="form.category"
+                  >{{ form.category }}</option>
+                </select>
               </div>
             </div>
 
@@ -415,35 +405,23 @@
               </div>
             </div>
 
-            <div class="form-row-2">
-              <div class="form-group">
-                <label class="form-label">
-                  <span>推荐采样温度 (Temperature)</span>
-                  <span class="temp-hint">
-                    {{ form.temperature <= 0.3 ? '严谨精准' : form.temperature >= 0.8 ? '创意发散' : '均衡稳定' }}
-                  </span>
-                </label>
-                <div class="slider-wrapper">
-                  <input
-                    v-model.number="form.temperature"
-                    type="range"
-                    class="range-slider"
-                    min="0"
-                    max="2"
-                    step="0.05"
-                  >
-                  <span class="slider-value-pill">{{ form.temperature }}</span>
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label class="form-label">推荐调度模型 (可选预设)</label>
+            <div class="form-group">
+              <label class="form-label">
+                <span>推荐采样温度 (Temperature)</span>
+                <span class="temp-hint">
+                  {{ form.temperature <= 0.3 ? '严谨精准' : form.temperature >= 0.8 ? '创意发散' : '均衡稳定' }}
+                </span>
+              </label>
+              <div class="slider-wrapper">
                 <input
-                  v-model="form.modelName"
-                  type="text"
-                  class="form-control-styled"
-                  placeholder="如: deepseek-chat、gpt-4o"
+                  v-model.number="form.temperature"
+                  type="range"
+                  class="range-slider"
+                  min="0"
+                  max="2"
+                  step="0.05"
                 >
+                <span class="slider-value-pill">{{ form.temperature }}</span>
               </div>
             </div>
 
@@ -556,7 +534,8 @@ import { useToast } from '../composables/useToast'
 const emit = defineEmits(['use-template', 'templates-updated'])
 const { showToast } = useToast()
 
-const categoryList = ['全部', '代码研发', '内容创作', '数据分析', '客户服务', '金融风控', '通用智能']
+const industryCategories = ['代码研发', '内容创作', '数据分析', '客户服务', '金融风控', '通用智能', '行政法务', '教育培训']
+const categoryList = ['全部', ...industryCategories]
 const emojiCatalog = ['💻', '📚', '📊', '🎧', '⚖️', '🚀', '🤖', '🎯', '💡', '🛡️', '🔍', '📝', '🎨', '💼', '🔬', '🌐']
 
 const currentCategory = ref('全部')
@@ -590,7 +569,6 @@ const form = reactive({
   category: '通用智能',
   avatar: '🤖',
   description: '',
-  modelName: '',
   systemPrompt: '',
   temperature: 0.7,
   tagsText: '',
@@ -708,7 +686,6 @@ function resetForm() {
     category: currentCategory.value !== '全部' ? currentCategory.value : '通用智能',
     avatar: '🤖',
     description: '',
-    modelName: '',
     systemPrompt: '',
     temperature: 0.7,
     tagsText: '',
@@ -728,7 +705,6 @@ function openEditModal(tpl) {
     category: tpl.category || '通用智能',
     avatar: tpl.avatar || '🤖',
     description: tpl.description || '',
-    modelName: tpl.modelName || '',
     systemPrompt: tpl.systemPrompt || '',
     temperature: tpl.temperature != null ? tpl.temperature : 0.7,
     tagsText: Array.isArray(tpl.tags) ? tpl.tags.join(', ') : (tpl.tags || ''),
@@ -767,7 +743,6 @@ async function saveTemplate() {
     category: form.category.trim(),
     avatar: form.avatar,
     description: form.description.trim(),
-    modelName: form.modelName.trim(),
     systemPrompt: form.systemPrompt.trim(),
     temperature: Number(form.temperature),
     tags: form.tagsText ? form.tagsText.split(/[,，]/).map(t => t.trim()).filter(Boolean).join(', ') : '',
@@ -839,8 +814,12 @@ onMounted(loadTemplates)
 .templates-view-container {
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  padding-bottom: 40px;
+  gap: 20px;
+  padding-bottom: 0;
+}
+
+.templates-view-container > .pagination-container {
+  margin-top: -8px;
 }
 
 /* Hero Header */
@@ -1326,6 +1305,12 @@ onMounted(loadTemplates)
 /* Modal Custom Styles */
 .template-modal-dialog {
   max-width: 640px;
+}
+
+.category-select {
+  cursor: pointer;
+  appearance: auto;
+  -webkit-appearance: menulist;
 }
 
 .required-star {

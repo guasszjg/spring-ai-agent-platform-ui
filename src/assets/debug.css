@@ -1010,6 +1010,13 @@
   border: 1px solid var(--border-color);
   border-radius: 8px;
   margin-bottom: 8px;
+  gap: 10px;
+}
+
+.knowledge-item-card:hover .tool-hover-actions {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
 }
 
 .knowledge-meta {
@@ -1019,6 +1026,14 @@
   font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
+  min-width: 0;
+  flex: 1;
+}
+
+.knowledge-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .knowledge-badge {

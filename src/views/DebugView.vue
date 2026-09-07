@@ -169,10 +169,38 @@
           </div>
         </div>
         <div class="config-card-section">
-          <div class="section-header-row"><div class="section-title"><span>知识库</span></div></div>
-          <div class="knowledge-item-card">
-            <div class="knowledge-meta"><i class="fa-solid fa-book" style="color: #ec4899;"></i><span>ShiMeta数字标牌V7.0.0使用手册.pdf</span></div>
-            <span class="knowledge-badge">高质量 · 混合检索</span>
+          <div class="section-header-row">
+            <div class="section-title"><span>知识库</span></div>
+            <div class="section-tools-header-right">
+              <span class="tools-count-badge">{{ boundKnowledgeBases.length }} 已关联</span>
+              <span class="tools-header-divider">|</span>
+              <button type="button" class="btn-tools-add" @click="openAddKnowledgeModal">
+                <i class="fa-solid fa-plus"></i>
+                <span>添加</span>
+              </button>
+            </div>
+          </div>
+          <p v-if="!boundKnowledgeBases.length" class="section-hint">尚未关联知识库。对话前会按这里绑定的库做检索并注入提示词。</p>
+          <div
+            v-for="kb in boundKnowledgeBases"
+            :key="kb.id"
+            class="knowledge-item-card"
+          >
+            <div class="knowledge-meta">
+              <i class="fa-solid fa-book" style="color: #ec4899;"></i>
+              <span>{{ kb.name }}</span>
+            </div>
+            <div class="tool-right">
+              <span class="knowledge-badge">{{ knowledgeBadge(kb) }}</span>
+              <button
+                type="button"
+                class="btn-tool-action btn-tool-delete"
+                title="取消关联"
+                @click.stop="unbindKnowledgeBase(kb)"
+              >
+                <i class="fa-regular fa-trash-can"></i>
+              </button>
+            </div>
           </div>
         </div>
         <div class="config-card-section">
@@ -530,6 +558,54 @@
         </div>
       </div>
     </div>
+
+    <div v-if="addKnowledgeModalOpen" class="tool-modal-backdrop" @click.self="addKnowledgeModalOpen = false">
+      <div class="tool-modal-dialog">
+        <div class="tool-modal-header">
+          <div class="tool-modal-title">
+            <i class="fa-solid fa-book" style="color: #ec4899;"></i>
+            <span>关联知识库</span>
+          </div>
+          <button type="button" class="btn-modal-close" @click="addKnowledgeModalOpen = false">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="tool-modal-body">
+          <div class="tool-catalog-section">
+            <h4 class="catalog-section-title">已有知识库 (共 {{ knowledgeCatalog.length }} 项)</h4>
+            <p v-if="!knowledgeCatalog.length" class="section-hint">暂无可选知识库，请先在知识库管理页创建或从 Dify 同步。</p>
+            <div class="tool-catalog-list">
+              <div v-for="kb in knowledgeCatalog" :key="kb.id" class="catalog-item-card">
+                <div class="catalog-item-left">
+                  <div class="tool-icon icon-orange">
+                    <i class="fa-solid fa-book"></i>
+                  </div>
+                  <div>
+                    <div class="tool-info-text">
+                      <span class="tool-title">{{ kb.name }}</span>
+                    </div>
+                    <div class="catalog-item-desc">{{ knowledgeBadge(kb) }}{{ kb.description ? ' · ' + kb.description : '' }}</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="btn-catalog-add"
+                  :disabled="boundKbIds.includes(kb.id)"
+                  @click="bindKnowledgeBase(kb)"
+                >
+                  <i :class="boundKbIds.includes(kb.id) ? 'fa-solid fa-check' : 'fa-solid fa-plus'"></i>
+                  {{ boundKbIds.includes(kb.id) ? '已关联' : '添加' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="tool-modal-footer">
+          <span></span>
+          <button type="button" class="btn-modal-cancel" @click="addKnowledgeModalOpen = false">完成</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -649,6 +725,14 @@ const tools = reactive([
 
 const enabledToolsCount = computed(() => tools.filter(t => t.enabled).length)
 const removedTools = ref([])
+const boundKbIds = ref([])
+const knowledgeCatalog = ref([])
+const addKnowledgeModalOpen = ref(false)
+const boundKnowledgeBases = computed(() => {
+  const catalog = knowledgeCatalog.value
+  return boundKbIds.value
+    .map(id => catalog.find(kb => kb.id === id) || { id, name: id, searchMethod: 'hybrid_search', indexingTechnique: 'high_quality' })
+})
 
 const toolSettingsModalOpen = ref(false)
 const editingTool = ref(null)
@@ -875,6 +959,69 @@ const standardToolCatalog = ref([
     config: { count: 5, freshness: 'noLimit', summary: true }
   }
 ])
+
+function knowledgeBadge(kb) {
+  const quality = kb?.indexingTechnique === 'economy' ? '经济' : '高质量'
+  const method = kb?.searchMethod
+  let methodLabel = '混合检索'
+  if (method === 'semantic_search') methodLabel = '向量检索'
+  else if (method === 'full_text_search') methodLabel = '全文检索'
+  return `${quality} · ${methodLabel}`
+}
+
+async function loadKnowledgeCatalog() {
+  const res = await http.get('/api/knowledge-bases', { page: 1, size: 100 })
+  if (res.success && res.data) {
+    knowledgeCatalog.value = res.data.records || []
+  }
+}
+
+async function persistKnowledgeBaseIds() {
+  if (!agent.value?.id) return false
+  const ids = [...boundKbIds.value]
+  agent.value = { ...agent.value, knowledgeBaseIds: ids }
+  const res = await http.put(`/api/agents/${agent.value.id}`, {
+    ...agent.value,
+    knowledgeBaseIds: ids
+  })
+  if (res.success && res.data) {
+    agent.value = res.data
+    if (Array.isArray(res.data.knowledgeBaseIds)) {
+      boundKbIds.value = [...res.data.knowledgeBaseIds]
+    }
+    return true
+  }
+  showToast(res.message || '知识库关联保存失败', 'error')
+  return false
+}
+
+async function openAddKnowledgeModal() {
+  await loadKnowledgeCatalog()
+  addKnowledgeModalOpen.value = true
+}
+
+async function bindKnowledgeBase(kb) {
+  if (!kb?.id || boundKbIds.value.includes(kb.id)) return
+  const prev = [...boundKbIds.value]
+  boundKbIds.value = [...prev, kb.id]
+  const ok = await persistKnowledgeBaseIds()
+  if (!ok) {
+    boundKbIds.value = prev
+    return
+  }
+  showToast(`已关联知识库 [${kb.name}]`, 'success', 2000)
+}
+
+async function unbindKnowledgeBase(kb) {
+  const prev = [...boundKbIds.value]
+  boundKbIds.value = prev.filter(id => id !== kb.id)
+  const ok = await persistKnowledgeBaseIds()
+  if (!ok) {
+    boundKbIds.value = prev
+    return
+  }
+  showToast(`已取消关联 [${kb.name}]`, 'info', 2000)
+}
 
 function openAddToolModal() {
   addToolModalOpen.value = true
@@ -1207,6 +1354,8 @@ onMounted(async () => {
     applyAgentSettings(res.data)
     loadPersistedSettings(res.data.id)
     loadPersistedTools(res.data)
+    boundKbIds.value = Array.isArray(res.data.knowledgeBaseIds) ? [...res.data.knowledgeBaseIds] : []
+    await loadKnowledgeCatalog()
     resetChat()
   } else {
     showToast('未能加载智能体信息', 'error')

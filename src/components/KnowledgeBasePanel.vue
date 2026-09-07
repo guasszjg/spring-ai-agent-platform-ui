@@ -6,9 +6,6 @@
       <div class="kb-hero-toolbar">
         <div>
           <h2 class="kb-page-title">企业私有知识库中心 (Enterprise RAG)</h2>
-          <p class="kb-page-subtitle">
-            支持外挂 Dify RAG 引擎与未来原生向量检索架构 · 统一管理企业非结构化知识文档与业务问答库
-          </p>
         </div>
         <div class="kb-hero-actions">
           <button class="btn-secondary kb-sync-btn" :disabled="syncing" title="从 Dify 导入或同步已有知识库" @click="syncFromDify">
@@ -22,61 +19,80 @@
         </div>
       </div>
 
-      <!-- 快速统计状态条 -->
-      <div class="kb-stats-strip">
-        <div class="kb-stat-pill">
-          <i class="fa-solid fa-book-bookmark text-blue"></i>
-          <span>知识库总数: <strong>{{ totalKbCount }}</strong></span>
+      <section class="stats-grid kb-stats-grid">
+        <div class="stat-card">
+          <div class="stat-info">
+            <span class="stat-label">知识库</span>
+            <span class="stat-value">{{ totalKbCount }}</span>
+          </div>
+          <div class="stat-icon-wrapper icon-blue"><i class="fa-solid fa-book-bookmark"></i></div>
         </div>
-        <div class="kb-stat-pill">
-          <i class="fa-solid fa-file-lines text-purple"></i>
-          <span>总入库文档: <strong>{{ totalDocCount }}</strong> 篇</span>
+        <div class="stat-card">
+          <div class="stat-info">
+            <span class="stat-label">入库文档</span>
+            <span class="stat-value">{{ totalDocCount }}</span>
+          </div>
+          <div class="stat-icon-wrapper icon-purple"><i class="fa-solid fa-file-lines"></i></div>
         </div>
-        <div class="kb-stat-pill">
-          <i class="fa-solid fa-comments text-emerald"></i>
-          <span>总 FAQ 问答: <strong>{{ totalFaqCount }}</strong> 条</span>
+        <div class="stat-card">
+          <div class="stat-info">
+            <span class="stat-label">FAQ 问答</span>
+            <span class="stat-value">{{ totalFaqCount }}</span>
+          </div>
+          <div class="stat-icon-wrapper icon-emerald"><i class="fa-solid fa-comments"></i></div>
         </div>
-        <div class="kb-stat-pill dify-status-pill">
-          <span class="pulse-dot-green"></span>
-          <span>Dify 外挂 RAG 引擎: <strong>在线就绪</strong> (120.79.38.143)</span>
+        <div class="stat-card">
+          <div class="stat-info">
+            <span class="stat-label">Dify 引擎</span>
+            <span class="stat-value kb-engine-status" :class="{ offline: !difyEngineConfigured }">
+              {{ difyEngineConfigured ? '在线' : '未接入' }}
+            </span>
+            <span class="stat-desc kb-engine-host" :title="difyEngineHost">{{ difyEngineHost }}</span>
+          </div>
+          <div class="stat-icon-wrapper icon-amber"><i class="fa-solid fa-link"></i></div>
         </div>
-      </div>
+      </section>
 
-      <!-- 过滤与视图切换条 -->
-      <div class="kb-filter-bar">
-        <div class="kb-search-box">
-          <i class="fa-solid fa-magnifying-glass"></i>
+      <section class="toolbar-section kb-toolbar">
+        <div class="search-box-wrapper kb-search-wide">
+          <i class="fa-solid fa-magnifying-glass search-icon"></i>
           <input
             v-model="searchKeyword"
-            placeholder="搜索知识库名称或描述..."
+            class="search-input"
+            type="search"
+            placeholder="搜索知识库名称或描述"
             @input="debounceSearch"
           >
-          <button v-if="searchKeyword" class="btn-clear-search" @click="searchKeyword = ''; loadKnowledgeBases()">
+          <button
+            v-if="searchKeyword"
+            type="button"
+            class="btn-clear-search"
+            @click="searchKeyword = ''; loadKnowledgeBases()"
+          >
             <i class="fa-solid fa-xmark"></i>
           </button>
         </div>
-
-        <div class="kb-filter-right">
-          <div class="kb-view-toggle">
-            <button
-              class="view-toggle-btn"
-              :class="{ active: viewLayout === 'card' }"
-              title="卡片网格视图"
-              @click="viewLayout = 'card'"
-            >
-              <i class="fa-solid fa-table-cells-large"></i>
-            </button>
-            <button
-              class="view-toggle-btn"
-              :class="{ active: viewLayout === 'table' }"
-              title="列表表格视图"
-              @click="viewLayout = 'table'"
-            >
-              <i class="fa-solid fa-list"></i>
-            </button>
-          </div>
+        <div class="view-mode-group">
+          <button
+            type="button"
+            class="btn-view-mode"
+            :class="{ active: viewLayout === 'card' }"
+            title="卡片网格"
+            @click="viewLayout = 'card'"
+          >
+            <i class="fa-solid fa-table-cells-large"></i>
+          </button>
+          <button
+            type="button"
+            class="btn-view-mode"
+            :class="{ active: viewLayout === 'table' }"
+            title="列表"
+            @click="viewLayout = 'table'"
+          >
+            <i class="fa-solid fa-list-ul"></i>
+          </button>
         </div>
-      </div>
+      </section>
 
       <!-- 卡片网格展示 -->
       <div v-if="loadingKb" class="kb-loading-state">
@@ -523,7 +539,7 @@
           </table>
 
           <!-- 文档分页 -->
-          <section v-if="docTotalCount > 0" class="pagination-container" style="margin-top: 16px;">
+          <section v-if="docTotalCount > 0" class="pagination-container">
             <div class="page-summary">
               共 {{ docTotalCount }} 篇知识文档 · 第 {{ docPage }} / {{ docTotalPages }} 页
               <select
@@ -674,7 +690,7 @@
         </div>
 
         <!-- FAQ 分页 -->
-        <section v-if="faqTotalCount > 0" class="pagination-container" style="margin-top: 16px;">
+        <section v-if="faqTotalCount > 0" class="pagination-container">
           <div class="page-summary">
             共 {{ faqTotalCount }} 条问答 FAQ · 第 {{ faqPage }} / {{ faqTotalPages }} 页
             <select
@@ -1100,6 +1116,8 @@ const kbList = ref([])
 const loadingKb = ref(false)
 const syncing = ref(false)
 const searchKeyword = ref('')
+const difyEngineHost = ref('未配置')
+const difyEngineConfigured = ref(false)
 const kbPage = ref(1)
 const kbPageSize = ref(12)
 const kbTotalPages = ref(1)
@@ -1188,6 +1206,17 @@ const totalFaqCount = computed(() => {
 
 // ==================== 知识库相关逻辑 ====================
 
+async function loadEngineInfo() {
+  const res = await http.get('/api/knowledge-engine')
+  if (res.success && res.data) {
+    difyEngineConfigured.value = !!res.data.configured
+    difyEngineHost.value = res.data.host || res.data.baseUrl || '未配置'
+  } else {
+    difyEngineConfigured.value = false
+    difyEngineHost.value = '未配置'
+  }
+}
+
 async function loadKnowledgeBases() {
   loadingKb.value = true
   const res = await http.get('/api/knowledge-bases', {
@@ -1236,7 +1265,24 @@ async function syncFromDify() {
   const res = await http.post('/api/knowledge-bases/sync-from-dify')
   syncing.value = false
   if (res.success) {
-    showToast(`Dify 知识库同步成功: 导入 ${res.data?.importedKnowledgeBases || 0} 个知识库, ${res.data?.importedDocuments || 0} 篇文档`, 'success')
+    const importedKb = res.data?.importedKnowledgeBases || 0
+    const importedDocs = res.data?.importedDocuments || 0
+    const staleCount = Number(res.data?.staleCount || 0)
+    const staleNames = (res.data?.staleKnowledgeBases || [])
+      .map(item => item.name)
+      .filter(Boolean)
+      .slice(0, 3)
+      .join('、')
+    if (staleCount > 0) {
+      showToast(
+        `已同步当前 Dify（${res.data?.engineHost || difyEngineHost.value}）：导入 ${importedKb} 个知识库、${importedDocs} 篇文档。另有 ${staleCount} 个本地知识库在当前引擎上已失效${staleNames ? '（' + staleNames + (staleCount > 3 ? ' 等' : '') + '）' : ''}，对话检索不会命中，请解绑智能体后删除或重新导入。`,
+        'warning',
+        6500
+      )
+    } else {
+      showToast(`Dify 知识库同步成功: 导入 ${importedKb} 个知识库, ${importedDocs} 篇文档`, 'success')
+    }
+    await loadEngineInfo()
     loadKnowledgeBases()
   } else {
     showToast(res.message || '从 Dify 同步失败', 'error')
@@ -1823,6 +1869,7 @@ async function loadViewLayoutPreference() {
 }
 
 onMounted(() => {
+  loadEngineInfo()
   loadKnowledgeBases()
   loadViewLayoutPreference()
 })

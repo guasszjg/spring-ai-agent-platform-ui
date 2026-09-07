@@ -505,11 +505,15 @@ const user = computed(() => {
   try { return JSON.parse(localStorage.getItem('user') || '{}') } catch { return {} }
 })
 const userAvatar = computed(() => {
+  const name = user.value?.username
   const av = user.value?.avatar
-  if (!av || av.includes('dicebear') || av.includes('bottts')) {
-    return user.value?.username === 'developer' ? defaultDevAvatar : defaultAdminAvatar
+  if (name === 'developer') {
+    if (!av || av.includes('dicebear') || av.includes('bottts') || av.includes('avatar-dev')) {
+      return defaultDevAvatar
+    }
+    return av
   }
-  return av
+  return defaultAdminAvatar
 })
 const pageTitle = computed(() => {
   if (currentTab.value === 'overview') return '概览仪表盘 (Overview & Analytics)'
@@ -652,7 +656,7 @@ function onUseTemplateFromPanel(t) {
   form.name = t.name || ''
   form.code = 'agent_' + (t.name || 'bot').toLowerCase().replace(/[^a-z0-9]/gi, '_')
   form.category = t.category || '通用智能'
-  form.modelName = routedModel.value || t.modelName || ''
+  form.modelName = routedModel.value || ''
   form.systemPrompt = t.systemPrompt || ''
   form.description = t.description || ''
   form.temperature = t.temperature != null ? t.temperature : 0.7
@@ -668,7 +672,7 @@ function applyTemplate(val) {
   form.name = t.name || ''
   form.code = 'agent_' + (t.name || 'bot').toLowerCase().replace(/[^a-z0-9]/gi, '_')
   form.category = t.category || '通用智能'
-  form.modelName = routedModel.value || t.modelName || ''
+  form.modelName = routedModel.value || ''
   form.systemPrompt = t.systemPrompt || ''
   form.description = t.description || ''
   form.temperature = t.temperature != null ? t.temperature : 0.7
