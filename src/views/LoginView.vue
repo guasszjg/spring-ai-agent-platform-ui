@@ -56,7 +56,7 @@
               type="button"
               class="role-pill"
               :class="{ active: currentRole === 'admin' }"
-              @click="selectRole('admin', 'admin123')"
+              @click="selectRole('admin', 'Amx#Admin2026')"
             >
               <i class="fa-solid fa-shield-halved"></i>
               <span>管理员</span>
@@ -65,7 +65,7 @@
               type="button"
               class="role-pill"
               :class="{ active: currentRole === 'dev' }"
-              @click="selectRole('developer', 'dev123456')"
+              @click="selectRole('developer', 'Amx#Dev2026')"
             >
               <i class="fa-solid fa-code"></i>
               <span>开发者</span>
@@ -73,7 +73,7 @@
           </div>
 
           <!-- Form -->
-          <form class="login-form" @submit.prevent="handleLogin">
+          <form class="login-form" autocomplete="off" @submit.prevent="handleLogin">
             <div class="input-field">
               <i class="fa-regular fa-user field-icon"></i>
               <input
@@ -82,7 +82,10 @@
                 class="text-input"
                 placeholder="账号"
                 required
-                autocomplete="username"
+                autocomplete="off"
+                data-1p-ignore
+                data-lpignore="true"
+                data-form-type="other"
               >
             </div>
 
@@ -94,7 +97,10 @@
                 class="text-input"
                 placeholder="密码"
                 required
-                autocomplete="current-password"
+                autocomplete="new-password"
+                data-1p-ignore
+                data-lpignore="true"
+                data-form-type="other"
               >
               <button
                 type="button"
@@ -146,7 +152,7 @@ const router = useRouter()
 const { showToast } = useToast()
 
 const username = ref('admin')
-const password = ref('admin123')
+const password = ref('Amx#Admin2026')
 const currentRole = ref('admin')
 const rememberMe = ref(true)
 const showPassword = ref(false)
@@ -180,6 +186,7 @@ async function handleLogin() {
     })
     if (res && res.success && res.data) {
       localStorage.setItem('user', JSON.stringify(res.data))
+      password.value = ''
       showToast('登录成功，正在进入控制台...', 'success', 1200)
       setTimeout(() => router.push('/dashboard'), 500)
     } else {

@@ -1075,15 +1075,23 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 
 const { showToast } = useToast()
 
+const KB_VIEW_LAYOUT_KEY = 'kbViewLayout'
+
 // 视图与导航控制
 const currentView = ref('list') // 'list' | 'detail'
-const viewLayout = ref('card') // 'card' | 'table'
+const viewLayout = ref(localStorage.getItem(KB_VIEW_LAYOUT_KEY) === 'table' ? 'table' : 'card')
+let persistLayoutReady = false
+watch(viewLayout, async (mode) => {
+  localStorage.setItem(KB_VIEW_LAYOUT_KEY, mode)
+  if (!persistLayoutReady) return
+  await http.put('/api/auth/preferences', { kbViewLayout: mode })
+})
 const activeSubTab = ref('documents') // 'documents' | 'faqs'
 const selectedKb = ref(null)
 
@@ -1804,7 +1812,18 @@ function getDocStatusLabel(status) {
   return '处理异常'
 }
 
+async function loadViewLayoutPreference() {
+  const res = await http.get('/api/auth/preferences')
+  const layout = res.success ? res.data?.kbViewLayout : ''
+  if (layout === 'table' || layout === 'card') {
+    viewLayout.value = layout
+    localStorage.setItem(KB_VIEW_LAYOUT_KEY, layout)
+  }
+  persistLayoutReady = true
+}
+
 onMounted(() => {
   loadKnowledgeBases()
+  loadViewLayoutPreference()
 })
 </script>
