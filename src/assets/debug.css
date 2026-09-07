@@ -1420,6 +1420,25 @@ input:checked + .slider-toggle:before {
   font-size: 11.5px;
 }
 
+.tool-form-label .badge-saved-encrypted {
+  font-weight: 500;
+  font-size: 11px;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 1px 7px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tool-form-label .badge-saved-encrypted.badge-inherited {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
 .tool-label-row {
   display: flex;
   align-items: center;

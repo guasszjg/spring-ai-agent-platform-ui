@@ -1,0 +1,16 @@
+<svg viewBox="0 0 24 24" width="1em" height="1em" style="flex:none;line-height:1" xmlns="http://www.w3.org/2000/svg">
+  <title>Custom LLM</title>
+  <defs>
+    <linearGradient id="custom-gen-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+    <linearGradient id="custom-node-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06B6D4"/>
+      <stop offset="100%" stop-color="#10B981"/>
+    </linearGradient>
+  </defs>
+  <path d="M12 2.5L20 7.2V16.8L12 21.5L4 16.8V7.2L12 2.5Z" stroke="url(#custom-gen-grad)" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M12 12L20 7.2M12 12V21.5M12 12L4 7.2" stroke="url(#custom-gen-grad)" stroke-width="1.8" stroke-linecap="round"/>
+  <circle cx="12" cy="12" r="2.5" fill="url(#custom-node-grad)"/>
+</svg>

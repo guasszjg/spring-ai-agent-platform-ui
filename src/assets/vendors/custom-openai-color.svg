@@ -1,0 +1,14 @@
+<svg viewBox="0 0 24 24" width="1em" height="1em" style="flex:none;line-height:1" xmlns="http://www.w3.org/2000/svg">
+  <title>Custom OpenAI</title>
+  <defs>
+    <linearGradient id="openai-teal-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="50%" stop-color="#06B6D4"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+  </defs>
+  <path d="M12 2C12 7.5 7.5 12 2 12C7.5 12 12 16.5 12 22C12 16.5 16.5 12 22 12C16.5 12 12 7.5 12 2Z" fill="url(#openai-teal-grad)"/>
+  <circle cx="12" cy="12" r="2.5" fill="#FFFFFF"/>
+  <circle cx="18" cy="6" r="1.2" fill="#06B6D4"/>
+  <circle cx="6" cy="18" r="1" fill="#10B981"/>
+</svg>

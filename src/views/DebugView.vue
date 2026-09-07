@@ -358,7 +358,10 @@
               <div class="tool-label-row">
                 <label class="tool-form-label">
                   <span>博查 API Key</span>
-                  <span class="label-sub">(选填，留空使用内置系统 Key)</span>
+                  <span v-if="bochaDbConfigured" class="badge-saved-encrypted" :class="{ 'badge-inherited': bochaDbInherited }" :title="bochaDbInherited ? '已自动继承平台共享的加密密钥' : '当前智能体已专属加密保存'">
+                    <i class="fa-solid fa-shield-halved"></i> {{ bochaDbInherited ? '继承平台共享密钥' : '数据库已专属保存' }}
+                  </span>
+                  <span v-else class="label-sub">(选填，留空使用内置系统 Key)</span>
                 </label>
                 <span class="tool-tip-pill" title="支持自定义 API Key，或填 mock 进行快速模拟验证">
                   <i class="fa-solid fa-circle-info"></i> 即时测试
@@ -370,7 +373,7 @@
                     v-model="editingToolConfig.apiKey"
                     class="tool-form-input tool-key-input"
                     :type="showApiKey ? 'text' : 'password'"
-                    placeholder="sk-********************************"
+                    :placeholder="bochaDbConfigured ? (bochaDbInherited ? '已自动继承平台共享密钥（如需专属 Key 请输入）' : '已在数据库专属加密保存（如需更换请输入新 Key）') : 'sk-********************************'"
                     @input="testResult = null"
                   >
                   <button
@@ -387,7 +390,7 @@
                   class="btn-tool-test"
                   :disabled="testingConnection"
                   @click="testBochaConnection"
-                  title="向 Bocha 接口发送连通性探测请求"
+                  :title="bochaDbConfigured && !editingToolConfig.apiKey ? '使用数据库已保存的加密 Key 进行连通性探测' : '向 Bocha 接口发送连通性探测请求'"
                 >
                   <i v-if="testingConnection" class="fa-solid fa-circle-notch fa-spin"></i>
                   <i v-else class="fa-solid fa-bolt"></i>
@@ -736,6 +739,8 @@ const boundKnowledgeBases = computed(() => {
 
 const toolSettingsModalOpen = ref(false)
 const editingTool = ref(null)
+const bochaDbConfigured = ref(false)
+const bochaDbInherited = ref(false)
 const showApiKey = ref(false)
 const testingConnection = ref(false)
 const testResult = ref(null)
@@ -755,7 +760,8 @@ async function testBochaConnection() {
   testResult.value = null
   try {
     const res = await http.post('/api/tools/bocha/test', {
-      apiKey: editingToolConfig.apiKey ? editingToolConfig.apiKey.trim() : undefined
+      apiKey: editingToolConfig.apiKey ? editingToolConfig.apiKey.trim() : undefined,
+      agentId: agent.value?.id
     })
     if (res.success && res.data) {
       testResult.value = {
@@ -796,8 +802,20 @@ function openToolSettings(tool) {
   testingConnection.value = false
   testResult.value = null
   let currentKey = tool.config?.apiKey || ''
-  if (tool.customIcon === 'bocha' && !currentKey) {
-    currentKey = localStorage.getItem(GLOBAL_BOCHA_KEY) || ''
+  if (tool.customIcon === 'bocha') {
+    bochaDbConfigured.value = false
+    bochaDbInherited.value = false
+    if (!currentKey) {
+      currentKey = localStorage.getItem(GLOBAL_BOCHA_KEY) || ''
+    }
+    if (agent.value?.id) {
+      http.get(`/api/agents/${agent.value.id}/tool-secrets/bocha`).then(res => {
+        if (res.success && res.data?.configured) {
+          bochaDbConfigured.value = true
+          bochaDbInherited.value = !!res.data.inherited
+        }
+      }).catch(() => {})
+    }
   }
   editingToolConfig.apiKey = currentKey
   editingToolConfig.count = tool.config?.count || 5
@@ -823,11 +841,15 @@ function saveToolSettings() {
 
     // 1. If Bocha key filled, persist globally to localStorage and backend secret store
     if (editingTool.value.customIcon === 'bocha') {
-      if (editingToolConfig.apiKey) {
+      if (editingToolConfig.apiKey && editingToolConfig.apiKey.trim()) {
         const trimmedKey = editingToolConfig.apiKey.trim()
         localStorage.setItem(GLOBAL_BOCHA_KEY, trimmedKey)
         if (agent.value?.id) {
           http.put(`/api/agents/${agent.value.id}/tool-secrets/bocha`, { apiKey: trimmedKey })
+            .then(() => {
+              bochaDbConfigured.value = true
+              bochaDbInherited.value = false
+            })
             .catch(err => console.warn('Sync bocha secret failed:', err))
         }
       }
@@ -855,6 +877,24 @@ function resetToolSettings() {
     editingToolConfig.count = 5
     editingToolConfig.freshness = 'noLimit'
     editingToolConfig.summary = true
+    if (agent.value?.id) {
+      http.delete(`/api/agents/${agent.value.id}/tool-secrets/bocha`)
+        .then(() => {
+          http.get(`/api/agents/${agent.value.id}/tool-secrets/bocha`).then(res => {
+            if (res.success && res.data?.configured) {
+              bochaDbConfigured.value = true
+              bochaDbInherited.value = !!res.data.inherited
+            } else {
+              bochaDbConfigured.value = false
+              bochaDbInherited.value = false
+            }
+          }).catch(() => {
+            bochaDbConfigured.value = false
+            bochaDbInherited.value = false
+          })
+        })
+        .catch(() => {})
+    }
   } else {
     editingToolConfig.timezone = 'Asia/Shanghai'
     editingToolConfig.format = 'yyyy-MM-dd HH:mm:ss'

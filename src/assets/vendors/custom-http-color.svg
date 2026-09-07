@@ -1,0 +1,16 @@
+<svg viewBox="0 0 24 24" width="1em" height="1em" style="flex:none;line-height:1" xmlns="http://www.w3.org/2000/svg">
+  <title>Custom HTTP</title>
+  <defs>
+    <linearGradient id="http-purple-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#6366F1"/>
+    </linearGradient>
+    <linearGradient id="http-cyan-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06B6D4"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+  </defs>
+  <path d="M7.5 7L2.5 12L7.5 17" stroke="url(#http-purple-grad)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M16.5 7L21.5 12L16.5 17" stroke="url(#http-purple-grad)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M13.5 4.5L9.5 13H14.5L10.5 19.5" stroke="url(#http-cyan-grad)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
