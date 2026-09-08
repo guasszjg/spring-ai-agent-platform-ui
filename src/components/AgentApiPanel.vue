@@ -55,7 +55,16 @@
         </div>
         <div class="card-title">智能体状态 & 路由</div>
         <div class="card-val-row">
-          <span class="agent-model-name">{{ agent?.modelName || '默认模型' }}</span>
+          <span class="agent-model-name" :title="`当前网关调度模型: ${effectiveRouteLabel}`">
+            {{ effectiveRouteLabel }}
+          </span>
+          <router-link
+            to="/dashboard?tab=gateway"
+            class="btn-icon-action"
+            title="点击前往网关修改模型路由"
+          >
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </router-link>
         </div>
         <div class="card-footer-tip">
           <i class="fa-solid fa-fingerprint" style="color: var(--accent-blue);"></i>
@@ -638,7 +647,7 @@
                   <span v-if="playLoading" class="typing-cursor"></span>
                 </div>
                 <div v-if="playStreamMeta" class="stream-meta-footer">
-                  <div class="meta-item"><i class="fa-solid fa-microchip"></i> 模型: {{ playStreamMeta.model || agent?.modelName }}</div>
+                  <div class="meta-item"><i class="fa-solid fa-microchip"></i> 模型: {{ playStreamMeta.model || effectiveModel }}</div>
                   <div class="meta-item"><i class="fa-regular fa-clock"></i> 耗时: {{ playStreamMeta.latency_ms || playStatus?.latencyMs || 0 }}ms</div>
                   <div class="meta-item"><i class="fa-solid fa-ticket"></i> Token: {{ playStreamMeta.tokens_used || 0 }}</div>
                   <div v-if="playParams.conversation_id" class="meta-item"><i class="fa-solid fa-comments"></i> 会话 ID: {{ playParams.conversation_id }}</div>
@@ -713,7 +722,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 
@@ -721,11 +730,72 @@ const props = defineProps({
   agent: {
     type: Object,
     required: true
+  },
+  routedChannel: {
+    type: String,
+    default: ''
+  },
+  routedModel: {
+    type: String,
+    default: ''
+  },
+  routedLabel: {
+    type: String,
+    default: ''
   }
 })
 
 const emit = defineEmits(['agent-updated'])
 const { showToast } = useToast()
+
+const localGatewayRoute = ref({ channel: '', model: '', label: '' })
+
+async function fetchGatewayRoute() {
+  try {
+    const res = await http.get('/api/model-gateway')
+    if (res.success && res.data) {
+      const providers = res.data.providers || []
+      const policy = res.data.policy || {}
+      const ready = providers.filter((p) => p.enabled && p.configured)
+      const defaultId = policy.defaultProviderId || ''
+      const primary = ready.find((p) => p.id === defaultId) || ready[0]
+      if (primary) {
+        const ch = primary.name || ''
+        const mo = primary.defaultModel || ''
+        localGatewayRoute.value = {
+          channel: ch,
+          model: mo,
+          label: ch && mo ? `${ch} · ${mo}` : (mo || ch || '默认模型')
+        }
+      }
+    }
+  } catch {}
+}
+
+onMounted(() => {
+  fetchGatewayRoute()
+})
+
+watch(() => props.agent?.id, () => {
+  fetchGatewayRoute()
+})
+
+const effectiveChannel = computed(() => {
+  return props.routedChannel || localGatewayRoute.value.channel || ''
+})
+
+const effectiveModel = computed(() => {
+  return props.routedModel || localGatewayRoute.value.model || props.agent?.modelName || '默认模型'
+})
+
+const effectiveRouteLabel = computed(() => {
+  if (props.routedLabel && props.routedLabel !== '未配置网关') return props.routedLabel
+  if (localGatewayRoute.value.label) return localGatewayRoute.value.label
+  if (effectiveChannel.value && effectiveModel.value) {
+    return `${effectiveChannel.value} · ${effectiveModel.value}`
+  }
+  return effectiveModel.value || props.agent?.modelName || '默认模型'
+})
 
 // View states
 const activeDetailTab = ref('docs')
@@ -883,6 +953,7 @@ while (true) {
 })
 
 const activeRespSnippet = computed(() => {
+  const currentModel = effectiveModel.value || 'deepseek-chat'
   if (respSampleMode.value === 'stream') {
     return `// 响应头: Content-Type: text/event-stream;charset=UTF-8
 
@@ -896,7 +967,7 @@ event: message
 data: {"event":"message","conversation_id":"conv-8f2a1b9c","message_id":"msg-4a1d9c2e","answer":"您的智能助手。","created_at":1741234567}
 
 event: message_end
-data: {"event":"message_end","conversation_id":"conv-8f2a1b9c","message_id":"msg-4a1d9c2e","metadata":{"model":"${props.agent?.modelName || 'deepseek-chat'}","tokens_used":48,"latency_ms":312,"tool_called":null}}`
+data: {"event":"message_end","conversation_id":"conv-8f2a1b9c","message_id":"msg-4a1d9c2e","metadata":{"model":"${currentModel}","tokens_used":48,"latency_ms":312,"tool_called":null}}`
   }
 
   return `// 响应头: Content-Type: application/json;charset=UTF-8
@@ -909,7 +980,7 @@ data: {"event":"message_end","conversation_id":"conv-8f2a1b9c","message_id":"msg
     "conversation_id": "conv-8f2a1b9c",
     "message_id": "msg-4a1d9c2e",
     "reply": "您好！我是您的智能助手，具备联网检索、代码编写和实时问答等能力，请问今天有什么可以帮您？",
-    "model": "${props.agent?.modelName || 'deepseek-chat'}",
+    "model": "${currentModel}",
     "tool_called": null,
     "tokens_used": 68,
     "latency_ms": 420,

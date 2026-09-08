@@ -329,7 +329,14 @@
 
     <AgentLogsPanel v-if="pageTab === 'logs' && agent" :agent-id="agent.id" />
     <AgentMonitorPanel v-if="pageTab === 'monitor' && agent" :agent-id="agent.id" />
-    <AgentApiPanel v-if="pageTab === 'api' && agent" :agent="agent" @agent-updated="onAgentUpdated" />
+    <AgentApiPanel
+      v-if="pageTab === 'api' && agent"
+      :agent="agent"
+      :routed-channel="routedChannel"
+      :routed-model="routedModel"
+      :routed-label="routedLabel"
+      @agent-updated="onAgentUpdated"
+    />
 
     <!-- Tool Settings Modal -->
     <div v-if="toolSettingsModalOpen" class="tool-modal-backdrop" @click.self="toolSettingsModalOpen = false">
@@ -613,7 +620,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
@@ -645,6 +652,22 @@ const routedLabel = computed(() => {
   if (routedChannel.value) return routedChannel.value
   if (routedModel.value) return routedModel.value
   return '未配置网关'
+})
+
+watch(pageTab, async (newTab) => {
+  if (newTab === 'api') {
+    const overviewRes = await http.get('/api/model-gateway')
+    if (overviewRes.success) {
+      applyGatewayRoute(overviewRes.data)
+      if (agent.value && routedModel.value && agent.value.modelName !== routedModel.value) {
+        agent.value.modelName = routedModel.value
+        http.put(`/api/agents/${agent.value.id}`, {
+          ...agent.value,
+          modelName: routedModel.value
+        }).catch(() => {})
+      }
+    }
+  }
 })
 const inputText = ref('')
 const sending = ref(false)
@@ -1185,8 +1208,10 @@ function optimizePrompt() {
 
 async function publish() {
   if (!agent.value) return
+  const currentModel = routedModel.value || agent.value.modelName
   const res = await http.put(`/api/agents/${agent.value.id}`, {
     ...agent.value,
+    modelName: currentModel,
     systemPrompt: prompt.value,
     temperature: Number(appliedSettings.temperature.value),
     topP: Number(appliedSettings.topP.value),
@@ -1397,6 +1422,14 @@ onMounted(async () => {
     boundKbIds.value = Array.isArray(res.data.knowledgeBaseIds) ? [...res.data.knowledgeBaseIds] : []
     await loadKnowledgeCatalog()
     resetChat()
+
+    if (routedModel.value && agent.value.modelName !== routedModel.value) {
+      agent.value.modelName = routedModel.value
+      http.put(`/api/agents/${agent.value.id}`, {
+        ...agent.value,
+        modelName: routedModel.value
+      }).catch(err => console.warn('Auto sync agent modelName failed:', err))
+    }
   } else {
     showToast('未能加载智能体信息', 'error')
   }

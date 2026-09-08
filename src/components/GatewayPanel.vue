@@ -95,8 +95,21 @@
                 <button class="btn-card-action btn-chat-primary" @click="openEdit(p)">
                   <i class="fa-solid fa-gear"></i><span>配置</span>
                 </button>
-                <button v-if="!p.builtin" class="btn-card-action btn-action-icon btn-action-danger" @click="removeCustom(p)">
+                <button
+                  v-if="!p.builtin"
+                  class="btn-card-action btn-action-icon btn-action-danger"
+                  title="删除通道"
+                  @click="removeCustom(p)"
+                >
                   <i class="fa-regular fa-trash-can"></i>
+                </button>
+                <button
+                  v-else
+                  class="btn-card-action btn-action-icon btn-action-locked"
+                  disabled
+                  title="系统预设通道，受保护不可删除"
+                >
+                  <i class="fa-solid fa-lock"></i>
                 </button>
               </div>
             </td>
@@ -916,5 +929,21 @@ onMounted(load)
 .gateway-vendor-mark.mark-custom {
   background: var(--bg-card, #ffffff) !important;
   border-color: rgba(99, 102, 241, 0.25) !important;
+}
+
+/* 系统预设通道锁定占位按钮 */
+.btn-action-icon.btn-action-locked {
+  opacity: 0.28;
+  cursor: not-allowed !important;
+  color: var(--text-muted, #94a3b8) !important;
+  background: rgba(148, 163, 184, 0.06) !important;
+  border-color: rgba(148, 163, 184, 0.2) !important;
+  pointer-events: auto;
+  transition: opacity 0.2s;
+}
+
+.btn-action-icon.btn-action-locked:hover {
+  opacity: 0.6;
+  background: rgba(148, 163, 184, 0.12) !important;
 }
 </style>
