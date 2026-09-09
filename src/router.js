@@ -17,9 +17,26 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   if (!to.meta.requiresAuth && to.name !== 'login') return true
 
+  const cachedUser = localStorage.getItem('user')
+  if (to.name === 'login' && !cachedUser) {
+    return true
+  }
+
   const session = await http.get('/api/auth/me')
-  if (to.meta.requiresAuth && !session.success) return '/login'
-  if (to.name === 'login' && session.success) return '/dashboard'
+  if (to.meta.requiresAuth && !session.success) {
+    localStorage.removeItem('user')
+    localStorage.removeItem('csrf_token')
+    return '/login'
+  }
+  if (session.success && session.data) {
+    localStorage.setItem('user', JSON.stringify(session.data))
+    if (session.data.csrfToken) {
+      localStorage.setItem('csrf_token', session.data.csrfToken)
+    }
+  }
+  if (to.name === 'login' && session.success && cachedUser) {
+    return '/dashboard'
+  }
   return true
 })
 

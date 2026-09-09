@@ -8,7 +8,7 @@
           <h2 class="kb-page-title">企业私有知识库中心 (Enterprise RAG)</h2>
         </div>
         <div class="kb-hero-actions">
-          <button class="btn-secondary kb-sync-btn" :disabled="syncing" title="从 Dify 导入或同步已有知识库" @click="syncFromDify">
+          <button v-if="canSyncDify" class="btn-secondary kb-sync-btn" :disabled="syncing" title="从 Dify 导入或同步已有知识库" @click="syncFromDify">
             <i class="fa-solid fa-rotate" :class="{ 'fa-spin': syncing }"></i>
             <span>{{ syncing ? '正在从 Dify 同步...' : '从 Dify 一键同步' }}</span>
           </button>
@@ -54,42 +54,92 @@
       </section>
 
       <section class="toolbar-section kb-toolbar">
-        <div class="search-box-wrapper kb-search-wide">
-          <i class="fa-solid fa-magnifying-glass search-icon"></i>
-          <input
-            v-model="searchKeyword"
-            class="search-input"
-            type="search"
-            placeholder="搜索知识库名称或描述"
-            @input="debounceSearch"
-          >
-          <button
-            v-if="searchKeyword"
-            type="button"
-            class="btn-clear-search"
-            @click="searchKeyword = ''; loadKnowledgeBases()"
-          >
-            <i class="fa-solid fa-xmark"></i>
-          </button>
+        <div class="kb-toolbar-left">
+          <div class="kb-scope-group">
+            <button
+              type="button"
+              class="btn-kb-scope-pill"
+              :class="{ active: scopeFilter === 'all' }"
+              title="查看全部可见知识库（系统公共 + 我的专属）"
+              @click="scopeFilter = 'all'"
+            >
+              <i class="fa-solid fa-layer-group"></i>
+              <span>全部知识库</span>
+              <span class="kb-scope-count">{{ allKbCount }}</span>
+            </button>
+            <button
+              type="button"
+              class="btn-kb-scope-pill"
+              :class="{ active: scopeFilter === 'mine' }"
+              title="仅筛选由我创建的专属私有知识库"
+              @click="scopeFilter = 'mine'"
+            >
+              <i class="fa-solid fa-user-pen"></i>
+              <span>我的创建</span>
+              <span class="kb-scope-count">{{ myKbCount }}</span>
+            </button>
+            <button
+              type="button"
+              class="btn-kb-scope-pill"
+              :class="{ active: scopeFilter === 'system' }"
+              title="仅筛选平台内置的标准公共知识库"
+              @click="scopeFilter = 'system'"
+            >
+              <i class="fa-solid fa-building-shield"></i>
+              <span>公共知识库</span>
+              <span class="kb-scope-count">{{ systemKbCount }}</span>
+            </button>
+          </div>
         </div>
-        <div class="view-mode-group">
+
+        <div class="kb-toolbar-right">
+          <div class="search-box-wrapper kb-search-box">
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input
+              v-model="searchKeyword"
+              class="search-input"
+              type="search"
+              placeholder="搜索知识库名称或描述..."
+              @input="debounceSearch"
+            >
+            <button
+              v-if="searchKeyword"
+              type="button"
+              class="btn-clear-search"
+              title="清空搜索"
+              @click="searchKeyword = ''; loadKnowledgeBases()"
+            >
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+          <div class="view-mode-group">
+            <button
+              type="button"
+              class="btn-view-mode"
+              :class="{ active: viewLayout === 'card' }"
+              title="卡片网格"
+              @click="viewLayout = 'card'"
+            >
+              <i class="fa-solid fa-table-cells-large"></i>
+            </button>
+            <button
+              type="button"
+              class="btn-view-mode"
+              :class="{ active: viewLayout === 'table' }"
+              title="列表展示"
+              @click="viewLayout = 'table'"
+            >
+              <i class="fa-solid fa-list-ul"></i>
+            </button>
+          </div>
           <button
             type="button"
-            class="btn-view-mode"
-            :class="{ active: viewLayout === 'card' }"
-            title="卡片网格"
-            @click="viewLayout = 'card'"
+            class="btn-refresh"
+            :disabled="loadingKb"
+            title="刷新知识库列表"
+            @click="loadKnowledgeBases"
           >
-            <i class="fa-solid fa-table-cells-large"></i>
-          </button>
-          <button
-            type="button"
-            class="btn-view-mode"
-            :class="{ active: viewLayout === 'table' }"
-            title="列表"
-            @click="viewLayout = 'table'"
-          >
-            <i class="fa-solid fa-list-ul"></i>
+            <i class="fa-solid fa-rotate" :class="{ 'fa-spin': loadingKb }"></i>
           </button>
         </div>
       </section>
@@ -100,15 +150,15 @@
         <span>正在加载知识库资产...</span>
       </div>
 
-      <div v-else-if="kbList.length === 0" class="kb-empty-state">
+      <div v-else-if="displayKbList.length === 0" class="kb-empty-state">
         <div class="empty-icon-wrap"><i class="fa-solid fa-book-open"></i></div>
-        <h3>暂无知识库数据</h3>
-        <p>您可以新建本地知识库并自动创建 Dify 数据集，或者直接从 Dify 导入已有知识库。</p>
+        <h3>{{ scopeFilter === 'mine' ? '暂无我创建的私有知识库' : (scopeFilter === 'system' ? '暂无系统公共知识库' : (searchKeyword ? '未找到符合条件的知识库' : '暂无知识库资产')) }}</h3>
+        <p>{{ scopeFilter === 'mine' ? '您可以点击上方「新建知识库」创建您的专属企业资料库。' : (searchKeyword ? '尝试更换检索词或清空筛选条件。' : (canSyncDify ? '您可以新建本地知识库并自动同步至 Dify 数据集，或者直接从 Dify 一键同步。' : '您可以点击上方「新建知识库」创建您的专属企业资料库。')) }}</p>
         <div class="empty-actions">
           <button class="btn-create-agent" @click="openCreateKb">
             <i class="fa-solid fa-plus"></i><span>立即创建知识库</span>
           </button>
-          <button class="btn-secondary" :disabled="syncing" @click="syncFromDify">
+          <button v-if="canSyncDify" class="btn-secondary" :disabled="syncing" @click="syncFromDify">
             <i class="fa-solid fa-rotate" :class="{ 'fa-spin': syncing }"></i><span>从 Dify 导入已有数据</span>
           </button>
         </div>
@@ -117,7 +167,7 @@
       <!-- 卡片视图 -->
       <div v-else-if="viewLayout === 'card'" class="kb-grid">
         <div
-          v-for="kb in kbList"
+          v-for="kb in displayKbList"
           :key="kb.id"
           class="kb-card"
           @click="openKbDetail(kb)"
@@ -127,6 +177,15 @@
             <div class="kb-card-title-group">
               <h3 class="kb-card-name" :title="kb.name">{{ kb.name }}</h3>
               <div class="kb-card-badges">
+                <span v-if="kb.isSystem" class="provider-badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3);">
+                  <i class="fa-solid fa-earth-americas"></i> 公共
+                </span>
+                <span v-else-if="canManageKb(kb)" class="provider-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);">
+                  <i class="fa-solid fa-user-check"></i> 我的
+                </span>
+                <span v-else class="provider-badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);">
+                  <i class="fa-solid fa-user"></i> {{ kb.ownerUsername || '共享' }}
+                </span>
                 <span class="provider-badge dify">
                   <i class="fa-solid fa-link"></i> Dify
                 </span>
@@ -165,13 +224,14 @@
               <button
                 type="button"
                 class="btn-card-action btn-chat-primary"
-                title="进入管理知识库文档与问答"
+                :title="canManageKb(kb) ? '进入管理知识库文档与问答' : '查看知识库文档与问答'"
                 @click="openKbDetail(kb)"
               >
-                <i class="fa-solid fa-arrow-right-to-bracket"></i>
-                <span>进入管理</span>
+                <i :class="canManageKb(kb) ? 'fa-solid fa-arrow-right-to-bracket' : 'fa-solid fa-eye'"></i>
+                <span>{{ canManageKb(kb) ? '进入管理' : '查看内容' }}</span>
               </button>
               <button
+                v-if="canManageKb(kb)"
                 type="button"
                 class="btn-card-action btn-action-icon"
                 title="编辑知识库信息"
@@ -180,6 +240,7 @@
                 <i class="fa-regular fa-pen-to-square"></i>
               </button>
               <button
+                v-if="canManageKb(kb)"
                 type="button"
                 class="btn-card-action btn-action-icon btn-action-danger"
                 title="删除知识库"
@@ -208,12 +269,17 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="kb in kbList" :key="kb.id" class="table-row-hover" @click="openKbDetail(kb)">
+            <tr v-for="kb in displayKbList" :key="kb.id" class="table-row-hover" @click="openKbDetail(kb)">
               <td>
                 <div class="kb-table-title-cell">
                   <span class="kb-table-avatar">{{ kb.avatar || '📚' }}</span>
                   <div>
-                    <div class="table-agent-title">{{ kb.name }}</div>
+                    <div class="table-agent-title" style="display: flex; align-items: center; gap: 6px;">
+                      <span>{{ kb.name }}</span>
+                      <span v-if="kb.isSystem" style="font-size: 11px; padding: 1px 6px; border-radius: 4px; background: rgba(99, 102, 241, 0.15); color: #818cf8;">公共</span>
+                      <span v-else-if="canManageKb(kb)" style="font-size: 11px; padding: 1px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: #34d399;">我的</span>
+                      <span v-else style="font-size: 11px; padding: 1px 6px; border-radius: 4px; background: rgba(245, 158, 11, 0.15); color: #fbbf24;">{{ kb.ownerUsername }}</span>
+                    </div>
                     <div class="table-agent-code">{{ kb.description || '暂无描述' }}</div>
                   </div>
                 </div>
@@ -240,13 +306,14 @@
                   <button
                     type="button"
                     class="btn-card-action btn-chat-primary"
-                    title="进入管理知识库"
+                    :title="canManageKb(kb) ? '进入管理知识库' : '查看知识库'"
                     @click="openKbDetail(kb)"
                   >
-                    <i class="fa-solid fa-arrow-right-to-bracket"></i>
-                    <span>进入管理</span>
+                    <i :class="canManageKb(kb) ? 'fa-solid fa-arrow-right-to-bracket' : 'fa-solid fa-eye'"></i>
+                    <span>{{ canManageKb(kb) ? '进入管理' : '查看内容' }}</span>
                   </button>
                   <button
+                    v-if="canManageKb(kb)"
                     type="button"
                     class="btn-card-action btn-action-icon"
                     title="编辑知识库信息"
@@ -255,6 +322,7 @@
                     <i class="fa-regular fa-pen-to-square"></i>
                   </button>
                   <button
+                    v-if="canManageKb(kb)"
                     type="button"
                     class="btn-card-action btn-action-icon btn-action-danger"
                     title="删除知识库"
@@ -344,10 +412,16 @@
             <p class="kb-desc-text">{{ selectedKb?.description || '暂无业务描述' }}</p>
           </div>
           <div class="kb-detail-top-actions">
-            <button class="btn-secondary" title="编辑知识库信息" @click="openEditKb(selectedKb)">
+            <button v-if="canManageKb(selectedKb)" class="btn-secondary" title="编辑知识库信息" @click="openEditKb(selectedKb)">
               <i class="fa-solid fa-pen-to-square"></i> <span>编辑信息</span>
             </button>
           </div>
+        </div>
+
+        <!-- 只读权限提示条 -->
+        <div v-if="!canManageKb(selectedKb)" style="margin: 14px 0 0 0; padding: 10px 16px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 8px; font-size: 13px; color: #60a5fa; display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-shield-halved"></i>
+          <span>您当前仅具备该知识库的只读使用权限（归属于: {{ selectedKb?.isSystem ? '系统公共' : (selectedKb?.ownerUsername || '其他开发者') }}），无法新增或修改文档与问答。</span>
         </div>
       </div>
 
@@ -374,7 +448,7 @@
       <!-- TAB 1: 文件文档库 -->
       <div v-show="activeSubTab === 'documents'" class="kb-tab-content">
         <!-- 上传区域 -->
-        <div class="kb-upload-card">
+        <div v-if="canManageKb(selectedKb)" class="kb-upload-card">
           <div class="upload-guide-header">
             <div>
               <h4 class="upload-guide-title"><i class="fa-solid fa-cloud-arrow-up text-blue"></i> 上传文档入库</h4>
@@ -525,6 +599,7 @@
                       <i class="fa-solid fa-rotate"></i>
                     </button>
                     <button
+                      v-if="canManageKb(selectedKb)"
                       type="button"
                       class="btn-card-action btn-action-icon btn-action-danger"
                       title="删除文档"
@@ -611,7 +686,7 @@
                 @input="debounceFaqSearch"
               >
             </div>
-            <button class="btn-create-agent" @click="openCreateFaq">
+            <button v-if="canManageKb(selectedKb)" class="btn-create-agent" @click="openCreateFaq">
               <i class="fa-solid fa-plus"></i> <span>新增问答 (FAQ)</span>
             </button>
           </div>
@@ -626,7 +701,7 @@
           <div class="empty-icon-wrap"><i class="fa-solid fa-comments"></i></div>
           <h3>暂无相关问答 (FAQ)</h3>
           <p>录入高频业务问答对，系统将自动向量化并同步到底层 Dify RAG 引擎，提升智能体应答精准度。</p>
-          <button class="btn-create-agent" @click="openCreateFaq">
+          <button v-if="canManageKb(selectedKb)" class="btn-create-agent" @click="openCreateFaq">
             <i class="fa-solid fa-plus"></i><span>立即添加第一条问答</span>
           </button>
         </div>
@@ -667,7 +742,7 @@
 
             <div class="faq-card-footer">
               <span class="faq-time"><i class="fa-regular fa-clock"></i> 创建于 {{ formatTime(faq.createdAt) }}</span>
-              <div class="agent-actions" style="justify-content: flex-end; flex-wrap: nowrap;">
+              <div v-if="canManageKb(selectedKb)" class="agent-actions" style="justify-content: flex-end; flex-wrap: nowrap;">
                 <button
                   type="button"
                   class="btn-card-action btn-action-icon"
@@ -1095,7 +1170,42 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 
+const props = defineProps({
+  user: {
+    type: Object,
+    default: () => ({})
+  },
+  currentUser: {
+    type: Object,
+    default: () => ({})
+  },
+  isSuperAdmin: {
+    type: Boolean,
+    default: false
+  }
+})
+
 const { showToast } = useToast()
+
+const effectiveUser = computed(() => {
+  if (props.user && Object.keys(props.user).length > 0) return props.user
+  if (props.currentUser && Object.keys(props.currentUser).length > 0) return props.currentUser
+  try { return JSON.parse(localStorage.getItem('user') || '{}') } catch { return {} }
+})
+
+const isSuperAdmin = computed(() => {
+  const u = effectiveUser.value
+  if (!u || !u.role) return false
+  if (u.role === 'DEVELOPER' || u.role === 'VIEWER') return false
+  return props.isSuperAdmin === true || u.role === 'SUPER_ADMIN' || u.role === 'System Admin' || u.username === 'admin'
+})
+
+const canSyncDify = computed(() => {
+  const u = effectiveUser.value
+  if (!u || !u.role) return false
+  if (u.role === 'DEVELOPER' || u.role === 'VIEWER') return false
+  return props.isSuperAdmin === true || u.role === 'SUPER_ADMIN' || u.role === 'System Admin' || u.username === 'admin'
+})
 
 const KB_VIEW_LAYOUT_KEY = 'kbViewLayout'
 
@@ -1113,6 +1223,7 @@ const selectedKb = ref(null)
 
 // 知识库列表状态
 const kbList = ref([])
+const scopeFilter = ref('all') // 'all' | 'mine' | 'system'
 const loadingKb = ref(false)
 const syncing = ref(false)
 const searchKeyword = ref('')
@@ -1123,6 +1234,27 @@ const kbPageSize = ref(12)
 const kbTotalPages = ref(1)
 const totalKbCount = ref(0)
 let searchTimer = null
+
+const allKbCount = computed(() => totalKbCount.value || kbList.value.length)
+const myKbCount = computed(() => kbList.value.filter(k => !k.isSystem && (k.ownerId === effectiveUser.value?.id || k.ownerUsername === effectiveUser.value?.username)).length)
+const systemKbCount = computed(() => kbList.value.filter(k => k.isSystem).length)
+
+function canManageKb(kb) {
+  if (!kb) return false
+  if (isSuperAdmin.value) return true
+  if (kb.isSystem) return false
+  return kb.ownerId === effectiveUser.value?.id || kb.ownerUsername === effectiveUser.value?.username
+}
+
+const displayKbList = computed(() => {
+  if (scopeFilter.value === 'mine') {
+    return kbList.value.filter(k => !k.isSystem && (k.ownerId === effectiveUser.value?.id || k.ownerUsername === effectiveUser.value?.username))
+  }
+  if (scopeFilter.value === 'system') {
+    return kbList.value.filter(k => k.isSystem)
+  }
+  return kbList.value
+})
 
 // 文档列表状态
 const docList = ref([])

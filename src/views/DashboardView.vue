@@ -27,68 +27,48 @@
           </div>
         </div>
         <nav class="sidebar-nav">
-          <div v-show="!sidebarCollapsed" class="nav-section-title">核心业务枢纽</div>
-          <div v-show="sidebarCollapsed" class="nav-section-divider"></div>
-          <button
-            class="sidebar-nav-item"
-            :class="{ active: currentTab === 'overview' }"
-            title="概览分析 (主页)"
-            @click="currentTab = 'overview'"
+          <div
+            v-for="(group, gIdx) in navGroups"
+            :key="group.id"
+            class="nav-group-wrapper"
           >
-            <i class="fa-solid fa-chart-pie"></i>
-            <span v-show="!sidebarCollapsed">概览分析 (主页)</span>
-            <span v-show="!sidebarCollapsed" class="nav-badge-pill">实时</span>
-          </button>
-          <button
-            class="sidebar-nav-item"
-            :class="{ active: currentTab === 'agents' }"
-            :title="'Agents 智能体 (' + (stats.totalAgents || 0) + ')'"
-            @click="currentTab = 'agents'"
-          >
-            <i class="fa-solid fa-robot"></i>
-            <span v-show="!sidebarCollapsed">Agents 智能体</span>
-            <span v-show="!sidebarCollapsed" class="nav-count-pill">{{ stats.totalAgents || 0 }}</span>
-          </button>
-          <button
-            class="sidebar-nav-item"
-            :class="{ active: currentTab === 'templates' }"
-            title="模板管理"
-            @click="currentTab = 'templates'"
-          >
-            <i class="fa-solid fa-shapes"></i>
-            <span v-show="!sidebarCollapsed">模板管理</span>
-            <span v-show="!sidebarCollapsed" class="nav-badge-pill">场景</span>
-          </button>
-          <button
-            class="sidebar-nav-item"
-            :class="{ active: currentTab === 'knowledge' }"
-            title="企业知识库 (RAG)"
-            @click="currentTab = 'knowledge'"
-          >
-            <i class="fa-solid fa-book-bookmark"></i>
-            <span v-show="!sidebarCollapsed">企业知识库</span>
-            <span v-show="!sidebarCollapsed" class="nav-badge-pill">RAG</span>
-          </button>
-          <div v-show="!sidebarCollapsed" class="nav-section-title" style="margin-top: 20px;">企业系统治理</div>
-          <div v-show="sidebarCollapsed" class="nav-section-divider"></div>
-          <button
-            class="sidebar-nav-item"
-            :class="{ active: currentTab === 'gateway' }"
-            title="模型网关路由 (LLM)"
-            @click="currentTab = 'gateway'"
-          >
-            <i class="fa-solid fa-network-wired"></i>
-            <span v-show="!sidebarCollapsed">模型网关路由</span>
-            <span v-show="!sidebarCollapsed" class="nav-badge-pill">LLM</span>
-          </button>
-          <button
-            class="sidebar-nav-item"
-            title="安全审计与护栏"
-            @click="showToast('安全审计与内容护栏模块运行正常', 'info')"
-          >
-            <i class="fa-solid fa-shield-halved"></i>
-            <span v-show="!sidebarCollapsed">安全审计与护栏</span>
-          </button>
+            <!-- Category Section Header (Expanded) -->
+            <div v-show="!sidebarCollapsed" class="nav-section-header">
+              <span class="nav-section-title">
+                <i :class="group.icon"></i>
+                <span>{{ group.title }}</span>
+              </span>
+              <span class="nav-section-tag">{{ group.enTitle }}</span>
+            </div>
+            <!-- Collapsed Divider -->
+            <div v-show="sidebarCollapsed && gIdx > 0" class="nav-section-divider" :title="group.title"></div>
+
+            <!-- Submenu Items -->
+            <button
+              v-for="item in group.items"
+              :key="item.id"
+              class="sidebar-nav-item"
+              :class="{ active: currentTab === item.id }"
+              :title="item.title || item.name"
+              @click="handleNavClick(item)"
+            >
+              <i :class="item.icon"></i>
+              <span v-show="!sidebarCollapsed" class="nav-item-name">{{ item.name }}</span>
+              <span
+                v-if="!sidebarCollapsed && item.badge"
+                class="nav-badge-pill"
+                :class="'badge-' + (item.badgeType || 'default')"
+              >
+                {{ item.badge }}
+              </span>
+              <span
+                v-else-if="!sidebarCollapsed && item.count !== undefined"
+                class="nav-count-pill"
+              >
+                {{ item.count }}
+              </span>
+            </button>
+          </div>
         </nav>
       </div>
       <div class="sidebar-footer">
@@ -96,15 +76,20 @@
           <span class="pulse-dot-green"></span>
           <span v-show="!sidebarCollapsed">集群状态: 99.99% 在线</span>
         </div>
-        <div class="sidebar-user-box">
-          <div class="user-meta-left" :title="user.nickname || '管理员'">
-            <img :src="userAvatar" class="user-avatar-sidebar" alt="Admin">
+        <div class="sidebar-user-box" style="cursor: pointer;" title="点击打开个人中心与安全设置" @click="openProfileModal">
+          <div class="user-meta-left" :title="user.nickname || user.username || '平台用户'">
+            <img :src="userAvatar" class="user-avatar-sidebar" alt="Avatar">
             <div v-show="!sidebarCollapsed" class="user-text-info">
-              <span class="user-name-text">{{ user.nickname || '管理员' }}</span>
-              <span class="user-role-text">租户主账号</span>
+              <span class="user-name-text">{{ user.nickname || user.username || '平台用户' }}</span>
+              <span class="user-role-text" :class="'role-' + (user.role || '').toLowerCase()">
+                <i v-if="isSuperAdmin" class="fa-solid fa-shield-halved"></i>
+                <i v-else-if="user.role === 'DEVELOPER'" class="fa-solid fa-code"></i>
+                <i v-else class="fa-solid fa-eye"></i>
+                <span>{{ user.roleName || (isSuperAdmin ? '超级管理员' : (user.role === 'VIEWER' ? '只读观察员' : '开发者')) }}</span>
+              </span>
             </div>
           </div>
-          <button class="btn-sidebar-logout" title="退出登录" @click="logout">
+          <button class="btn-sidebar-logout" title="退出登录" @click.stop="logout">
             <i class="fa-solid fa-arrow-right-from-bracket"></i>
           </button>
         </div>
@@ -131,13 +116,13 @@
           <button class="btn-theme-toggle" title="切换主题" @click="toggleTheme">
             <i :class="theme === 'light' ? 'fa-solid fa-sun' : 'fa-solid fa-moon'" :style="{ color: theme === 'light' ? '#f59e0b' : '#9ca3af' }"></i>
           </button>
-          <div class="topbar-user-menu">
+          <div class="topbar-user-menu" style="cursor: pointer;" title="点击打开个人中心与安全设置" @click="openProfileModal">
             <img class="topbar-user-avatar" :src="userAvatar" alt="Avatar">
             <div class="topbar-user-info">
-              <span class="topbar-user-name">{{ user.nickname || '管理员' }}</span>
-              <span class="topbar-user-tag">租户主账号</span>
+              <span class="topbar-user-name">{{ user.nickname || user.username || '管理员' }}</span>
+              <span class="topbar-user-tag" :class="'role-' + (user.role || '').toLowerCase()">{{ user.roleName || (isSuperAdmin ? '超级管理员' : (user.role === 'VIEWER' ? '只读观察员' : '开发者')) }}</span>
             </div>
-            <button class="btn-topbar-logout" title="退出登录" @click="logout">
+            <button class="btn-topbar-logout" title="退出登录" @click.stop="logout">
               <i class="fa-solid fa-arrow-right-from-bracket"></i>
             </button>
           </div>
@@ -231,7 +216,7 @@
             <h2 class="header-bar-title">智能体资产总览</h2>
             <div class="cluster-live-status"><span class="cluster-dot"></span><span>调度集群就绪 · 负载正常</span></div>
           </div>
-          <button class="btn-create-agent" @click="openCreate"><i class="fa-solid fa-plus"></i><span>注册新智能体</span></button>
+          <button v-if="user.role !== 'VIEWER'" class="btn-create-agent" @click="openCreate"><i class="fa-solid fa-plus"></i><span>注册新智能体</span></button>
         </div>
         <section class="stats-grid">
           <div class="stat-card"><div class="stat-info"><span class="stat-label">智能体资产总数</span><span class="stat-value">{{ stats.totalAgents || 0 }}</span></div><div class="stat-icon-wrapper icon-blue"><i class="fa-solid fa-layer-group"></i></div></div>
@@ -243,6 +228,36 @@
           <div class="search-box-wrapper">
             <i class="fa-solid fa-magnifying-glass search-icon"></i>
             <input v-model="keyword" class="search-input" placeholder="搜索智能体名称、Prompt、业务编码或标签..." @input="debounceSearch">
+          </div>
+          <!-- Scope Filter: 全部 / 我的资产 / 系统预置 -->
+          <div class="scope-filter-group">
+            <button
+              class="btn-scope-pill"
+              :class="{ active: scopeFilter === 'all' }"
+              title="查看全量可见智能体（系统公共 + 个人资产）"
+              @click="setScope('all')"
+            >
+              <i class="fa-solid fa-cubes"></i>
+              <span>全部智能体</span>
+            </button>
+            <button
+              class="btn-scope-pill"
+              :class="{ active: scopeFilter === 'mine' }"
+              title="仅筛选由我创建或克隆的专属个人智能体"
+              @click="setScope('mine')"
+            >
+              <i class="fa-solid fa-user-check"></i>
+              <span>我的专属资产</span>
+            </button>
+            <button
+              class="btn-scope-pill"
+              :class="{ active: scopeFilter === 'system' }"
+              title="仅筛选平台内置的标准系统公共智能体"
+              @click="setScope('system')"
+            >
+              <i class="fa-solid fa-shield-halved"></i>
+              <span>系统公共预置</span>
+            </button>
           </div>
           <div class="category-filter-group">
             <button v-for="cat in categories" :key="cat" class="btn-filter-pill" :class="{ active: category === cat }" @click="setCategory(cat)">{{ cat }}</button>
@@ -270,7 +285,12 @@
                   <div class="agent-meta-left">
                     <div class="agent-avatar-badge">{{ a.avatar || '🤖' }}</div>
                     <div class="agent-title-box">
-                      <h3>{{ a.name }}</h3>
+                      <div class="agent-title-row">
+                        <h3>{{ a.name }}</h3>
+                        <span v-if="a.isSystem" class="agent-scope-pill scope-system" title="系统公共预置资产，全员共享"><i class="fa-solid fa-shield-halved"></i> 系统公共</span>
+                        <span v-else-if="isMyAgent(a)" class="agent-scope-pill scope-mine" title="我的专属私有资产"><i class="fa-solid fa-user-check"></i> 我的资产</span>
+                        <span v-else class="agent-scope-pill scope-other" :title="'开发者: @' + (a.ownerUsername || '其他开发者')"><i class="fa-solid fa-user"></i> @{{ a.ownerUsername }}</span>
+                      </div>
                       <div class="agent-code-tag">{{ a.code || a.id }}</div>
                     </div>
                   </div>
@@ -291,21 +311,27 @@
                   <span><i class="fa-regular fa-clock"></i> {{ a.avgResponseTimeMs || 0 }}ms</span>
                 </div>
                 <div class="agent-actions">
-                  <button class="btn-card-action btn-chat-primary" @click="goDebug(a.id)"><i class="fa-solid fa-sliders"></i><span>调试</span></button>
-                  <button class="btn-card-action btn-action-icon" title="编辑智能体" @click="openEdit(a)"><i class="fa-regular fa-pen-to-square"></i></button>
-                  <button class="btn-card-action btn-action-icon" title="复制智能体" :disabled="copying" @click="copyAgent(a)"><i class="fa-regular fa-copy"></i></button>
-                  <button class="btn-card-action btn-action-icon" :title="a.status === 'RUNNING' ? '停用智能体' : '启用智能体'" @click="toggleStatus(a)"><i class="fa-solid fa-power-off"></i></button>
-                  <button class="btn-card-action btn-action-icon btn-action-danger" title="删除智能体" @click="openDelete(a)"><i class="fa-regular fa-trash-can"></i></button>
+                  <button class="btn-card-action btn-chat-primary" title="进入智能体独立会话调试界面" @click="goDebug(a.id)"><i class="fa-solid fa-sliders"></i><span>调试</span></button>
+                  <button v-if="canManageAgent(a)" class="btn-card-action btn-action-icon" title="编辑智能体配置" @click="openEdit(a)"><i class="fa-regular fa-pen-to-square"></i></button>
+                  <button v-else class="btn-card-action btn-action-icon disabled-locked" title="系统公共预置资产受保护，请先“复制专属”后再修改" @click="copyAgent(a)"><i class="fa-solid fa-lock"></i></button>
+                  <button class="btn-card-action btn-action-icon" :class="{ 'btn-clone-highlight': a.isSystem && !isSuperAdmin }" :title="a.isSystem ? '复制为我的专属智能体（拥有独立配置）' : '复制智能体'" :disabled="copying" @click="copyAgent(a)"><i class="fa-regular fa-copy"></i></button>
+                  <button v-if="canManageAgent(a)" class="btn-card-action btn-action-icon" :title="a.status === 'RUNNING' ? '停用智能体' : '启用智能体'" @click="toggleStatus(a)"><i class="fa-solid fa-power-off"></i></button>
+                  <button v-if="canManageAgent(a)" class="btn-card-action btn-action-icon btn-action-danger" title="删除智能体" @click="openDelete(a)"><i class="fa-regular fa-trash-can"></i></button>
                 </div>
               </div>
             </div>
           </div>
           <div v-else class="table-view-card">
             <table class="agent-table">
-              <thead><tr><th>智能体</th><th>业务分类</th><th>调度模型</th><th>系统提示词</th><th>调用统计</th><th>运行状态</th><th style="text-align:right;">操作管理</th></tr></thead>
+              <thead><tr><th>智能体</th><th>资产归属</th><th>业务分类</th><th>调度模型</th><th>系统提示词</th><th>调用统计</th><th>运行状态</th><th style="text-align:right;">操作管理</th></tr></thead>
               <tbody>
                 <tr v-for="a in agents" :key="a.id">
                   <td><div class="table-agent-meta"><div class="table-agent-avatar">{{ a.avatar || '🤖' }}</div><div><div class="table-agent-title">{{ a.name }}</div><div class="table-agent-code">{{ a.code || a.id }}</div></div></div></td>
+                  <td>
+                    <span v-if="a.isSystem" class="agent-scope-pill scope-system" title="系统公共预置资产"><i class="fa-solid fa-shield-halved"></i> 系统公共</span>
+                    <span v-else-if="isMyAgent(a)" class="agent-scope-pill scope-mine" title="我的专属私有资产"><i class="fa-solid fa-user-check"></i> 我的资产</span>
+                    <span v-else class="agent-scope-pill scope-other" :title="'开发者: @' + (a.ownerUsername || '未知')"><i class="fa-solid fa-user"></i> @{{ a.ownerUsername }}</span>
+                  </td>
                   <td><span class="spec-badge"><i class="fa-solid fa-tag"></i> {{ a.category || '通用' }}</span></td>
                   <td>{{ routedModelLabel }}</td>
                   <td><div class="table-prompt-cell">{{ a.systemPrompt || '暂无设定' }}</div></td>
@@ -313,11 +339,12 @@
                   <td><div class="badge-status" :class="statusClass(a.status)"><span class="status-dot"></span><span>{{ statusLabel(a.status) }}</span></div></td>
                   <td style="text-align:right; white-space: nowrap;">
                     <div class="agent-actions" style="justify-content:flex-end; flex-wrap: nowrap;">
-                      <button class="btn-card-action btn-chat-primary" @click="goDebug(a.id)"><i class="fa-solid fa-sliders"></i><span>调试</span></button>
-                      <button class="btn-card-action btn-action-icon" title="编辑智能体" @click="openEdit(a)"><i class="fa-regular fa-pen-to-square"></i></button>
-                      <button class="btn-card-action btn-action-icon" title="复制智能体" :disabled="copying" @click="copyAgent(a)"><i class="fa-regular fa-copy"></i></button>
-                      <button class="btn-card-action btn-action-icon" :title="a.status === 'RUNNING' ? '停用智能体' : '启用智能体'" @click="toggleStatus(a)"><i class="fa-solid fa-power-off"></i></button>
-                      <button class="btn-card-action btn-action-icon btn-action-danger" title="删除智能体" @click="openDelete(a)"><i class="fa-regular fa-trash-can"></i></button>
+                      <button class="btn-card-action btn-chat-primary" title="进入智能体独立会话调试界面" @click="goDebug(a.id)"><i class="fa-solid fa-sliders"></i><span>调试</span></button>
+                      <button v-if="canManageAgent(a)" class="btn-card-action btn-action-icon" title="编辑智能体配置" @click="openEdit(a)"><i class="fa-regular fa-pen-to-square"></i></button>
+                      <button v-else class="btn-card-action btn-action-icon disabled-locked" title="系统公共资产受保护不可直接修改，请点击复制专属" @click="copyAgent(a)"><i class="fa-solid fa-lock"></i></button>
+                      <button class="btn-card-action btn-action-icon" :class="{ 'btn-clone-highlight': a.isSystem && !isSuperAdmin }" :title="a.isSystem ? '复制为我的专属智能体' : '复制智能体'" :disabled="copying" @click="copyAgent(a)"><i class="fa-regular fa-copy"></i></button>
+                      <button v-if="canManageAgent(a)" class="btn-card-action btn-action-icon" :title="a.status === 'RUNNING' ? '停用智能体' : '启用智能体'" @click="toggleStatus(a)"><i class="fa-solid fa-power-off"></i></button>
+                      <button v-if="canManageAgent(a)" class="btn-card-action btn-action-icon btn-action-danger" title="删除智能体" @click="openDelete(a)"><i class="fa-regular fa-trash-can"></i></button>
                     </div>
                   </td>
                 </tr>
@@ -340,11 +367,19 @@
       </section>
 
       <section v-show="currentTab === 'knowledge'" class="app-subview active">
-        <KnowledgeBasePanel />
+        <KnowledgeBasePanel :user="user" :current-user="user" :is-super-admin="isSuperAdmin" />
       </section>
 
       <section v-show="currentTab === 'gateway'" class="app-subview active">
         <GatewayPanel />
+      </section>
+
+      <section v-show="currentTab === 'users'" class="app-subview active">
+        <UserManagementPanel :currentUser="user" />
+      </section>
+
+      <section v-show="currentTab === 'roles'" class="app-subview active">
+        <RolePermissionPanel />
       </section>
     </div>
   </div>
@@ -435,6 +470,207 @@
       </div>
     </div>
   </div>
+
+  <!-- Modal: Personal Profile & Security Settings -->
+  <div v-if="profileModalOpen" class="modal-backdrop open" @click.self="profileModalOpen = false">
+    <div class="modal-dialog" style="max-width: 520px;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 36px; height: 36px; border-radius: 10px; background: rgba(59, 130, 246, 0.15); display: flex; align-items: center; justify-content: center; color: #60a5fa; font-size: 1.1rem;">
+            <i class="fa-solid fa-user-gear"></i>
+          </div>
+          <div>
+            <h3 style="margin: 0; font-size: 1.15rem;">个人中心与账号安全</h3>
+            <span style="font-size: 0.8rem; color: var(--text-secondary);">管理个人昵称与安全登录密码</span>
+          </div>
+        </div>
+        <button class="btn-modal-close" @click="profileModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="modal-body" style="padding: 20px 24px; display: flex; flex-direction: column; gap: 18px;">
+        <!-- Account Info Summary -->
+        <div style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <img :src="userAvatar" style="width: 44px; height: 44px; border-radius: 12px; object-fit: cover; border: 1px solid var(--border-color);" alt="avatar">
+            <div>
+              <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary);">{{ user.nickname || user.username }}</div>
+              <div style="font-size: 0.8rem; color: var(--text-muted); font-family: monospace;">@{{ user.username }}</div>
+            </div>
+          </div>
+          <div style="font-size: 0.78rem; font-weight: 600; padding: 4px 10px; border-radius: 6px; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);">
+            <span>{{ user.roleName || (isSuperAdmin ? '超级管理员' : (user.role === 'VIEWER' ? '只读观察员' : '开发者')) }}</span>
+          </div>
+        </div>
+
+        <!-- Edit Profile Section -->
+        <form @submit.prevent="saveUserProfile">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px;">修改姓名 / 昵称</label>
+            <div style="display: flex; gap: 10px;">
+              <input v-model="profileForm.nickname" class="form-control-styled" placeholder="输入新的昵称" required style="flex: 1;">
+              <button type="submit" class="btn-chat-primary" style="white-space: nowrap; padding: 0 16px;" :disabled="savingProfile">
+                <span>{{ savingProfile ? '更新中...' : '保存昵称' }}</span>
+              </button>
+            </div>
+          </div>
+        </form>
+
+        <div style="border-top: 1px solid var(--border-color); padding-top: 16px;">
+          <h4 style="margin: 0 0 12px 0; font-size: 0.95rem; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-lock" style="color: var(--accent-amber);"></i>
+            <span>修改登录密码</span>
+          </h4>
+          <form style="display: flex; flex-direction: column; gap: 12px;" @submit.prevent="saveUserPassword">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 4px;">当前原密码</label>
+              <input v-model="passwordForm.oldPassword" type="password" class="form-control-styled" placeholder="请输入当前旧密码" required>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 4px;">新密码 (至少6位)</label>
+              <input v-model="passwordForm.newPassword" type="password" class="form-control-styled" placeholder="请输入高强度新密码" required minlength="6">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 4px;">确认新密码</label>
+              <input v-model="passwordForm.confirmPassword" type="password" class="form-control-styled" placeholder="请再次确认新密码" required minlength="6">
+            </div>
+            <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
+              <button type="submit" class="btn-chat-primary" :disabled="changingPassword">
+                <i v-if="changingPassword" class="fa-solid fa-spinner fa-spin"></i>
+                <span>{{ changingPassword ? '提交中...' : '确认修改密码' }}</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Forced First-Time Password Change -->
+  <div v-if="user.mustChangePassword" class="modal-backdrop open" style="z-index: 99999; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(12px);">
+    <div class="modal-dialog" style="max-width: 480px;">
+      <div class="modal-header" style="border-bottom: 1px solid rgba(245, 158, 11, 0.3);">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(245, 158, 11, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent-amber); font-size: 1.1rem;">
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+          <div>
+            <h3 style="margin: 0; font-size: 1.15rem; color: var(--text-primary);">安全提示：请设置新密码</h3>
+            <span style="font-size: 0.8rem; color: var(--accent-amber);">初始临时密码登录后必须修改密码以激活账号</span>
+          </div>
+        </div>
+      </div>
+
+      <form @submit.prevent="handleForcedPasswordChange">
+        <div class="modal-body" style="padding: 20px 24px; display: flex; flex-direction: column; gap: 14px;">
+          <p style="font-size: 0.86rem; color: var(--text-secondary); line-height: 1.5; margin: 0;">
+            检测到账号 <strong>@{{ user.username }}</strong> 当前处于临时凭据状态。为保障企业资产与模型调用安全，在继续使用平台前请首先设置您的专属密码。
+          </p>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 4px;">新密码 (至少6位) *</label>
+            <input v-model="forcePasswordForm.newPassword" type="password" class="form-control-styled" required minlength="6" placeholder="请输入新密码">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 4px;">确认新密码 *</label>
+            <input v-model="forcePasswordForm.confirmPassword" type="password" class="form-control-styled" required minlength="6" placeholder="请再次输入新密码">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" @click="logout">退出登录</button>
+          <button type="submit" class="btn-chat-primary" :disabled="forcingPassword">
+            <i v-if="forcingPassword" class="fa-solid fa-spinner fa-spin"></i>
+            <span>{{ forcingPassword ? '设置中...' : '设置密码并激活进入' }}</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Security Guardrails & Audit Details -->
+  <div v-if="auditModalOpen" class="modal-backdrop open" @click.self="auditModalOpen = false">
+    <div class="modal-dialog audit-modal-dialog" style="max-width: 640px;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="audit-header-badge">
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+          <div>
+            <h3 style="margin: 0; font-size: 1.15rem; color: var(--text-primary);">安全审计与实时护栏体系</h3>
+            <span style="font-size: 0.8rem; color: var(--text-secondary);">Enterprise Security Guardrails & Audit Pipeline · 守护模型交互安全</span>
+          </div>
+        </div>
+        <button class="btn-modal-close" @click="auditModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="modal-body" style="padding: 20px 24px; display: flex; flex-direction: column; gap: 16px;">
+        <!-- Cluster Guardrail Status Banner -->
+        <div class="audit-status-banner">
+          <div class="banner-left">
+            <span class="pulse-dot-green"></span>
+            <div>
+              <div class="status-title">多层安全护栏集群 99.99% 在线守护中</div>
+              <div class="status-subtitle">实时监控全量智能体调度，自动执行违规阻断与日志审计</div>
+            </div>
+          </div>
+          <span class="guardrail-active-pill">ACTIVE 运行中</span>
+        </div>
+
+        <!-- 4 Pillars Grid -->
+        <div class="audit-pillars-grid">
+          <div class="audit-pillar-card">
+            <div class="pillar-icon icon-blue">
+              <i class="fa-solid fa-user-ninja"></i>
+            </div>
+            <div class="pillar-content">
+              <h4>Prompt 越狱与注入防御</h4>
+              <p>特征匹配动态拦截越狱指令、恶意系统角色劫持及对抗性输入，保障模型行为受控。</p>
+            </div>
+          </div>
+
+          <div class="audit-pillar-card">
+            <div class="pillar-icon icon-amber">
+              <i class="fa-solid fa-filter-circle-xmark"></i>
+            </div>
+            <div class="pillar-content">
+              <h4>内容合规与敏感词过滤</h4>
+              <p>内置企业与合规双重词库，对智能体输入与大模型输出双向实时检测，防止违规内容流出。</p>
+            </div>
+          </div>
+
+          <div class="audit-pillar-card">
+            <div class="pillar-icon icon-purple">
+              <i class="fa-solid fa-fingerprint"></i>
+            </div>
+            <div class="pillar-content">
+              <h4>PII 个人隐私脱敏保护</h4>
+              <p>手机号、身份证件、银行卡、邮箱等敏感隐私数据在出境提交大模型前自动掩码脱敏。</p>
+            </div>
+          </div>
+
+          <div class="audit-pillar-card">
+            <div class="pillar-icon icon-emerald">
+              <i class="fa-solid fa-clipboard-check"></i>
+            </div>
+            <div class="pillar-content">
+              <h4>会话级合规审计归档</h4>
+              <p>每一次智能体调度调用全量记录请求 Token、时延、调用者身份与 IP，安全留存 180 天。</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Audit Notice Footnote -->
+        <div class="audit-note-box">
+          <i class="fa-solid fa-circle-info"></i>
+          <span>所有安全防护策略由平台后端全自动实时生效，如需调整企业特定违禁词或安全拦截阈值，请联系超级管理员。</span>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="justify-content: flex-end;">
+        <button class="btn-chat-primary" style="min-width: 120px;" @click="auditModalOpen = false">
+          我已了解
+        </button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -446,6 +682,8 @@ import { useToast } from '../composables/useToast'
 import GatewayPanel from '../components/GatewayPanel.vue'
 import AgentTemplatesPanel from '../components/AgentTemplatesPanel.vue'
 import KnowledgeBasePanel from '../components/KnowledgeBasePanel.vue'
+import UserManagementPanel from '../components/UserManagementPanel.vue'
+import RolePermissionPanel from '../components/RolePermissionPanel.vue'
 import AgentLogo from '../components/AgentLogo.vue'
 import defaultAdminAvatar from '../assets/avatar-admin.jpg'
 import defaultDevAvatar from '../assets/avatar-dev.jpg'
@@ -461,6 +699,7 @@ const pageResult = ref({})
 const page = ref(1)
 const keyword = ref('')
 const category = ref('全部')
+const scopeFilter = ref('all')
 const statusFilter = ref('')
 const viewMode = ref(localStorage.getItem('agentViewMode') || 'card')
 const sidebarCollapsed = ref(localStorage.getItem('sidebarCollapsed') === 'true')
@@ -501,13 +740,25 @@ const form = reactive({
   avatar: '🤖', temperature: 0.7, status: 'RUNNING', systemPrompt: '', description: '', tagsText: ''
 })
 
-const user = computed(() => {
-  try { return JSON.parse(localStorage.getItem('user') || '{}') } catch { return {} }
+const user = ref({})
+function refreshUserFromStorage() {
+  try {
+    user.value = JSON.parse(localStorage.getItem('user') || '{}')
+  } catch {
+    user.value = {}
+  }
+}
+refreshUserFromStorage()
+
+const isSuperAdmin = computed(() => {
+  const r = user.value?.role
+  return r === 'SUPER_ADMIN' || r === 'System Admin' || user.value?.username === 'admin'
 })
+
 const userAvatar = computed(() => {
   const name = user.value?.username
   const av = user.value?.avatar
-  if (name === 'developer') {
+  if (name === 'developer' || user.value?.role === 'DEVELOPER') {
     if (!av || av.includes('dicebear') || av.includes('bottts') || av.includes('avatar-dev')) {
       return defaultDevAvatar
     }
@@ -515,13 +766,243 @@ const userAvatar = computed(() => {
   }
   return defaultAdminAvatar
 })
+
 const pageTitle = computed(() => {
   if (currentTab.value === 'overview') return '概览仪表盘 (Overview & Analytics)'
   if (currentTab.value === 'agents') return 'Agents 智能体资产管理'
   if (currentTab.value === 'templates') return '行业场景模版中心 (Agent Templates)'
+  if (currentTab.value === 'knowledge') return '企业私有知识库 (RAG)'
   if (currentTab.value === 'gateway') return '模型网关路由 (LLM Gateway)'
-  return '企业私有知识库 (RAG)'
+  if (currentTab.value === 'users') return '企业租户用户管理 (User Management)'
+  if (currentTab.value === 'roles') return '系统固定角色与权限矩阵 (Roles & Permissions)'
+  return 'AgentMatrix 企业控制台'
 })
+
+// Security Guardrails & Audit Modal
+const auditModalOpen = ref(false)
+
+// Navigation taxonomy structure (4 Primary Enterprise Categories)
+const navGroups = computed(() => {
+  const groups = [
+    {
+      id: 'metrics',
+      title: '运行监控',
+      enTitle: 'METRICS',
+      icon: 'fa-solid fa-chart-line',
+      items: [
+        {
+          id: 'overview',
+          name: '概览分析',
+          title: '概览分析 (Token消耗与指标)',
+          icon: 'fa-solid fa-chart-pie',
+          badge: '实时',
+          badgeType: 'blue'
+        }
+      ]
+    },
+    {
+      id: 'studio',
+      title: '智能体工程',
+      enTitle: 'AGENT STUDIO',
+      icon: 'fa-solid fa-wand-magic-sparkles',
+      items: [
+        {
+          id: 'agents',
+          name: 'Agents 资产',
+          title: 'Agents 智能体资产管理',
+          icon: 'fa-solid fa-robot',
+          count: stats.value.totalAgents || agents.value.length || 0
+        },
+        {
+          id: 'templates',
+          name: '场景模版中心',
+          title: '场景模版中心 (预置行业智能体)',
+          icon: 'fa-solid fa-layer-group',
+          badge: '模版',
+          badgeType: 'purple'
+        }
+      ]
+    },
+    {
+      id: 'knowledge',
+      title: '知识与检索',
+      enTitle: 'DATA & RAG',
+      icon: 'fa-solid fa-database',
+      items: [
+        {
+          id: 'knowledge',
+          name: '企业私有知识库',
+          title: '企业私有知识库 (RAG检索)',
+          icon: 'fa-solid fa-book-bookmark',
+          badge: 'RAG',
+          badgeType: 'emerald'
+        }
+      ]
+    }
+  ]
+
+  // Category 4: Enterprise Governance (Admin) or Platform Rules & Security (Developer / Viewer)
+  const govItems = []
+
+  if (isSuperAdmin.value) {
+    govItems.push({
+      id: 'gateway',
+      name: '模型网关路由',
+      title: '模型网关路由 (LLM Channels & Models)',
+      icon: 'fa-solid fa-route',
+      badge: '路由',
+      badgeType: 'amber'
+    })
+    govItems.push({
+      id: 'users',
+      name: '平台用户管理',
+      title: '企业租户用户管理 (RBAC)',
+      icon: 'fa-solid fa-users-gear',
+      badge: '用户',
+      badgeType: 'cyan'
+    })
+  }
+
+  govItems.push({
+    id: 'roles',
+    name: '角色与权限矩阵',
+    title: '系统固定角色与权限对照矩阵',
+    icon: 'fa-solid fa-shield-halved',
+    badge: '矩阵',
+    badgeType: 'purple'
+  })
+
+  govItems.push({
+    id: 'audit',
+    name: '安全审计与护栏',
+    title: '安全审计与实时护栏体系',
+    icon: 'fa-solid fa-fingerprint',
+    badge: '在线',
+    badgeType: 'emerald',
+    action: 'auditModal'
+  })
+
+  groups.push({
+    id: 'governance',
+    title: isSuperAdmin.value ? '企业系统治理' : '平台规则与安全',
+    enTitle: isSuperAdmin.value ? 'GOVERNANCE' : 'SECURITY',
+    icon: isSuperAdmin.value ? 'fa-solid fa-sliders' : 'fa-solid fa-shield-cat',
+    items: govItems
+  })
+
+  return groups
+})
+
+function handleNavClick(item) {
+  if (item.action === 'auditModal' || item.id === 'audit') {
+    auditModalOpen.value = true
+    return
+  }
+  if ((item.id === 'gateway' || item.id === 'users') && !isSuperAdmin.value) {
+    showToast('无权限访问该功能，仅超级管理员可用', 'error')
+    return
+  }
+  currentTab.value = item.id
+}
+
+// Profile & Security Modal
+const profileModalOpen = ref(false)
+const profileForm = reactive({ nickname: '' })
+const passwordForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
+const savingProfile = ref(false)
+const changingPassword = ref(false)
+
+const forcePasswordForm = reactive({ newPassword: '', confirmPassword: '' })
+const forcingPassword = ref(false)
+
+function openProfileModal() {
+  profileForm.nickname = user.value?.nickname || user.value?.username || ''
+  passwordForm.oldPassword = ''
+  passwordForm.newPassword = ''
+  passwordForm.confirmPassword = ''
+  profileModalOpen.value = true
+}
+
+async function saveUserProfile() {
+  if (!profileForm.nickname.trim()) {
+    showToast('用户昵称不能为空', 'error')
+    return
+  }
+  savingProfile.value = true
+  try {
+    const res = await http.put('/api/auth/profile', { nickname: profileForm.nickname.trim() })
+    if (res.success && res.data) {
+      user.value = res.data
+      localStorage.setItem('user', JSON.stringify(res.data))
+      showToast('昵称已成功更新', 'success')
+      profileModalOpen.value = false
+    } else {
+      showToast(res.message || '更新失败', 'error')
+    }
+  } catch (e) {
+    showToast('网络异常: ' + e.message, 'error')
+  } finally {
+    savingProfile.value = false
+  }
+}
+
+async function saveUserPassword() {
+  if (passwordForm.newPassword.length < 6) {
+    showToast('新密码长度不能少于 6 位', 'error')
+    return
+  }
+  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    showToast('两次输入的新密码不一致', 'error')
+    return
+  }
+  changingPassword.value = true
+  try {
+    const res = await http.put('/api/auth/password', {
+      oldPassword: passwordForm.oldPassword,
+      newPassword: passwordForm.newPassword
+    })
+    if (res.success && res.data) {
+      user.value = res.data
+      localStorage.setItem('user', JSON.stringify(res.data))
+      showToast('密码修改成功，安全凭据已更新', 'success')
+      profileModalOpen.value = false
+    } else {
+      showToast(res.message || '密码修改失败', 'error')
+    }
+  } catch (e) {
+    showToast('网络异常: ' + e.message, 'error')
+  } finally {
+    changingPassword.value = false
+  }
+}
+
+async function handleForcedPasswordChange() {
+  if (forcePasswordForm.newPassword.length < 6) {
+    showToast('新密码长度不能少于 6 位', 'error')
+    return
+  }
+  if (forcePasswordForm.newPassword !== forcePasswordForm.confirmPassword) {
+    showToast('两次输入的新密码不一致', 'error')
+    return
+  }
+  forcingPassword.value = true
+  try {
+    const res = await http.put('/api/auth/password', {
+      newPassword: forcePasswordForm.newPassword
+    })
+    if (res.success && res.data) {
+      user.value = res.data
+      localStorage.setItem('user', JSON.stringify(res.data))
+      showToast('密码设置成功，账号已激活！欢迎使用平台', 'success')
+    } else {
+      showToast(res.message || '密码设置失败', 'error')
+    }
+  } catch (e) {
+    showToast('网络异常: ' + e.message, 'error')
+  } finally {
+    forcingPassword.value = false
+  }
+}
 const totalTokens = computed(() => Number(stats.value.promptTokens || 0) + Number(stats.value.completionTokens || 0))
 const promptShare = computed(() => totalTokens.value ? Math.round(Number(stats.value.promptTokens || 0) * 1000 / totalTokens.value) / 10 : 0)
 const completionShare = computed(() => totalTokens.value ? Math.round((100 - promptShare.value) * 10) / 10 : 0)
@@ -549,11 +1030,18 @@ function toggleTheme() {
 }
 
 async function logout() {
-  await http.del('/api/auth/session')
+  try {
+    await http.del('/api/auth/session')
+  } catch (err) {
+    console.warn('Logout request error:', err)
+  }
   localStorage.removeItem('token')
   localStorage.removeItem('user')
-  showToast('已安全登出控制台', 'info')
-  router.push('/login')
+  localStorage.removeItem('csrf_token')
+  showToast('已安全退出登录', 'info', 1000)
+  setTimeout(() => {
+    window.location.href = '/login'
+  }, 100)
 }
 
 function changeRange(range) {
@@ -565,6 +1053,30 @@ function setCategory(cat) {
   category.value = cat
   page.value = 1
   loadAgents()
+}
+
+function setScope(sc) {
+  scopeFilter.value = sc
+  page.value = 1
+  loadAgents()
+}
+
+function isMyAgent(agent) {
+  if (!agent) return false
+  if (agent.isSystem) return false
+  const currentUserId = user.value?.id
+  const currentUsername = user.value?.username
+  if (agent.ownerId && currentUserId) return agent.ownerId === currentUserId
+  if (agent.ownerUsername && currentUsername) return agent.ownerUsername === currentUsername
+  return false
+}
+
+function canManageAgent(agent) {
+  if (!agent) return false
+  if (isSuperAdmin.value) return true
+  if (user.value?.role === 'VIEWER') return false
+  if (agent.isSystem) return false
+  return isMyAgent(agent)
 }
 
 function debounceSearch() {
@@ -583,6 +1095,12 @@ function goDebug(id) {
 
 watch(viewMode, (mode) => localStorage.setItem('agentViewMode', mode))
 watch(currentTab, (tab) => {
+  if ((tab === 'gateway' || tab === 'users') && !isSuperAdmin.value) {
+    showToast('无权限访问该模块，已自动返回概览', 'error')
+    currentTab.value = 'overview'
+    return
+  }
+  router.replace({ query: { ...route.query, tab } }).catch(() => {})
   if (tab === 'overview') nextTick(renderCharts)
   if (tab === 'gateway' || tab === 'agents') loadGatewayRoute()
   if (tab === 'templates') loadTemplates()
@@ -599,7 +1117,12 @@ async function loadStats() {
 
 async function loadAgents() {
   const res = await http.get('/api/agents', {
-    keyword: keyword.value, category: category.value, status: statusFilter.value, page: page.value, size: 6
+    keyword: keyword.value,
+    category: category.value,
+    status: statusFilter.value,
+    scope: scopeFilter.value,
+    page: page.value,
+    size: 6
   })
   if (res.success && res.data) {
     agents.value = res.data.records || []
@@ -613,6 +1136,7 @@ async function loadTemplates() {
 }
 
 async function loadGatewayRoute() {
+  if (!isSuperAdmin.value) return
   const res = await http.get('/api/model-gateway')
   if (!res.success) return
   const providers = res.data?.providers || []
@@ -737,7 +1261,7 @@ async function copyAgent(agent) {
   try {
     const res = await http.post(`/api/agents/${agent.id}/copy`)
     if (res.success) {
-      showToast(`已成功复制智能体「${res.data?.name || agent.name}」`, 'success')
+      showToast(`已成功复制智能体「${res.data?.name || agent.name}」，已存入您的个人专属资产`, 'success')
       refresh()
     } else {
       showToast(res.message || '复制智能体失败', 'error')
@@ -798,9 +1322,25 @@ function renderCharts() {
 
 onMounted(() => {
   const tab = route.query.tab
-  if (tab === 'gateway' || tab === 'agents' || tab === 'knowledge' || tab === 'overview') {
-    currentTab.value = tab
+  const validTabs = ['overview', 'agents', 'templates', 'knowledge', 'gateway', 'users', 'roles']
+  if (validTabs.includes(tab)) {
+    if ((tab === 'gateway' || tab === 'users') && !isSuperAdmin.value) {
+      currentTab.value = 'overview'
+    } else {
+      currentTab.value = tab
+    }
   }
+
+  http.get('/api/auth/me').then(res => {
+    if (res.success && res.data) {
+      user.value = res.data
+      localStorage.setItem('user', JSON.stringify(res.data))
+      if ((currentTab.value === 'gateway' || currentTab.value === 'users') && !isSuperAdmin.value) {
+        currentTab.value = 'overview'
+      }
+    }
+  }).catch(() => {})
+
   loadStats()
   loadAgents()
   loadTemplates()
