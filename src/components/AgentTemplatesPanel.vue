@@ -43,7 +43,7 @@
             v-model="searchKeyword"
             type="text"
             class="template-search-input"
-            placeholder="搜索模板名称、场景描述或标签..."
+            placeholder="搜索模板名称、账号、场景描述或标签..."
             @input="debounceSearch"
           >
           <button
@@ -114,7 +114,7 @@
                 <i class="fa-solid fa-sparkles"></i> 系统预设
               </span>
               <span v-else class="tpl-badge custom-badge">
-                自定义
+                {{ accountLabel(tpl) }}
               </span>
             </div>
             <span class="tpl-category-tag">{{ tpl.category || '通用智能' }}</span>
@@ -216,6 +216,7 @@
         <thead>
           <tr>
             <th style="min-width: 190px;">模板信息</th>
+            <th style="min-width: 110px;">所属账号</th>
             <th style="min-width: 110px;">业务分类</th>
             <th style="min-width: 170px;">场景功能描述</th>
             <th style="min-width: 200px;">系统提示词</th>
@@ -233,12 +234,13 @@
                   <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                     <span class="table-agent-title">{{ tpl.name }}</span>
                     <span v-if="tpl.isBuiltin" class="tpl-badge builtin-badge" style="font-size: 10px; padding: 1px 6px; white-space: nowrap;">预设</span>
-                    <span v-else class="tpl-badge custom-badge" style="font-size: 10px; padding: 1px 6px; white-space: nowrap;">自定义</span>
+                    <span v-else class="tpl-badge custom-badge" style="font-size: 10px; padding: 1px 6px; white-space: nowrap;">{{ accountLabel(tpl) }}</span>
                   </div>
                   <div class="table-agent-code">排序权重: {{ tpl.sortOrder || 0 }}</div>
                 </div>
               </div>
             </td>
+            <td>{{ tpl.isBuiltin ? '系统公共' : accountLabel(tpl) }}</td>
             <td class="col-category">
               <span class="spec-badge"><i class="fa-solid fa-tag"></i> {{ tpl.category || '通用智能' }}</span>
             </td>
@@ -530,7 +532,11 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
+import { accountLabel } from '../composables/useAccountOptions'
 
+const props = defineProps({
+  isSuperAdmin: { type: Boolean, default: false }
+})
 const emit = defineEmits(['use-template', 'templates-updated'])
 const { showToast } = useToast()
 
@@ -745,8 +751,9 @@ async function saveTemplate() {
     description: form.description.trim(),
     systemPrompt: form.systemPrompt.trim(),
     temperature: Number(form.temperature),
-    tags: form.tagsText ? form.tagsText.split(/[,，]/).map(t => t.trim()).filter(Boolean).join(', ') : '',
-    sortOrder: Number(form.sortOrder || 0)
+    tags: form.tagsText ? form.tagsText.split(/[,，]/).map(t => t.trim()).filter(Boolean) : [],
+    sortOrder: Number(form.sortOrder || 0),
+    isBuiltin: false
   }
 
   try {

@@ -227,7 +227,7 @@
         <section class="toolbar-section">
           <div class="search-box-wrapper">
             <i class="fa-solid fa-magnifying-glass search-icon"></i>
-            <input v-model="keyword" class="search-input" placeholder="搜索智能体名称、Prompt、业务编码或标签..." @input="debounceSearch">
+            <input v-model="keyword" class="search-input" placeholder="搜索名称、账号、Prompt、业务编码或标签..." @input="debounceSearch">
           </div>
           <!-- Scope Filter: 全部 / 我的资产 / 系统预置 -->
           <div class="scope-filter-group">
@@ -288,10 +288,8 @@
                       <div class="agent-title-row">
                         <h3>{{ a.name }}</h3>
                         <span v-if="a.isSystem" class="agent-scope-pill scope-system" title="系统公共预置资产，全员共享"><i class="fa-solid fa-shield-halved"></i> 系统公共</span>
-                        <span v-else-if="isMyAgent(a)" class="agent-scope-pill scope-mine" title="我的专属私有资产"><i class="fa-solid fa-user-check"></i> 我的资产</span>
-                        <span v-else class="agent-scope-pill scope-other" :title="'开发者: @' + (a.ownerUsername || '其他开发者')"><i class="fa-solid fa-user"></i> @{{ a.ownerUsername }}</span>
                       </div>
-                      <div class="agent-code-tag">{{ a.code || a.id }}</div>
+                      <div class="agent-code-tag">{{ a.code || a.id }} · 所属账号 {{ a.isSystem ? '系统公共' : accountLabel(a) }}</div>
                     </div>
                   </div>
                   <div class="badge-status" :class="statusClass(a.status)"><span class="status-dot"></span><span>{{ statusLabel(a.status) }}</span></div>
@@ -300,7 +298,7 @@
                 <div class="agent-specs">
                   <span class="spec-badge spec-model"><i class="fa-solid fa-microchip"></i><span>{{ routedModelLabel }}</span></span>
                   <span class="spec-badge"><i class="fa-solid fa-temperature-half"></i><span>T:{{ a.temperature != null ? a.temperature : 0.7 }}</span></span>
-                  <span class="spec-badge"><i class="fa-solid fa-tag"></i><span>{{ a.category || '通用' }}</span></span>
+                  <span class="spec-badge"><i class="fa-solid fa-user"></i><span>{{ a.isSystem ? '系统公共' : accountLabel(a) }}</span></span>
                 </div>
                 <div class="prompt-preview-box">{{ a.systemPrompt || '暂未设定 System Prompt' }}</div>
                 <div class="agent-tags"><span v-for="t in (a.tags || [])" :key="t" class="tag-item">#{{ t }}</span></div>
@@ -323,15 +321,11 @@
           </div>
           <div v-else class="table-view-card">
             <table class="agent-table">
-              <thead><tr><th>智能体</th><th>资产归属</th><th>业务分类</th><th>调度模型</th><th>系统提示词</th><th>调用统计</th><th>运行状态</th><th style="text-align:right;">操作管理</th></tr></thead>
+              <thead><tr><th>智能体</th><th>所属账号</th><th>业务分类</th><th>调度模型</th><th>系统提示词</th><th>调用统计</th><th>运行状态</th><th style="text-align:right;">操作管理</th></tr></thead>
               <tbody>
                 <tr v-for="a in agents" :key="a.id">
                   <td><div class="table-agent-meta"><div class="table-agent-avatar">{{ a.avatar || '🤖' }}</div><div><div class="table-agent-title">{{ a.name }}</div><div class="table-agent-code">{{ a.code || a.id }}</div></div></div></td>
-                  <td>
-                    <span v-if="a.isSystem" class="agent-scope-pill scope-system" title="系统公共预置资产"><i class="fa-solid fa-shield-halved"></i> 系统公共</span>
-                    <span v-else-if="isMyAgent(a)" class="agent-scope-pill scope-mine" title="我的专属私有资产"><i class="fa-solid fa-user-check"></i> 我的资产</span>
-                    <span v-else class="agent-scope-pill scope-other" :title="'开发者: @' + (a.ownerUsername || '未知')"><i class="fa-solid fa-user"></i> @{{ a.ownerUsername }}</span>
-                  </td>
+                  <td>{{ a.isSystem ? '系统公共' : accountLabel(a) }}</td>
                   <td><span class="spec-badge"><i class="fa-solid fa-tag"></i> {{ a.category || '通用' }}</span></td>
                   <td>{{ routedModelLabel }}</td>
                   <td><div class="table-prompt-cell">{{ a.systemPrompt || '暂无设定' }}</div></td>
@@ -363,7 +357,7 @@
       </section>
 
       <section v-show="currentTab === 'templates'" class="app-subview active">
-        <AgentTemplatesPanel @use-template="onUseTemplateFromPanel" @templates-updated="loadTemplates" />
+        <AgentTemplatesPanel :is-super-admin="isSuperAdmin" @use-template="onUseTemplateFromPanel" @templates-updated="loadTemplates" />
       </section>
 
       <section v-show="currentTab === 'knowledge'" class="app-subview active">
@@ -380,6 +374,14 @@
 
       <section v-show="currentTab === 'roles'" class="app-subview active">
         <RolePermissionPanel />
+      </section>
+
+      <section v-show="currentTab === 'security'" class="app-subview active">
+        <SecurityOpenPanel
+          :user="user"
+          :is-super-admin="isSuperAdmin"
+          :initial-tab="securityInnerTab"
+        />
       </section>
     </div>
   </div>
@@ -584,93 +586,6 @@
       </form>
     </div>
   </div>
-
-  <!-- Modal: Security Guardrails & Audit Details -->
-  <div v-if="auditModalOpen" class="modal-backdrop open" @click.self="auditModalOpen = false">
-    <div class="modal-dialog audit-modal-dialog" style="max-width: 640px;">
-      <div class="modal-header">
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <div class="audit-header-badge">
-            <i class="fa-solid fa-shield-halved"></i>
-          </div>
-          <div>
-            <h3 style="margin: 0; font-size: 1.15rem; color: var(--text-primary);">安全审计与实时护栏体系</h3>
-            <span style="font-size: 0.8rem; color: var(--text-secondary);">Enterprise Security Guardrails & Audit Pipeline · 守护模型交互安全</span>
-          </div>
-        </div>
-        <button class="btn-modal-close" @click="auditModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-
-      <div class="modal-body" style="padding: 20px 24px; display: flex; flex-direction: column; gap: 16px;">
-        <!-- Cluster Guardrail Status Banner -->
-        <div class="audit-status-banner">
-          <div class="banner-left">
-            <span class="pulse-dot-green"></span>
-            <div>
-              <div class="status-title">多层安全护栏集群 99.99% 在线守护中</div>
-              <div class="status-subtitle">实时监控全量智能体调度，自动执行违规阻断与日志审计</div>
-            </div>
-          </div>
-          <span class="guardrail-active-pill">ACTIVE 运行中</span>
-        </div>
-
-        <!-- 4 Pillars Grid -->
-        <div class="audit-pillars-grid">
-          <div class="audit-pillar-card">
-            <div class="pillar-icon icon-blue">
-              <i class="fa-solid fa-user-ninja"></i>
-            </div>
-            <div class="pillar-content">
-              <h4>Prompt 越狱与注入防御</h4>
-              <p>特征匹配动态拦截越狱指令、恶意系统角色劫持及对抗性输入，保障模型行为受控。</p>
-            </div>
-          </div>
-
-          <div class="audit-pillar-card">
-            <div class="pillar-icon icon-amber">
-              <i class="fa-solid fa-filter-circle-xmark"></i>
-            </div>
-            <div class="pillar-content">
-              <h4>内容合规与敏感词过滤</h4>
-              <p>内置企业与合规双重词库，对智能体输入与大模型输出双向实时检测，防止违规内容流出。</p>
-            </div>
-          </div>
-
-          <div class="audit-pillar-card">
-            <div class="pillar-icon icon-purple">
-              <i class="fa-solid fa-fingerprint"></i>
-            </div>
-            <div class="pillar-content">
-              <h4>PII 个人隐私脱敏保护</h4>
-              <p>手机号、身份证件、银行卡、邮箱等敏感隐私数据在出境提交大模型前自动掩码脱敏。</p>
-            </div>
-          </div>
-
-          <div class="audit-pillar-card">
-            <div class="pillar-icon icon-emerald">
-              <i class="fa-solid fa-clipboard-check"></i>
-            </div>
-            <div class="pillar-content">
-              <h4>会话级合规审计归档</h4>
-              <p>每一次智能体调度调用全量记录请求 Token、时延、调用者身份与 IP，安全留存 180 天。</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Audit Notice Footnote -->
-        <div class="audit-note-box">
-          <i class="fa-solid fa-circle-info"></i>
-          <span>所有安全防护策略由平台后端全自动实时生效，如需调整企业特定违禁词或安全拦截阈值，请联系超级管理员。</span>
-        </div>
-      </div>
-
-      <div class="modal-footer" style="justify-content: flex-end;">
-        <button class="btn-chat-primary" style="min-width: 120px;" @click="auditModalOpen = false">
-          我已了解
-        </button>
-      </div>
-    </div>
-  </div>
 </template>
 
 <script setup>
@@ -679,11 +594,13 @@ import { useRoute, useRouter } from 'vue-router'
 import Chart from 'chart.js/auto'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
+import { accountLabel } from '../composables/useAccountOptions'
 import GatewayPanel from '../components/GatewayPanel.vue'
 import AgentTemplatesPanel from '../components/AgentTemplatesPanel.vue'
 import KnowledgeBasePanel from '../components/KnowledgeBasePanel.vue'
 import UserManagementPanel from '../components/UserManagementPanel.vue'
 import RolePermissionPanel from '../components/RolePermissionPanel.vue'
+import SecurityOpenPanel from '../components/SecurityOpenPanel.vue'
 import AgentLogo from '../components/AgentLogo.vue'
 import defaultAdminAvatar from '../assets/avatar-admin.jpg'
 import defaultDevAvatar from '../assets/avatar-dev.jpg'
@@ -692,6 +609,7 @@ const router = useRouter()
 const route = useRoute()
 const { showToast } = useToast()
 const currentTab = ref('overview')
+const securityInnerTab = ref('overview')
 const timeRange = ref('7days')
 const stats = ref({})
 const agents = ref([])
@@ -775,11 +693,9 @@ const pageTitle = computed(() => {
   if (currentTab.value === 'gateway') return '模型网关路由 (LLM Gateway)'
   if (currentTab.value === 'users') return '企业租户用户管理 (User Management)'
   if (currentTab.value === 'roles') return '系统固定角色与权限矩阵 (Roles & Permissions)'
+  if (currentTab.value === 'security') return '开放与安全 (Open API & Guardrails)'
   return 'AgentMatrix 企业控制台'
 })
-
-// Security Guardrails & Audit Modal
-const auditModalOpen = ref(false)
 
 // Navigation taxonomy structure (4 Primary Enterprise Categories)
 const navGroups = computed(() => {
@@ -873,13 +789,12 @@ const navGroups = computed(() => {
   })
 
   govItems.push({
-    id: 'audit',
-    name: '安全审计与护栏',
-    title: '安全审计与实时护栏体系',
+    id: 'security',
+    name: '开放与安全',
+    title: '开放凭证、接入终端、护栏策略与审计',
     icon: 'fa-solid fa-fingerprint',
-    badge: '在线',
-    badgeType: 'emerald',
-    action: 'auditModal'
+    badge: 'OPEN',
+    badgeType: 'emerald'
   })
 
   groups.push({
@@ -894,10 +809,6 @@ const navGroups = computed(() => {
 })
 
 function handleNavClick(item) {
-  if (item.action === 'auditModal' || item.id === 'audit') {
-    auditModalOpen.value = true
-    return
-  }
   if ((item.id === 'gateway' || item.id === 'users') && !isSuperAdmin.value) {
     showToast('无权限访问该功能，仅超级管理员可用', 'error')
     return
@@ -1136,16 +1047,10 @@ async function loadTemplates() {
 }
 
 async function loadGatewayRoute() {
-  if (!isSuperAdmin.value) return
-  const res = await http.get('/api/model-gateway')
-  if (!res.success) return
-  const providers = res.data?.providers || []
-  const policy = res.data?.policy || {}
-  const ready = providers.filter((p) => p.enabled && p.configured)
-  const defaultId = policy.defaultProviderId || ''
-  const primary = ready.find((p) => p.id === defaultId) || ready[0]
-  routedChannel.value = primary?.name || ''
-  routedModel.value = primary?.defaultModel || ''
+  const res = await http.get('/api/model-gateway/active-route')
+  if (!res.success || !res.data) return
+  routedChannel.value = res.data.channel || ''
+  routedModel.value = res.data.model || ''
 }
 
 function refresh() {
@@ -1322,12 +1227,18 @@ function renderCharts() {
 
 onMounted(() => {
   const tab = route.query.tab
-  const validTabs = ['overview', 'agents', 'templates', 'knowledge', 'gateway', 'users', 'roles']
+  const validTabs = ['overview', 'agents', 'templates', 'knowledge', 'gateway', 'users', 'roles', 'security', 'open-platform']
   if (validTabs.includes(tab)) {
     if ((tab === 'gateway' || tab === 'users') && !isSuperAdmin.value) {
       currentTab.value = 'overview'
+    } else if (tab === 'open-platform') {
+      currentTab.value = 'security'
+      securityInnerTab.value = 'keys'
     } else {
       currentTab.value = tab
+      if (tab === 'security' && typeof route.query.sec === 'string' && route.query.sec) {
+        securityInnerTab.value = route.query.sec
+      }
     }
   }
 

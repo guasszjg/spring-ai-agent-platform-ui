@@ -656,7 +656,7 @@ const routedLabel = computed(() => {
 
 watch(pageTab, async (newTab) => {
   if (newTab === 'api') {
-    const overviewRes = await http.get('/api/model-gateway')
+    const overviewRes = await http.get('/api/model-gateway/active-route')
     if (overviewRes.success) {
       applyGatewayRoute(overviewRes.data)
       if (agent.value && routedModel.value && agent.value.modelName !== routedModel.value) {
@@ -1254,14 +1254,9 @@ function onUp() {
   if (leftWidth.value) localStorage.setItem('debugPaneWidth', String(leftWidth.value))
 }
 
-function applyGatewayRoute(overview) {
-  const providers = overview?.providers || []
-  const policy = overview?.policy || {}
-  const ready = providers.filter((p) => p.enabled && p.configured)
-  const defaultId = policy.defaultProviderId || ''
-  const primary = ready.find((p) => p.id === defaultId) || ready[0]
-  routedChannel.value = primary?.name || ''
-  routedModel.value = primary?.defaultModel || ''
+function applyGatewayRoute(route) {
+  routedChannel.value = route?.channel || ''
+  routedModel.value = route?.model || ''
 }
 
 function createDefaultSettings() {
@@ -1409,8 +1404,8 @@ onMounted(async () => {
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp)
   document.addEventListener('mousedown', onDocClick)
-  const overviewRes = await http.get('/api/model-gateway')
-  if (overviewRes.success) applyGatewayRoute(overviewRes.data)
+    const overviewRes = await http.get('/api/model-gateway/active-route')
+    if (overviewRes.success) applyGatewayRoute(overviewRes.data)
   const res = await http.get(`/api/agents/${route.params.id}`)
   if (res.success && res.data) {
     agent.value = res.data

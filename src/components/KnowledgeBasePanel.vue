@@ -92,14 +92,14 @@
           </div>
         </div>
 
-        <div class="kb-toolbar-right">
+          <div class="kb-toolbar-right">
           <div class="search-box-wrapper kb-search-box">
             <i class="fa-solid fa-magnifying-glass search-icon"></i>
             <input
               v-model="searchKeyword"
               class="search-input"
               type="search"
-              placeholder="搜索知识库名称或描述..."
+              placeholder="搜索知识库名称、描述或账号..."
               @input="debounceSearch"
             >
             <button
@@ -180,11 +180,10 @@
                 <span v-if="kb.isSystem" class="provider-badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3);">
                   <i class="fa-solid fa-earth-americas"></i> 公共
                 </span>
-                <span v-else-if="canManageKb(kb)" class="provider-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);">
-                  <i class="fa-solid fa-user-check"></i> 我的
-                </span>
-                <span v-else class="provider-badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);">
-                  <i class="fa-solid fa-user"></i> {{ kb.ownerUsername || '共享' }}
+                <span v-else class="provider-badge" :style="isOwnKb(kb)
+                  ? 'background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);'
+                  : 'background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);'">
+                  <i class="fa-solid fa-user"></i> {{ accountLabel(kb) }}
                 </span>
                 <span class="provider-badge dify">
                   <i class="fa-solid fa-link"></i> Dify
@@ -259,6 +258,7 @@
           <thead>
             <tr>
               <th>知识库名称</th>
+              <th>所属账号</th>
               <th>提供方</th>
               <th>检索模式 / 向量模型</th>
               <th>文档数量</th>
@@ -277,13 +277,13 @@
                     <div class="table-agent-title" style="display: flex; align-items: center; gap: 6px;">
                       <span>{{ kb.name }}</span>
                       <span v-if="kb.isSystem" style="font-size: 11px; padding: 1px 6px; border-radius: 4px; background: rgba(99, 102, 241, 0.15); color: #818cf8;">公共</span>
-                      <span v-else-if="canManageKb(kb)" style="font-size: 11px; padding: 1px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: #34d399;">我的</span>
-                      <span v-else style="font-size: 11px; padding: 1px 6px; border-radius: 4px; background: rgba(245, 158, 11, 0.15); color: #fbbf24;">{{ kb.ownerUsername }}</span>
+                      <span v-else style="font-size: 11px; padding: 1px 6px; border-radius: 4px;" :style="isOwnKb(kb) ? 'background: rgba(16, 185, 129, 0.15); color: #34d399;' : 'background: rgba(245, 158, 11, 0.15); color: #fbbf24;'">{{ accountLabel(kb) }}</span>
                     </div>
                     <div class="table-agent-code">{{ kb.description || '暂无描述' }}</div>
                   </div>
                 </div>
               </td>
+              <td>{{ kb.isSystem ? '系统公共' : accountLabel(kb) }}</td>
               <td>
                 <span class="provider-badge dify">Dify 外挂</span>
               </td>
@@ -1169,6 +1169,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
+import { accountLabel } from '../composables/useAccountOptions'
 
 const props = defineProps({
   user: {
@@ -1243,6 +1244,11 @@ function canManageKb(kb) {
   if (!kb) return false
   if (isSuperAdmin.value) return true
   if (kb.isSystem) return false
+  return isOwnKb(kb)
+}
+
+function isOwnKb(kb) {
+  if (!kb) return false
   return kb.ownerId === effectiveUser.value?.id || kb.ownerUsername === effectiveUser.value?.username
 }
 

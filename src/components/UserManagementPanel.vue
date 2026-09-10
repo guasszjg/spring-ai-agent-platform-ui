@@ -363,6 +363,15 @@
             </label>
           </div>
 
+          <div v-if="createForm.role === 'DEVELOPER' && outboundProviders.length" class="form-item">
+            <label class="form-label"><span>第三方账号对接（可选）</span></label>
+            <p class="modal-desc" style="margin-bottom: 8px;">创建后按通道配置去对方开户或绑定，失败不阻断本地账号。</p>
+            <label v-for="p in outboundProviders" :key="p.id" class="custom-checkbox-row">
+              <input type="checkbox" :value="p.code" v-model="createForm.providerCodes">
+              <span class="checkbox-text">{{ p.name }}（{{ p.onUserCreated === 'CREATE_REMOTE' ? '开户' : '绑定' }}）</span>
+            </label>
+          </div>
+
           <div class="modal-footer">
             <button type="button" class="btn-secondary" @click="showCreateModal = false">取消</button>
             <button type="submit" class="btn-chat-primary" :disabled="submitting">
@@ -739,8 +748,10 @@ const createForm = reactive({
   nickname: '',
   role: 'DEVELOPER',
   password: '',
-  mustChangePassword: true
+  mustChangePassword: true,
+  providerCodes: []
 })
+const outboundProviders = ref([])
 
 // Edit Form State
 const editingUser = ref(null)
@@ -850,9 +861,16 @@ function openCreateModal() {
   createForm.role = 'DEVELOPER'
   createForm.password = ''
   createForm.mustChangePassword = true
+  createForm.providerCodes = []
   createPasswordMode.value = 'AUTO'
   showCreatePwd.value = false
   showCreateModal.value = true
+  loadOutboundProviders()
+}
+
+async function loadOutboundProviders() {
+  const res = await http.get('/api/security/identity-providers')
+  outboundProviders.value = (res.success ? res.data : []).filter(p => p.enabled && p.onUserCreated && p.onUserCreated !== 'OFF')
 }
 
 async function handleCreateUser() {
@@ -873,7 +891,11 @@ async function handleCreateUser() {
       nickname: createForm.nickname.trim(),
       role: createForm.role,
       password: createPasswordMode.value === 'CUSTOM' ? createForm.password.trim() : '',
-      mustChangePassword: createForm.mustChangePassword
+      mustChangePassword: createForm.mustChangePassword,
+      identities: (createForm.providerCodes || []).map(code => ({
+        provider: code,
+        mode: outboundProviders.value.find(p => p.code === code)?.onUserCreated || 'CREATE_REMOTE'
+      }))
     }
     const res = await http.post('/api/users', payload)
     if (res.success) {

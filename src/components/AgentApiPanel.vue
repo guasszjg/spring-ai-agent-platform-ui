@@ -88,13 +88,13 @@
             <span>重新生成</span>
           </button>
         </div>
-        <div class="card-title">智能体专属 API 密钥 (Secret Key)</div>
+        <div class="card-title">开放凭证 (Open API Key)</div>
         <div class="card-val-row">
-          <code class="code-key">{{ showKey ? (agent?.apiKey || '未分配 Key') : maskedKey }}</code>
+          <code class="code-key">{{ showKey ? (sessionPlaintext || '明文仅在签发时显示') : maskedKey }}</code>
           <button
             type="button"
             class="btn-icon-action"
-            :title="showKey ? '隐藏密钥' : '显示完整密钥'"
+            :title="showKey ? '隐藏密钥' : '显示'"
             @click="showKey = !showKey"
           >
             <i :class="showKey ? 'fa-regular fa-eye-slash' : 'fa-regular fa-eye'"></i>
@@ -102,15 +102,15 @@
           <button
             type="button"
             class="btn-icon-action"
-            title="复制密钥"
-            @click="copyText(agent?.apiKey || '', 'API Key 已复制到剪贴板')"
+            title="复制"
+            @click="copyText(sessionPlaintext, sessionPlaintext ? 'API Key 已复制' : '当前没有可复制的明文，请重新签发')"
           >
             <i class="fa-regular fa-copy"></i>
           </button>
         </div>
         <div class="card-footer-tip tip-warn">
           <i class="fa-solid fa-shield-halved"></i>
-          <span>请妥善保管，切勿暴露在公开前端客户端</span>
+          <span>{{ keyPrefixHint }} · 推荐到侧栏「开放与安全 → 开放凭证」签发，接口前缀 /open/v1</span>
         </div>
       </div>
     </div>
@@ -244,7 +244,7 @@
               <div class="header-spec-item">
                 <span class="header-name">Authorization</span>
                 <span class="header-type">Header (必填)</span>
-                <code class="header-val">Bearer {{ agent?.apiKey ? (showKey ? agent.apiKey : 'sk-agent-••••••••') : '<YOUR_API_KEY>' }}</code>
+            <code class="header-val">Bearer {{ sessionPlaintext ? (showKey ? sessionPlaintext : maskedKey) : 'sk-live-&lt;YOUR_API_KEY&gt;' }}</code>
               </div>
               <div class="header-spec-item">
                 <span class="header-name">Content-Type</span>
@@ -699,7 +699,7 @@
             </p>
             <div class="regen-current-key-row">
               <span class="label">当前密钥：</span>
-              <code>{{ agent?.apiKey || '无' }}</code>
+              <code>{{ sessionPlaintext || boundKeyPrefix || '尚未签发明文' }}</code>
             </div>
           </div>
         </div>
@@ -752,21 +752,14 @@ const localGatewayRoute = ref({ channel: '', model: '', label: '' })
 
 async function fetchGatewayRoute() {
   try {
-    const res = await http.get('/api/model-gateway')
+    const res = await http.get('/api/model-gateway/active-route')
     if (res.success && res.data) {
-      const providers = res.data.providers || []
-      const policy = res.data.policy || {}
-      const ready = providers.filter((p) => p.enabled && p.configured)
-      const defaultId = policy.defaultProviderId || ''
-      const primary = ready.find((p) => p.id === defaultId) || ready[0]
-      if (primary) {
-        const ch = primary.name || ''
-        const mo = primary.defaultModel || ''
-        localGatewayRoute.value = {
-          channel: ch,
-          model: mo,
-          label: ch && mo ? `${ch} · ${mo}` : (mo || ch || '默认模型')
-        }
+      const ch = res.data.channel || ''
+      const mo = res.data.model || ''
+      localGatewayRoute.value = {
+        channel: ch,
+        model: mo,
+        label: ch && mo ? `${ch} · ${mo}` : (mo || ch || '默认模型')
       }
     }
   } catch {}
@@ -774,11 +767,24 @@ async function fetchGatewayRoute() {
 
 onMounted(() => {
   fetchGatewayRoute()
+  loadBoundKey()
 })
 
 watch(() => props.agent?.id, () => {
   fetchGatewayRoute()
+  loadBoundKey()
 })
+
+async function loadBoundKey() {
+  sessionPlaintext.value = ''
+  boundKeyPrefix.value = ''
+  if (!props.agent?.id) return
+  const res = await http.get('/api/open-api-keys')
+  if (!res.success) return
+  const match = (res.data || []).find(k => (k.agentScope || []).includes(props.agent.id) && k.status === 'ACTIVE')
+    || (res.data || []).find(k => (k.scopes || []).includes('chat') && k.status === 'ACTIVE')
+  if (match) boundKeyPrefix.value = match.keyPrefix
+}
 
 const effectiveChannel = computed(() => {
   return props.routedChannel || localGatewayRoute.value.channel || ''
@@ -823,14 +829,25 @@ const consoleBodyRef = ref(null)
 
 // Computed
 const apiBaseUrl = computed(() => {
-  return `${window.location.origin}/api/v1`
+  return `${window.location.origin}/open/v1`
 })
 
+const sessionPlaintext = ref('')
+const boundKeyPrefix = ref('')
+
 const maskedKey = computed(() => {
-  const key = props.agent?.apiKey
-  if (!key) return 'sk-agent-••••••••••••••••••••••••'
-  if (key.length <= 14) return key
-  return key.substring(0, 9) + '••••••••••••••••' + key.substring(key.length - 4)
+  if (sessionPlaintext.value) {
+    const key = sessionPlaintext.value
+    return key.substring(0, 12) + '••••••••' + key.substring(key.length - 4)
+  }
+  if (boundKeyPrefix.value) return boundKeyPrefix.value + '••••••••'
+  return 'sk-live-••••••••'
+})
+
+const keyPrefixHint = computed(() => {
+  if (sessionPlaintext.value) return '本次签发的明文仍在本页，关闭后消失'
+  if (boundKeyPrefix.value) return '已绑定凭证 ' + boundKeyPrefix.value
+  return '尚未签发，请点击重新生成'
 })
 
 const statusLabel = computed(() => {
@@ -859,7 +876,7 @@ const codeLangLabel = computed(() => {
 
 const activeCodeSnippet = computed(() => {
   const url = `${apiBaseUrl.value}/chat-messages`
-  const key = props.agent?.apiKey || 'YOUR_API_KEY'
+  const key = sessionPlaintext.value || 'sk-live-<YOUR_API_KEY>'
 
   if (codeLang.value === 'curl-stream') {
     return `curl -X POST '${url}' \\
@@ -1018,12 +1035,12 @@ async function confirmRegenerateKey() {
   regening.value = true
   try {
     const res = await http.post(`/api/agents/${props.agent.id}/regenerate-api-key`)
-    if (res.success && res.data?.apiKey) {
-      showToast('API Key 重新生成成功', 'success', 2500)
-      emit('agent-updated', {
-        ...props.agent,
-        apiKey: res.data.apiKey
-      })
+    if (res.success && (res.data?.plaintext || res.data?.apiKey)) {
+      const plaintext = res.data.plaintext || res.data.apiKey
+      sessionPlaintext.value = plaintext
+      boundKeyPrefix.value = res.data?.key?.keyPrefix || plaintext.substring(0, 16)
+      showToast('新凭证已签发，明文仅显示这一次', 'success', 2500)
+      emit('agent-updated', { ...props.agent })
       regenModalOpen.value = false
     } else {
       showToast(res.message || '生成失败，请重试', 'error')
@@ -1059,7 +1076,21 @@ async function executePlaygroundRequest() {
 
   const isStreaming = playParams.value.response_mode === 'streaming'
   const endpoint = `${apiBaseUrl.value}/chat-messages`
-  const key = props.agent?.apiKey || ''
+  const key = sessionPlaintext.value || ''
+
+  if (!key) {
+    showToast('请先签发凭证，明文只在本页签发后可用', 'warning')
+    playLoading.value = false
+    return
+  }
+
+  const payload = {
+    agent_id: props.agent?.id,
+    message: playParams.value.message.trim(),
+    response_mode: isStreaming ? 'streaming' : 'blocking',
+    conversation_id: playParams.value.conversation_id || undefined,
+    user: playParams.value.user || undefined
+  }
 
   if (isStreaming) {
     try {
@@ -1069,12 +1100,7 @@ async function executePlaygroundRequest() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${key}`
         },
-        body: JSON.stringify({
-          message: playParams.value.message.trim(),
-          response_mode: 'streaming',
-          conversation_id: playParams.value.conversation_id || undefined,
-          user: playParams.value.user || undefined
-        })
+        body: JSON.stringify(payload)
       })
 
       playStatus.value = {
@@ -1154,31 +1180,28 @@ async function executePlaygroundRequest() {
   } else {
     // Blocking mode
     try {
-      const res = await http.post('/api/v1/chat-messages', {
-        message: playParams.value.message.trim(),
-        response_mode: 'blocking',
-        conversation_id: playParams.value.conversation_id || undefined,
-        user: playParams.value.user || undefined
-      }, {
+      const res = await fetch(endpoint, {
+        method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${key}`
-        }
+        },
+        body: JSON.stringify(payload)
       })
-
+      const json = await res.json()
       const latency = Date.now() - startTime
       playStatus.value = {
-        code: res.code || 200,
-        success: res.success,
-        latencyMs: res.data?.latency_ms || latency,
-        tokens: res.data?.tokens_used || 0
+        code: res.status,
+        success: json.success,
+        latencyMs: json.data?.latency_ms || latency,
+        tokens: json.data?.tokens_used || 0
       }
+      playResponseText.value = JSON.stringify(json, null, 2)
 
-      playResponseText.value = JSON.stringify(res, null, 2)
-
-      if (res.success && res.data?.conversation_id) {
-        playParams.value.conversation_id = res.data.conversation_id
+      if (json.success && json.data?.conversation_id) {
+        playParams.value.conversation_id = json.data.conversation_id
       }
-      showToast('阻塞调用成功', 'success', 1500)
+      showToast(json.success ? '阻塞调用成功' : (json.message || '调用失败'), json.success ? 'success' : 'error')
     } catch (err) {
       playStatus.value = {
         code: 500,
