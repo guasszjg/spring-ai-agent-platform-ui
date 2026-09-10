@@ -378,6 +378,561 @@
         </div>
       </div>
     </section>
+
+    <!-- Docs (API Reference & Access Guide) -->
+    <section v-show="innerTab === 'docs'" class="sec-block">
+      <!-- Quickstart Hero Card -->
+      <div class="table-view-card sec-doc-hero">
+        <div class="sec-doc-hero-head">
+          <div>
+            <div class="sec-doc-pill"><i class="fa-solid fa-code"></i> RESTFUL &amp; SSE OPEN API</div>
+            <h3 class="sec-doc-title">开发接入文档与接口规范</h3>
+            <p class="sec-doc-desc">支持第三方系统、移动端、嵌入式设备及自动化脚本通过标准 HTTP API 调用本平台智能体、知识库及会话能力。</p>
+          </div>
+          <div class="sec-doc-baseurl-box">
+            <span class="sec-doc-baseurl-label">OPEN API BASE URL</span>
+            <div class="sec-doc-baseurl-content">
+              <code>{{ apiBaseUrl }}</code>
+              <button type="button" class="btn-copy-doc" title="复制 Base URL" @click="copyText(apiBaseUrl, 'Base URL')">
+                <i class="fa-regular fa-copy"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Security & Client Headers Callout -->
+        <div class="sec-doc-headers-grid">
+          <div class="sec-doc-header-card">
+            <div class="header-name">Authorization <span class="badge-req">必填</span></div>
+            <div class="header-format"><code>Bearer sk-agt-xxxxxxxx</code></div>
+            <div class="header-desc">在「开放凭证」标签页签发。由调用方在每个请求的 HTTP Header 中携带。</div>
+          </div>
+          <div class="sec-doc-header-card">
+            <div class="header-name">X-Client-Type <span class="badge-opt" :class="{ 'badge-req': policy.clientPolicy !== 'OFF' }">{{ policy.clientPolicy === 'OFF' ? '可选' : '策略要求' }}</span></div>
+            <div class="header-format"><code>SN | MAC | IMEI | APP_ID | CUSTOM_KEY</code></div>
+            <div class="header-desc">上报调用终端类型。若护栏开启了终端策略，未登记或类型不符的调用将被阻断。</div>
+          </div>
+          <div class="sec-doc-header-card">
+            <div class="header-name">X-Client-Id <span class="badge-opt" :class="{ 'badge-req': policy.clientPolicy !== 'OFF' }">{{ policy.clientPolicy === 'OFF' ? '可选' : '策略要求' }}</span></div>
+            <div class="header-format"><code>DEV-SN-001 / APP-CRM-V2</code></div>
+            <div class="header-desc">终端唯一标识号。在「接入终端」标签页完成登记审批后，系统自动赋予放行权限。</div>
+          </div>
+          <div class="sec-doc-header-card">
+            <div class="header-name">X-End-User <span class="badge-opt">推荐</span></div>
+            <div class="header-format"><code>user_id / employee_no</code></div>
+            <div class="header-desc">终端末端用户标识。透传后可在审计日志、用量统计及安全护栏中实现用户级追踪。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Interactive Code Playground -->
+      <div class="table-view-card sec-code-card">
+        <div class="sec-card-head">
+          <div class="code-head-left">
+            <i class="fa-solid fa-terminal" style="color: var(--accent-blue);"></i>
+            <h3>快速调用示例代码</h3>
+            <div class="doc-scenario-tabs">
+              <button type="button" class="btn-scenario" :class="{ active: docScenario === 'chat' }" @click="docScenario = 'chat'">1. 智能体对话</button>
+              <button type="button" class="btn-scenario" :class="{ active: docScenario === 'kb' }" @click="docScenario = 'kb'">2. 知识库上传与检索</button>
+              <button type="button" class="btn-scenario" :class="{ active: docScenario === 'agents' }" @click="docScenario = 'agents'">3. 智能体资产与绑定</button>
+            </div>
+          </div>
+          <div class="code-head-right">
+            <div class="doc-lang-tabs">
+              <button type="button" class="btn-lang" :class="{ active: docLang === 'curl' }" @click="docLang = 'curl'">cURL</button>
+              <button type="button" class="btn-lang" :class="{ active: docLang === 'python' }" @click="docLang = 'python'">Python</button>
+              <button type="button" class="btn-lang" :class="{ active: docLang === 'node' }" @click="docLang = 'node'">Node.js</button>
+            </div>
+            <button type="button" class="btn-copy-code" @click="copyText(activeCodeSnippet, '示例代码')">
+              <i class="fa-regular fa-copy"></i>
+              <span>复制代码</span>
+            </button>
+          </div>
+        </div>
+        <pre class="sec-code-pre"><code>{{ activeCodeSnippet }}</code></pre>
+      </div>
+
+      <!-- Complete Open API Directory -->
+      <div class="table-view-card sec-api-directory">
+        <div class="sec-card-head">
+          <h3><i class="fa-solid fa-list-check" style="color: var(--accent-emerald);"></i> 开放接口清单 (API Catalog)</h3>
+          <span class="sec-muted">共 6 大分类 17 个端点，全部支持凭证权限校验与多维用量计量</span>
+        </div>
+
+        <div class="sec-api-groups">
+          <!-- 1. Chat -->
+          <div class="api-group-item">
+            <div class="api-group-title">
+              <i class="fa-regular fa-comments" style="color: #60a5fa;"></i>
+              <span>智能体对话 (Chat Messages)</span>
+            </div>
+            <div class="api-endpoints-list">
+              <div class="endpoint-row">
+                <span class="method-badge post">POST</span>
+                <span class="endpoint-path">/chat-messages</span>
+                <span class="scope-tag">chat</span>
+                <span class="endpoint-desc">发起智能体对话。支持 stream=true (SSE 流式输出) 与 stream=false (单次完整响应)，内置知识库召回增强与敏感词过滤</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Agents -->
+          <div class="api-group-item">
+            <div class="api-group-title">
+              <i class="fa-solid fa-robot" style="color: #c084fc;"></i>
+              <span>智能体资产管理 (Agents)</span>
+            </div>
+            <div class="api-endpoints-list">
+              <div class="endpoint-row">
+                <span class="method-badge get">GET</span>
+                <span class="endpoint-path">/agents</span>
+                <span class="scope-tag">agents:read</span>
+                <span class="endpoint-desc">分页拉取当前凭证可访问的智能体清单</span>
+              </div>
+              <div class="endpoint-row">
+                <span class="method-badge get">GET</span>
+                <span class="endpoint-path">/agents/{id}</span>
+                <span class="scope-tag">agents:read</span>
+                <span class="endpoint-desc">获取指定智能体开放信息（安全脱敏原始系统提示词与第三方模型凭据）</span>
+              </div>
+              <div class="endpoint-row">
+                <span class="method-badge post">POST</span>
+                <span class="endpoint-path">/agents</span>
+                <span class="scope-tag">agents:write</span>
+                <span class="endpoint-desc">创建自定义智能体（名称、分类、温度、模型标识等）</span>
+              </div>
+              <div class="endpoint-row">
+                <span class="method-badge put">PUT</span>
+                <span class="endpoint-path">/agents/{id}</span>
+                <span class="scope-tag">agents:write</span>
+                <span class="endpoint-desc">更新智能体基础配置及运行参数</span>
+              </div>
+              <div class="endpoint-row">
+                <span class="method-badge delete">DELETE</span>
+                <span class="endpoint-path">/agents/{id}</span>
+                <span class="scope-tag">agents:write</span>
+                <span class="endpoint-desc">删除指定的智能体资产</span>
+              </div>
+              <div class="endpoint-row">
+                <span class="method-badge post">POST</span>
+                <span class="endpoint-path">/agents/{id}/publish</span>
+                <span class="scope-tag">agents:write</span>
+                <span class="endpoint-desc">发布智能体使其进入 RUNNING 运行就绪状态</span>
+              </div>
+              <div class="endpoint-row">
+                <span class="method-badge post">POST</span>
+                <span class="endpoint-path">/agents/{id}/pause</span>
+                <span class="scope-tag">agents:write</span>
+                <span class="endpoint-desc">暂停智能体使其进入 IDLE 闲置下线状态</span>
+              </div>
+              <div class="endpoint-row">
+                <span class="method-badge get">GET</span>
+                <span class="endpoint-path">/agents/{id}/knowledge-bases</span>
+                <span class="scope-tag">agents:read</span>
+                <span class="endpoint-desc">获取该智能体已关联绑定的全部私有知识库清单</span>
+              </div>
+              <div class="endpoint-row">
+                <span class="method-badge put">PUT</span>
+                <span class="endpoint-path">/agents/{id}/knowledge-bases</span>
+                <span class="scope-tag">agents:bind_kb</span>
+                <span class="endpoint-desc">给智能体批量绑定关联知识库（替换绑定关系）</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Knowledge Bases -->
+          <div class="api-group-item">
+            <div class="api-group-title">
+              <i class="fa-solid fa-book-bookmark" style="color: #34d399;"></i>
+              <span>企业知识库与 RAG (Knowledge Bases)</span>
+            </div>
+            <div class="api-endpoints-list">
+              <div class="endpoint-row">
+                <span class="method-badge get">GET</span>
+                <span class="endpoint-path">/knowledge-bases</span>
+                <span class="scope-tag">kb:read</span>
+                <span class="endpoint-desc">获取当前租户下的私有知识库列表</span>
+              </div>
+              <div class="endpoint-row">
+                <span class="method-badge post">POST</span>
+                <span class="endpoint-path">/knowledge-bases</span>
+                <span class="scope-tag">kb:write</span>
+                <span class="endpoint-desc">创建新的知识库集合</span>
+              </div>
+              <div class="endpoint-row">
+                <span class="method-badge post">POST</span>
+                <span class="endpoint-path">/knowledge-bases/{id}/documents</span>
+                <span class="scope-tag">kb:write</span>
+                <span class="endpoint-desc">上传文件切片并向量化 (multipart/form-data，支持 PDF/TXT/MD/DOCX)</span>
+              </div>
+              <div class="endpoint-row">
+                <span class="method-badge post">POST</span>
+                <span class="endpoint-path">/knowledge-bases/{id}/retrieve</span>
+                <span class="scope-tag">kb:read</span>
+                <span class="endpoint-desc">执行语义向量检索测试，返回相似度 TopK 文本切片与分值</span>
+              </div>
+              <div class="endpoint-row">
+                <span class="method-badge post">POST</span>
+                <span class="endpoint-path">/knowledge-bases/{id}/faqs</span>
+                <span class="scope-tag">kb:write</span>
+                <span class="endpoint-desc">直接录入精准问答对 FAQ</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Conversations -->
+          <div class="api-group-item">
+            <div class="api-group-title">
+              <i class="fa-solid fa-clock-rotate-left" style="color: #fbbf24;"></i>
+              <span>会话与消息历史 (Conversations)</span>
+            </div>
+            <div class="api-endpoints-list">
+              <div class="endpoint-row">
+                <span class="method-badge get">GET</span>
+                <span class="endpoint-path">/conversations</span>
+                <span class="scope-tag">conversations:read</span>
+                <span class="endpoint-desc">分页拉取该开发者或凭证下的历史对话列表</span>
+              </div>
+              <div class="endpoint-row">
+                <span class="method-badge get">GET</span>
+                <span class="endpoint-path">/conversations/{id}/messages</span>
+                <span class="scope-tag">conversations:read</span>
+                <span class="endpoint-desc">获取指定会话的历史上下文消息记录</span>
+              </div>
+              <div class="endpoint-row">
+                <span class="method-badge delete">DELETE</span>
+                <span class="endpoint-path">/conversations/{id}</span>
+                <span class="scope-tag">conversations:read</span>
+                <span class="endpoint-desc">删除历史会话及其关联的所有消息</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. Usage & Audit -->
+          <div class="api-group-item">
+            <div class="api-group-title">
+              <i class="fa-solid fa-chart-pie" style="color: #22d3ee;"></i>
+              <span>用量统计与审计事件 (Usage &amp; Audit)</span>
+            </div>
+            <div class="api-endpoints-list">
+              <div class="endpoint-row">
+                <span class="method-badge get">GET</span>
+                <span class="endpoint-path">/usage/summary</span>
+                <span class="scope-tag">usage:read</span>
+                <span class="endpoint-desc">查询指定时间段内的调用总量、Token 消耗、拦截数等事实汇总</span>
+              </div>
+              <div class="endpoint-row">
+                <span class="method-badge get">GET</span>
+                <span class="endpoint-path">/usage/daily</span>
+                <span class="scope-tag">usage:read</span>
+                <span class="endpoint-desc">获取多维日级事实聚合记录（智能体、凭证、终端细分）</span>
+              </div>
+              <div class="endpoint-row">
+                <span class="method-badge get">GET</span>
+                <span class="endpoint-path">/audit/events</span>
+                <span class="scope-tag">usage:read</span>
+                <span class="endpoint-desc">检索租户安全审计事件流（支持按结果过滤 SUCCESS/DENIED）</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 6. Account -->
+          <div class="api-group-item">
+            <div class="api-group-title">
+              <i class="fa-solid fa-link" style="color: #f43f5e;"></i>
+              <span>账号对接与外部通知 (Account)</span>
+            </div>
+            <div class="api-endpoints-list">
+              <div class="endpoint-row">
+                <span class="method-badge get">GET</span>
+                <span class="endpoint-path">/account</span>
+                <span class="scope-tag">account:read</span>
+                <span class="endpoint-desc">查看当前调用凭证归属的开发者账号详情及权限范围</span>
+              </div>
+              <div class="endpoint-row">
+                <span class="method-badge post">POST</span>
+                <span class="endpoint-path">/account/bind-identity</span>
+                <span class="scope-tag">account:write</span>
+                <span class="endpoint-desc">入站绑定外部第三方系统用户标识</span>
+              </div>
+              <div class="endpoint-row">
+                <span class="method-badge post">POST</span>
+                <span class="endpoint-path">/account/webhook</span>
+                <span class="scope-tag">无鉴权限制</span>
+                <span class="endpoint-desc">接收外部系统回调事件通知（支持 X-Signature 密钥验签）</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Guardrails & Error Dictionary -->
+      <div class="table-view-card sec-error-dict">
+        <div class="sec-card-head">
+          <h3><i class="fa-solid fa-triangle-exclamation" style="color: var(--accent-amber);"></i> 安全护栏与状态码速查字典</h3>
+        </div>
+        <div class="table-responsive">
+          <table class="agent-table">
+            <thead>
+              <tr>
+                <th style="width: 100px;">HTTP 状态</th>
+                <th style="width: 190px;">错误码 (code)</th>
+                <th>拦截触发场景</th>
+                <th>排查与处理建议</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="sec-status st-denied">401</span></td>
+                <td><code>unauthorized</code></td>
+                <td>未携带 <code>Authorization</code> 头，或 API Key 不存在 / 已被吊销</td>
+                <td>在「开放凭证」页面重新签发新 Key，并确认请求头为 <code>Bearer &lt;key&gt;</code> 格式</td>
+              </tr>
+              <tr>
+                <td><span class="sec-status st-denied">403</span></td>
+                <td><code>scope_missing</code></td>
+                <td>当前使用的 API Key 未勾选该接口所需的权限范围（如 <code>chat</code>、<code>kb:read</code> 等）</td>
+                <td>在凭证管理中签发包含对应 Scope 的新密钥</td>
+              </tr>
+              <tr>
+                <td><span class="sec-status st-denied">403</span></td>
+                <td><code>agent_not_allowed</code></td>
+                <td>当前 Key 配置了智能体范围白名单，且未包含请求中所指定的 <code>agentId</code></td>
+                <td>重新签发凭证并勾选该智能体，或让管理员分配该智能体访问权限</td>
+              </tr>
+              <tr>
+                <td><span class="sec-status st-denied">403</span></td>
+                <td><code>client_not_allowed</code></td>
+                <td>开启了终端强制策略，但请求头中的 <code>X-Client-Id</code> 未在接入终端列表中登记或已被停用</td>
+                <td>前往「接入终端」页面登记该设备的 SN/MAC/标识并由管理员审批通过</td>
+              </tr>
+              <tr>
+                <td><span class="sec-status st-denied">403</span></td>
+                <td><code>client_pending</code></td>
+                <td>设备标识已自动上报录入，但当前状态为「待审批」</td>
+                <td>请管理员在「接入终端」中点击“审批通过”后即可开始调用</td>
+              </tr>
+              <tr>
+                <td><span class="sec-status st-denied">403</span></td>
+                <td><code>kill_switch_active</code></td>
+                <td>安全团队触发了全平台/租户紧急停用 (Kill Switch)</td>
+                <td>该租户下全部 Open API 暂停服务；请联系管理员在「风险总览」关闭 Kill Switch</td>
+              </tr>
+              <tr>
+                <td><span class="sec-status st-denied">403</span></td>
+                <td><code>forbidden_hours</code></td>
+                <td>请求时间不在护栏配置的允许调用时间段内 (如 09:00-18:00)</td>
+                <td>调整调用时机，或在「护栏策略」中调整“允许调用时段”配置</td>
+              </tr>
+              <tr>
+                <td><span class="sec-status st-error">422</span></td>
+                <td><code>input_too_long</code></td>
+                <td>输入的单次 prompt 字符长度超出了平台配置的最大长度限制</td>
+                <td>压缩提示词或截断输入，或在「护栏策略」中提高“最大输入字符数”</td>
+              </tr>
+              <tr>
+                <td><span class="sec-status st-error">422</span></td>
+                <td><code>sensitive_content</code></td>
+                <td>输入文本命中了敏感词黑名单或 PII 隐私信息，且策略配置为“直接阻断”</td>
+                <td>过滤输入内容中的涉密或违规文本；可在「护栏策略」中调整敏感词库</td>
+              </tr>
+              <tr>
+                <td><span class="sec-status st-error">429</span></td>
+                <td><code>rate_limited</code></td>
+                <td>超出每分钟最大请求频次限制 (RPM 限流)</td>
+                <td>降低客户端并发调用频率，或引入重试退避机制 (Exponential Backoff)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Usage Metrics -->
+    <section v-show="innerTab === 'usage'" class="sec-block">
+      <!-- Toolbar / Time Range Selector -->
+      <div class="users-toolbar">
+        <div class="usage-title-row">
+          <h3><i class="fa-solid fa-chart-line" style="color: var(--accent-blue);"></i> API 调用与 Token 消耗统计</h3>
+          <span class="sec-muted">多维事实聚合记录与实时调用流水分析</span>
+        </div>
+        <div class="usage-toolbar-actions">
+          <div class="overview-date-filter">
+            <button type="button" class="btn-time-range" :class="{ active: usageRange === 'today' }" @click="changeUsageRange('today')">今日</button>
+            <button type="button" class="btn-time-range" :class="{ active: usageRange === '7d' }" @click="changeUsageRange('7d')">近7天</button>
+            <button type="button" class="btn-time-range" :class="{ active: usageRange === '30d' }" @click="changeUsageRange('30d')">近30天</button>
+          </div>
+          <button class="btn-users-refresh" title="刷新数据" :disabled="loadingUsage" @click="loadUsage">
+            <i class="fa-solid fa-arrows-rotate" :class="{ 'fa-spin': loadingUsage }"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Metric Cards Grid -->
+      <div class="users-metrics-grid" style="grid-template-columns: repeat(5, 1fr);">
+        <div class="user-metric-card">
+          <div class="metric-icon-box metric-icon-total"><i class="fa-solid fa-bolt"></i></div>
+          <div class="metric-info">
+            <span class="metric-label">API 总调用量</span>
+            <span class="metric-value">{{ usageSummary.calls || 0 }}</span>
+          </div>
+        </div>
+        <div class="user-metric-card">
+          <div class="metric-icon-box" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa;">
+            <i class="fa-regular fa-comments"></i>
+          </div>
+          <div class="metric-info">
+            <span class="metric-label">对话请求 / 消息</span>
+            <span class="metric-value">{{ usageSummary.chatCalls || 0 }} <small style="font-size: 0.72rem; color: var(--text-muted);">/ {{ usageSummary.messages || 0 }}条</small></span>
+          </div>
+        </div>
+        <div class="user-metric-card">
+          <div class="metric-icon-box metric-icon-admin"><i class="fa-solid fa-coins"></i></div>
+          <div class="metric-info">
+            <span class="metric-label">消耗 Tokens</span>
+            <span class="metric-value">{{ ((usageSummary.promptTokens || 0) + (usageSummary.completionTokens || 0)).toLocaleString() }}</span>
+            <span class="metric-sub-label">入: {{ (usageSummary.promptTokens || 0).toLocaleString() }} · 出: {{ (usageSummary.completionTokens || 0).toLocaleString() }}</span>
+          </div>
+        </div>
+        <div class="user-metric-card">
+          <div class="metric-icon-box" style="background: rgba(244, 63, 94, 0.12); color: var(--accent-rose);">
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+          <div class="metric-info">
+            <span class="metric-label">护栏拦截 / 异常</span>
+            <span class="metric-value" style="color: var(--accent-rose);">{{ usageSummary.denied || 0 }} <small style="font-size: 0.72rem; color: var(--text-muted);">/ {{ usageSummary.errors || 0 }}错</small></span>
+          </div>
+        </div>
+        <div class="user-metric-card">
+          <div class="metric-icon-box metric-icon-dev"><i class="fa-solid fa-stopwatch"></i></div>
+          <div class="metric-info">
+            <span class="metric-label">平均响应耗时</span>
+            <span class="metric-value">{{ avgLatencyText }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sub-Tab Switcher: Daily Fact Table vs Realtime Call Logs -->
+      <div class="sec-sub-tabs-row">
+        <div class="sec-sub-tabs">
+          <button type="button" class="btn-sub-tab" :class="{ active: usageSubTab === 'daily' }" @click="usageSubTab = 'daily'">
+            <i class="fa-solid fa-table-cells"></i> 按日聚合事实表 ({{ usageDailyList.length }}条)
+          </button>
+          <button type="button" class="btn-sub-tab" :class="{ active: usageSubTab === 'logs' }" @click="usageSubTab = 'logs'">
+            <i class="fa-solid fa-list-ul"></i> 实时调用流水 (最新{{ usageLogsResult.total }}条)
+          </button>
+        </div>
+      </div>
+
+      <!-- Daily Fact Table View -->
+      <div v-show="usageSubTab === 'daily'" class="table-view-card users-table-card">
+        <div v-if="loadingUsage && !usageDailyList.length" class="users-loading-state">
+          <i class="fa-solid fa-circle-notch fa-spin"></i>
+          <span>加载用量统计数据...</span>
+        </div>
+        <div v-else-if="!usageDailyList.length" class="users-empty-state">
+          <div class="empty-icon-wrap"><i class="fa-solid fa-chart-simple"></i></div>
+          <h4>选定时间段内暂无调用数据</h4>
+          <p>请按「接入文档」发起一次 API 对话或检索调用，系统将自动汇总事实记录</p>
+        </div>
+        <table v-else class="agent-table">
+          <thead>
+            <tr>
+              <th>统计日期</th>
+              <th>智能体 ID</th>
+              <th>凭证 ID</th>
+              <th>终端设备</th>
+              <th>总调用量</th>
+              <th>对话次数</th>
+              <th>输入 Tokens</th>
+              <th>输出 Tokens</th>
+              <th>安全拦截</th>
+              <th>异常数</th>
+              <th>平均耗时</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in usageDailyList" :key="item.id">
+              <td style="font-weight: 600;">{{ item.statDate }}</td>
+              <td><code>{{ item.agentId || '—' }}</code></td>
+              <td><code>{{ item.apiKeyId ? item.apiKeyId.slice(0, 10) + '...' : '—' }}</code></td>
+              <td><span v-if="item.clientCredentialId" class="sec-status st-success">{{ item.clientCredentialId }}</span><span v-else class="sec-muted">—</span></td>
+              <td style="font-weight: 700; color: var(--accent-blue);">{{ item.calls }}</td>
+              <td>{{ item.chatCalls }}</td>
+              <td>{{ (item.promptTokens || 0).toLocaleString() }}</td>
+              <td>{{ (item.completionTokens || 0).toLocaleString() }}</td>
+              <td>
+                <span v-if="item.denied > 0" class="sec-status st-denied">{{ item.denied }}</span>
+                <span v-else class="sec-muted">0</span>
+              </td>
+              <td>
+                <span v-if="item.errors > 0" class="sec-status st-error">{{ item.errors }}</span>
+                <span v-else class="sec-muted">0</span>
+              </td>
+              <td>{{ item.calls ? Math.round(item.latencySumMs / item.calls) + ' ms' : '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Realtime Call Logs View -->
+      <div v-show="usageSubTab === 'logs'" class="table-view-card users-table-card">
+        <div v-if="!usageLogs.length" class="users-empty-state">
+          <div class="empty-icon-wrap"><i class="fa-solid fa-clipboard-list"></i></div>
+          <h4>暂无调用流水日志</h4>
+          <p>每笔经过网关与鉴权链的请求明细均会实时保存于此处供排查分析</p>
+        </div>
+        <table v-else class="agent-table">
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>端点 (Endpoint)</th>
+              <th>HTTP 状态</th>
+              <th>耗时</th>
+              <th>Tokens</th>
+              <th>模型</th>
+              <th>终端 / 用户</th>
+              <th>拦截原因</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="log in usageLogs" :key="log.id">
+              <td>{{ formatTime(log.ts) }}</td>
+              <td><code>{{ log.endpoint }}</code></td>
+              <td>
+                <span class="sec-status" :class="httpStatusClass(log.httpStatus)">
+                  {{ log.httpStatus }}
+                </span>
+              </td>
+              <td>{{ log.latencyMs }} ms</td>
+              <td>{{ ((log.promptTokens || 0) + (log.completionTokens || 0)).toLocaleString() }}</td>
+              <td><span class="sec-muted">{{ log.model || '—' }}</span></td>
+              <td>
+                <div v-if="log.clientCredentialId || log.endUser">
+                  <div v-if="log.clientCredentialId" class="sec-name">{{ log.clientCredentialId }}</div>
+                  <div v-if="log.endUser" class="sec-muted">用户: {{ log.endUser }}</div>
+                </div>
+                <span v-else class="sec-muted">—</span>
+              </td>
+              <td>
+                <span v-if="log.denyReason" class="sec-error">{{ log.denyReason }}</span>
+                <span v-else class="sec-muted">—</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Logs Pager -->
+        <section v-if="usageLogsResult.total" class="pagination-container">
+          <div class="page-summary">共 {{ usageLogsResult.total }} 条 · 第 {{ usageLogsPage }} / {{ Math.max(1, usageLogsResult.totalPages || 1) }} 页</div>
+          <div class="pagination-controls">
+            <button class="btn-page" :disabled="usageLogsPage <= 1" @click="changeUsageLogsPage(-1)"><i class="fa-solid fa-chevron-left"></i></button>
+            <button v-for="n in pageNumbers(Math.max(1, usageLogsResult.totalPages || 1), usageLogsPage)" :key="'ul'+n" class="btn-page" :class="{ active: n === usageLogsPage }" @click="setUsageLogsPage(n)">{{ n }}</button>
+            <button class="btn-page" :disabled="usageLogsPage >= (usageLogsResult.totalPages || 1)" @click="changeUsageLogsPage(1)"><i class="fa-solid fa-chevron-right"></i></button>
+          </div>
+        </section>
+      </div>
+    </section>
   </div>
 
   <!-- Create Key Modal -->
@@ -635,8 +1190,10 @@ const loading = ref(false)
 
 const tabs = [
   { id: 'overview', name: '风险总览', icon: 'fa-solid fa-gauge-high' },
+  { id: 'docs', name: '接入文档', icon: 'fa-solid fa-book-open-reader' },
   { id: 'keys', name: '开放凭证', icon: 'fa-solid fa-key' },
   { id: 'clients', name: '接入终端', icon: 'fa-solid fa-mobile-screen' },
+  { id: 'usage', name: '用量统计', icon: 'fa-solid fa-chart-simple' },
   { id: 'policy', name: '护栏策略', icon: 'fa-solid fa-shield-halved' },
   { id: 'audit', name: '审计日志', icon: 'fa-solid fa-list' },
   { id: 'identity', name: '账号对接', icon: 'fa-solid fa-link' }
@@ -710,17 +1267,17 @@ function selectFilteredAgents() {
   keyForm.agentScope = [...ids]
 }
 const scopeOptions = [
-  { id: 'chat', name: '对话', desc: '调用智能体聊天，含多轮和流式。当前已生效。' },
-  { id: 'agents:read', name: '读智能体', desc: '查询智能体列表和配置。后续开放。' },
-  { id: 'agents:write', name: '写智能体', desc: '创建、修改、发布、停用智能体。后续开放。' },
-  { id: 'kb:read', name: '读知识库', desc: '查询知识库、文档、FAQ、检索。后续开放。' },
-  { id: 'kb:write', name: '写知识库', desc: '创建知识库、上传文档、维护 FAQ。后续开放。' },
-  { id: 'agents:bind_kb', name: '绑定知识库', desc: '给智能体绑定或解绑知识库。后续开放。' },
-  { id: 'conversations:read', name: '读会话', desc: '拉取历史会话和消息。后续开放。' },
-  { id: 'usage:read', name: '读用量', desc: '查看调用次数和 token 统计。后续开放。' },
-  { id: 'clients:write', name: '管终端', desc: '通过 API 维护设备白名单。后续开放。' },
-  { id: 'account:read', name: '读账号对接', desc: '查看已绑定的第三方账号。后续开放。' },
-  { id: 'account:write', name: '写账号对接', desc: '绑定或解绑第三方账号。后续开放。' }
+  { id: 'chat', name: '对话', desc: '调用智能体聊天，含多轮问答与 SSE 流式响应。' },
+  { id: 'agents:read', name: '读智能体', desc: '查询授权智能体清单及脱敏配置。' },
+  { id: 'agents:write', name: '写智能体', desc: '创建、修改、发布上线与暂停智能体。' },
+  { id: 'kb:read', name: '读知识库', desc: '知识库列表、语义向量检索测试、文档明细。' },
+  { id: 'kb:write', name: '写知识库', desc: '创建知识库、上传切片文档、录入精准 FAQ。' },
+  { id: 'agents:bind_kb', name: '绑定知识库', desc: '为指定智能体关联或解绑私有知识库。' },
+  { id: 'conversations:read', name: '读会话', desc: '拉取历史会话与上下文消息记录。' },
+  { id: 'usage:read', name: '读用量', desc: '查询多维调用量、Token 消耗统计与审计事件。' },
+  { id: 'clients:write', name: '管终端', desc: '通过 API 维护终端设备白名单与状态变更。' },
+  { id: 'account:read', name: '读账号对接', desc: '查看调用凭证归属的开发者账号详情。' },
+  { id: 'account:write', name: '写账号对接', desc: '入站登记与绑定外部第三方系统账号。' }
 ]
 
 function scopeName(id) {
@@ -851,7 +1408,7 @@ async function loadAll() {
     if (idp.success) providers.value = idp.data || []
     if (ids.success) identities.value = ids.data || []
     if (ag.success) agents.value = ag.data?.records || ag.data?.content || []
-    await loadAudit()
+    await Promise.all([loadAudit(), loadUsage()])
   } finally {
     loading.value = false
   }
@@ -1104,6 +1661,317 @@ async function unbindIdentity(item) {
     await loadAll()
   }
 }
+
+// Base URL & Copy Utility
+const apiBaseUrl = computed(() => {
+  if (typeof window === 'undefined') return '/open/v1'
+  return `${window.location.origin}/open/v1`
+})
+
+function fallbackCopy(text, label) {
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.style.position = 'fixed'
+  ta.style.opacity = '0'
+  document.body.appendChild(ta)
+  ta.select()
+  try {
+    document.execCommand('copy')
+    showToast(`已复制${label}到剪贴板`, 'success')
+  } catch {
+    showToast('复制失败，请手动选择复制', 'error')
+  }
+  document.body.removeChild(ta)
+}
+
+function copyText(text, label = '内容') {
+  if (!text) return
+  if (navigator?.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast(`已复制${label}到剪贴板`, 'success')
+    }).catch(() => {
+      fallbackCopy(text, label)
+    })
+  } else {
+    fallbackCopy(text, label)
+  }
+}
+
+// Docs Playground State
+const docLang = ref('curl')
+const docScenario = ref('chat')
+
+const docCodeSnippets = computed(() => {
+  const base = apiBaseUrl.value
+  return {
+    chat: {
+      curl: `curl -X POST "${base}/chat-messages" \\
+  -H "Authorization: Bearer sk-agt-your-api-key" \\
+  -H "Content-Type: application/json" \\
+  -H "X-Client-Type: SN" \\
+  -H "X-Client-Id: DEV-SN-001" \\
+  -H "X-End-User: user_terminal_01" \\
+  -d '{
+    "agentId": "your-agent-id",
+    "query": "你好，请介绍一下你自己以及你可以做什么？",
+    "stream": false
+  }'`,
+      python: `import requests
+
+url = "${base}/chat-messages"
+headers = {
+    "Authorization": "Bearer sk-agt-your-api-key",
+    "Content-Type": "application/json",
+    "X-Client-Type": "SN",
+    "X-Client-Id": "DEV-SN-001",
+    "X-End-User": "user_terminal_01"
+}
+payload = {
+    "agentId": "your-agent-id",
+    "query": "你好，请介绍一下你自己以及你可以做什么？",
+    "stream": False
+}
+
+response = requests.post(url, json=payload, headers=headers)
+print(response.json())`,
+      node: `// Node.js 18+ 或前端应用
+const response = await fetch('${base}/chat-messages', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer sk-agt-your-api-key',
+    'Content-Type': 'application/json',
+    'X-Client-Type': 'SN',
+    'X-Client-Id': 'DEV-SN-001',
+    'X-End-User': 'user_terminal_01'
+  },
+  body: JSON.stringify({
+    agentId: 'your-agent-id',
+    query: '你好，请介绍一下你自己以及你可以做什么？',
+    stream: false
+  })
+});
+const data = await response.json();
+console.log(data);`
+    },
+    kb: {
+      curl: `# 1. 语义知识库检索测试
+curl -X POST "${base}/knowledge-bases/{kbId}/retrieve" \\
+  -H "Authorization: Bearer sk-agt-your-api-key" \\
+  -H "Content-Type: application/json" \\
+  -H "X-Client-Type: SN" \\
+  -H "X-Client-Id: DEV-SN-001" \\
+  -d '{
+    "query": "企业差旅标准与报销流程是什么？",
+    "topK": 3
+  }'
+
+# 2. 上传文档切片 (multipart/form-data)
+curl -X POST "${base}/knowledge-bases/{kbId}/documents" \\
+  -H "Authorization: Bearer sk-agt-your-api-key" \\
+  -H "X-Client-Type: SN" \\
+  -H "X-Client-Id: DEV-SN-001" \\
+  -F "file=@/path/to/manual.pdf"`,
+      python: `import requests
+
+# 1. 语义检索召回
+retrieve_url = "${base}/knowledge-bases/{kbId}/retrieve"
+headers = {
+    "Authorization": "Bearer sk-agt-your-api-key",
+    "Content-Type": "application/json",
+    "X-Client-Type": "SN",
+    "X-Client-Id": "DEV-SN-001"
+}
+res = requests.post(retrieve_url, json={"query": "报销标准", "topK": 3}, headers=headers)
+print("召回切片:", res.json())
+
+# 2. 上传文档切片
+upload_url = "${base}/knowledge-bases/{kbId}/documents"
+with open("manual.pdf", "rb") as f:
+    files = {"file": ("manual.pdf", f, "application/pdf")}
+    up_headers = {"Authorization": "Bearer sk-agt-your-api-key", "X-Client-Type": "SN", "X-Client-Id": "DEV-SN-001"}
+    up_res = requests.post(upload_url, files=files, headers=up_headers)
+    print("上传切片状态:", up_res.json())`,
+      node: `// 1. 语义检索召回
+const res = await fetch('${base}/knowledge-bases/{kbId}/retrieve', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer sk-agt-your-api-key',
+    'Content-Type': 'application/json',
+    'X-Client-Type': 'SN',
+    'X-Client-Id': 'DEV-SN-001'
+  },
+  body: JSON.stringify({ query: '报销标准', topK: 3 })
+});
+console.log(await res.json());
+
+// 2. 上传文档切片 (FormData)
+const form = new FormData();
+form.append('file', blobFile, 'manual.pdf');
+const upRes = await fetch('${base}/knowledge-bases/{kbId}/documents', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer sk-agt-your-api-key',
+    'X-Client-Type': 'SN',
+    'X-Client-Id': 'DEV-SN-001'
+  },
+  body: form
+});
+console.log(await upRes.json());`
+    },
+    agents: {
+      curl: `# 1. 分页拉取已授权的智能体列表
+curl -X GET "${base}/agents?page=1&size=20" \\
+  -H "Authorization: Bearer sk-agt-your-api-key" \\
+  -H "X-Client-Type: SN" \\
+  -H "X-Client-Id: DEV-SN-001"
+
+# 2. 为智能体批量绑定私有知识库
+curl -X PUT "${base}/agents/{agentId}/knowledge-bases" \\
+  -H "Authorization: Bearer sk-agt-your-api-key" \\
+  -H "Content-Type: application/json" \\
+  -H "X-Client-Type: SN" \\
+  -H "X-Client-Id: DEV-SN-001" \\
+  -d '{
+    "knowledgeBaseIds": ["kb_enterprise_rules", "kb_tech_faq"]
+  }'`,
+      python: `import requests
+
+headers = {
+    "Authorization": "Bearer sk-agt-your-api-key",
+    "Content-Type": "application/json",
+    "X-Client-Type": "SN",
+    "X-Client-Id": "DEV-SN-001"
+}
+
+# 1. 查询智能体列表
+agents = requests.get("${base}/agents?page=1&size=20", headers=headers).json()
+print("已授权智能体:", agents)
+
+# 2. 绑定知识库
+bind_url = "${base}/agents/{agentId}/knowledge-bases"
+bind_res = requests.put(bind_url, json={"knowledgeBaseIds": ["kb_123"]}, headers=headers)
+print("绑定知识库结果:", bind_res.json())`,
+      node: `const headers = {
+  'Authorization': 'Bearer sk-agt-your-api-key',
+  'Content-Type': 'application/json',
+  'X-Client-Type': 'SN',
+  'X-Client-Id': 'DEV-SN-001'
+};
+
+// 1. 获取授权智能体列表
+const list = await fetch('${base}/agents?page=1&size=20', { headers }).then(r => r.json());
+console.log('已授权智能体:', list);
+
+// 2. 绑定知识库
+const bind = await fetch('${base}/agents/{agentId}/knowledge-bases', {
+  method: 'PUT',
+  headers,
+  body: JSON.stringify({ knowledgeBaseIds: ['kb_123'] })
+}).then(r => r.json());
+console.log('绑定结果:', bind);`
+    }
+  }
+})
+
+const activeCodeSnippet = computed(() => {
+  const sc = docCodeSnippets.value[docScenario.value] || docCodeSnippets.value.chat
+  return sc[docLang.value] || sc.curl
+})
+
+// Usage Metrics State
+const usageRange = ref('30d')
+const usageSubTab = ref('daily')
+const usageSummary = ref({})
+const usageDailyList = ref([])
+const usageLogs = ref([])
+const usageLogsPage = ref(1)
+const usageLogsResult = ref({ total: 0, page: 1, totalPages: 1, size: 10 })
+const loadingUsage = ref(false)
+
+const avgLatencyText = computed(() => {
+  const calls = usageSummary.value.calls || 0
+  const sum = usageSummary.value.latencySumMs || 0
+  if (!calls) return '0 ms'
+  return `${Math.round(sum / calls)} ms`
+})
+
+function httpStatusClass(status) {
+  if (status >= 200 && status < 300) return 'st-success'
+  if (status === 403 || status === 422 || status === 429) return 'st-denied'
+  return 'st-error'
+}
+
+function changeUsageRange(r) {
+  usageRange.value = r
+  loadUsage()
+}
+
+function changeUsageLogsPage(delta) {
+  const next = usageLogsPage.value + delta
+  const max = Math.max(1, usageLogsResult.value.totalPages || 1)
+  if (next < 1 || next > max) return
+  usageLogsPage.value = next
+  loadUsageLogs()
+}
+
+function setUsageLogsPage(p) {
+  usageLogsPage.value = p
+  loadUsageLogs()
+}
+
+async function loadUsage() {
+  loadingUsage.value = true
+  try {
+    let from = ''
+    let to = ''
+    const now = new Date()
+    const fmt = (d) => {
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+    to = fmt(now)
+    if (usageRange.value === 'today') {
+      from = to
+    } else if (usageRange.value === '7d') {
+      const d = new Date()
+      d.setDate(d.getDate() - 7)
+      from = fmt(d)
+    } else {
+      const d = new Date()
+      d.setDate(d.getDate() - 30)
+      from = fmt(d)
+    }
+
+    const [sumRes, dailyRes] = await Promise.all([
+      http.get('/api/security/usage/summary', { from, to }),
+      http.get('/api/security/usage/daily', { from, to })
+    ])
+    if (sumRes.success) usageSummary.value = sumRes.data || {}
+    if (dailyRes.success) usageDailyList.value = dailyRes.data || []
+    await loadUsageLogs()
+  } finally {
+    loadingUsage.value = false
+  }
+}
+
+async function loadUsageLogs() {
+  const res = await http.get('/api/security/usage/logs', { page: usageLogsPage.value, size: 10 })
+  if (res.success) {
+    usageLogs.value = res.data?.records || res.data?.content || []
+    usageLogsResult.value = {
+      total: res.data?.total || 0,
+      page: res.data?.page || usageLogsPage.value,
+      totalPages: res.data?.totalPages || 1,
+      size: res.data?.size || 10
+    }
+  }
+}
+
+watch(innerTab, (tab) => {
+  if (tab === 'usage') loadUsage()
+})
 
 onMounted(loadAll)
 </script>
@@ -1842,10 +2710,461 @@ onMounted(loadAll)
   gap: 7px;
 }
 
+/* ================= Docs & Quickstart Styles ================= */
+.sec-doc-hero {
+  padding: 24px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(16, 185, 129, 0.04)), var(--bg-card);
+}
+
+.sec-doc-hero-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.sec-doc-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+.sec-doc-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 6px 0;
+}
+
+.sec-doc-desc {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  margin: 0;
+  max-width: 680px;
+  line-height: 1.5;
+}
+
+.sec-doc-baseurl-box {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 320px;
+}
+
+.sec-doc-baseurl-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+}
+
+.sec-doc-baseurl-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sec-doc-baseurl-content code {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--accent-blue);
+  word-break: break-all;
+}
+
+.btn-copy-doc {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-copy-doc:hover {
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.sec-doc-headers-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-color);
+}
+
+.sec-doc-header-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.header-name {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-format code {
+  font-size: 0.78rem;
+  color: var(--accent-blue);
+  background: var(--bg-input);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.header-desc {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.badge-req {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(244, 63, 94, 0.15);
+  color: var(--accent-rose);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.badge-opt {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+/* Code Playground */
+.sec-code-card {
+  padding: 18px;
+}
+
+.code-head-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.code-head-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.doc-scenario-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-input);
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.btn-scenario {
+  border: none;
+  background: transparent;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-scenario.active {
+  background: var(--accent-blue);
+  color: #fff;
+  font-weight: 600;
+}
+
+.doc-lang-tabs {
+  display: flex;
+  gap: 3px;
+  background: var(--bg-input);
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.btn-lang {
+  border: none;
+  background: transparent;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-lang.active {
+  background: var(--bg-card);
+  color: var(--accent-blue);
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.btn-copy-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-copy-code:hover {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.sec-code-pre {
+  background: #090d16;
+  color: #d1d5db;
+  padding: 18px;
+  border-radius: 10px;
+  margin: 14px 0 0 0;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* API Directory */
+.sec-api-directory {
+  padding: 20px;
+}
+
+.sec-api-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.api-group-item {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.api-group-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.api-endpoints-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.endpoint-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-color);
+  transition: background 0.15s ease;
+}
+
+.endpoint-row:last-child {
+  border-bottom: none;
+}
+
+.endpoint-row:hover {
+  background: rgba(59, 130, 246, 0.04);
+}
+
+.method-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  width: 58px;
+  text-align: center;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+.method-badge.get {
+  background: rgba(2, 132, 199, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.method-badge.post {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.method-badge.put {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.method-badge.delete {
+  background: rgba(244, 63, 94, 0.15);
+  color: #fb7185;
+  border: 1px solid rgba(251, 113, 133, 0.3);
+}
+
+.endpoint-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  min-width: 260px;
+  flex-shrink: 0;
+}
+
+.scope-tag {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(139, 92, 246, 0.12);
+  color: #c084fc;
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.endpoint-desc {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+.sec-error-dict {
+  padding: 20px;
+}
+
+.table-responsive {
+  overflow-x: auto;
+}
+
+/* ================= Usage Styles ================= */
+.usage-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.usage-title-row h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.usage-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.metric-sub-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.sec-sub-tabs-row {
+  margin: 4px 0 0 0;
+}
+
+.sec-sub-tabs {
+  display: inline-flex;
+  gap: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.btn-sub-tab {
+  border: none;
+  background: transparent;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-sub-tab.active {
+  background: var(--accent-blue);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
 @media (max-width: 1100px) {
   .sec-split,
   .sec-policy-grid,
   .users-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  .sec-doc-headers-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .sec-doc-headers-grid {
     grid-template-columns: 1fr;
   }
 }
