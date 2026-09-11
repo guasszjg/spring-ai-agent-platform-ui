@@ -1,84 +1,84 @@
 <template>
   <div class="app-layout">
     <aside class="app-sidebar" :class="{ collapsed: sidebarCollapsed }">
-      <div>
-        <div class="sidebar-header">
-          <div class="sidebar-header-row">
-            <a
-              class="sidebar-brand"
-              :title="sidebarCollapsed ? '点击展开侧边栏' : 'AgentMatrix Enterprise'"
-              @click.prevent="sidebarCollapsed ? toggleSidebar() : (currentTab = 'overview')"
-            >
-              <AgentLogo :size="sidebarCollapsed ? 28 : 32" />
-              <div v-show="!sidebarCollapsed" class="brand-text">
-                <span class="brand-title">AgentMatrix</span>
-                <span class="brand-edition">Enterprise v2.6</span>
-              </div>
-            </a>
-            <button
-              v-show="!sidebarCollapsed"
-              type="button"
-              class="btn-sidebar-header-toggle"
-              title="收起侧边栏"
-              @click.stop="toggleSidebar"
-            >
-              <i class="fa-solid fa-chevron-left"></i>
-            </button>
-          </div>
-        </div>
-        <nav class="sidebar-nav">
-          <div
-            v-for="(group, gIdx) in navGroups"
-            :key="group.id"
-            class="nav-group-wrapper"
+      <div class="sidebar-header">
+        <div class="sidebar-header-row">
+          <a
+            class="sidebar-brand"
+            :title="sidebarCollapsed ? '点击展开侧边栏' : 'AgentMatrix Enterprise'"
+            @click.prevent="sidebarCollapsed ? toggleSidebar() : (currentTab = 'overview')"
           >
-            <!-- Category Section Header (Expanded) -->
-            <div v-show="!sidebarCollapsed" class="nav-section-header">
-              <span class="nav-section-title">
-                <i :class="group.icon"></i>
-                <span>{{ group.title }}</span>
-              </span>
-              <span class="nav-section-tag">{{ group.enTitle }}</span>
+            <AgentLogo :size="sidebarCollapsed ? 30 : 34" />
+            <div v-show="!sidebarCollapsed" class="brand-text">
+              <span class="brand-title">AgentMatrix</span>
+              <span class="brand-edition">Enterprise v2.6</span>
             </div>
-            <!-- Collapsed Divider -->
-            <div v-show="sidebarCollapsed && gIdx > 0" class="nav-section-divider" :title="group.title"></div>
-
-            <!-- Submenu Items -->
-            <button
-              v-for="item in group.items"
-              :key="item.id"
-              class="sidebar-nav-item"
-              :class="{ active: currentTab === item.id }"
-              :title="item.title || item.name"
-              @click="handleNavClick(item)"
-            >
-              <i :class="item.icon"></i>
-              <span v-show="!sidebarCollapsed" class="nav-item-name">{{ item.name }}</span>
-              <span
-                v-if="!sidebarCollapsed && item.badge"
-                class="nav-badge-pill"
-                :class="'badge-' + (item.badgeType || 'default')"
-              >
-                {{ item.badge }}
-              </span>
-              <span
-                v-else-if="!sidebarCollapsed && item.count !== undefined"
-                class="nav-count-pill"
-              >
-                {{ item.count }}
-              </span>
-            </button>
-          </div>
-        </nav>
-      </div>
-      <div class="sidebar-footer">
-        <div class="sidebar-cluster-status" :title="'集群状态: 99.99% 在线'">
-          <span class="pulse-dot-green"></span>
-          <span v-show="!sidebarCollapsed">集群状态: 99.99% 在线</span>
+          </a>
+          <button
+            v-show="!sidebarCollapsed"
+            type="button"
+            class="btn-sidebar-header-toggle"
+            title="收起侧边栏"
+            @click.stop="toggleSidebar"
+          >
+            <i class="fa-solid fa-chevron-left"></i>
+          </button>
         </div>
-        <div class="sidebar-user-box" style="cursor: pointer;" title="点击打开个人中心与安全设置" @click="openProfileModal">
-          <div class="user-meta-left" :title="user.nickname || user.username || '平台用户'">
-            <img :src="userAvatar" class="user-avatar-sidebar" alt="Avatar">
+      </div>
+
+      <nav class="sidebar-nav">
+        <div
+          v-for="(group, gIdx) in navGroups"
+          :key="group.id"
+          class="nav-group-wrapper"
+        >
+          <!-- Category Section Header (Expanded) -->
+          <div v-show="!sidebarCollapsed" class="nav-section-header">
+            <span class="nav-section-title">
+              <i :class="group.icon"></i>
+              <span>{{ group.title }}</span>
+            </span>
+          </div>
+          <!-- Collapsed Divider -->
+          <div v-show="sidebarCollapsed && gIdx > 0" class="nav-section-divider" :title="group.title"></div>
+
+          <!-- Submenu Items -->
+          <button
+            v-for="item in group.items"
+            :key="item.id"
+            class="sidebar-nav-item"
+            :class="{ active: currentTab === item.id }"
+            :title="item.title || item.name"
+            @click="handleNavClick(item)"
+          >
+            <span class="nav-item-icon-wrap">
+              <i :class="item.icon"></i>
+            </span>
+            <span v-show="!sidebarCollapsed" class="nav-item-name">{{ item.name }}</span>
+            <span
+              v-if="!sidebarCollapsed && item.badge"
+              class="nav-badge-pill"
+              :class="'badge-' + (item.badgeType || 'default')"
+            >
+              {{ item.badge }}
+            </span>
+            <span
+              v-else-if="!sidebarCollapsed && item.count !== undefined"
+              class="nav-count-pill"
+            >
+              {{ item.count }}
+            </span>
+          </button>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user-card" :title="user.nickname || user.username || '平台用户'" @click="openProfileModal">
+          <div class="user-meta-left">
+            <div class="user-avatar-wrap">
+              <img :src="userAvatar" class="user-avatar-sidebar" alt="Avatar">
+              <span class="avatar-online-dot"></span>
+            </div>
             <div v-show="!sidebarCollapsed" class="user-text-info">
               <span class="user-name-text">{{ user.nickname || user.username || '平台用户' }}</span>
               <span class="user-role-text" :class="'role-' + (user.role || '').toLowerCase()">
@@ -89,7 +89,7 @@
               </span>
             </div>
           </div>
-          <button class="btn-sidebar-logout" title="退出登录" @click.stop="logout">
+          <button v-show="!sidebarCollapsed" class="btn-sidebar-logout" title="退出登录" @click.stop="logout">
             <i class="fa-solid fa-arrow-right-from-bracket"></i>
           </button>
         </div>
@@ -710,9 +710,7 @@ const navGroups = computed(() => {
           id: 'overview',
           name: '概览分析',
           title: '概览分析 (Token消耗与指标)',
-          icon: 'fa-solid fa-chart-pie',
-          badge: '实时',
-          badgeType: 'blue'
+          icon: 'fa-solid fa-chart-pie'
         }
       ]
     },
@@ -733,9 +731,7 @@ const navGroups = computed(() => {
           id: 'templates',
           name: '场景模版中心',
           title: '场景模版中心 (预置行业智能体)',
-          icon: 'fa-solid fa-layer-group',
-          badge: '模版',
-          badgeType: 'purple'
+          icon: 'fa-solid fa-layer-group'
         }
       ]
     },
@@ -749,9 +745,7 @@ const navGroups = computed(() => {
           id: 'knowledge',
           name: '企业私有知识库',
           title: '企业私有知识库 (RAG检索)',
-          icon: 'fa-solid fa-book-bookmark',
-          badge: 'RAG',
-          badgeType: 'emerald'
+          icon: 'fa-solid fa-book-bookmark'
         }
       ]
     }
@@ -765,17 +759,13 @@ const navGroups = computed(() => {
       id: 'gateway',
       name: '模型网关路由',
       title: '模型网关路由 (LLM Channels & Models)',
-      icon: 'fa-solid fa-route',
-      badge: '路由',
-      badgeType: 'amber'
+      icon: 'fa-solid fa-route'
     })
     govItems.push({
       id: 'users',
       name: '平台用户管理',
       title: '企业租户用户管理 (RBAC)',
-      icon: 'fa-solid fa-users-gear',
-      badge: '用户',
-      badgeType: 'cyan'
+      icon: 'fa-solid fa-users-gear'
     })
   }
 
@@ -783,9 +773,7 @@ const navGroups = computed(() => {
     id: 'roles',
     name: '角色与权限矩阵',
     title: '系统固定角色与权限对照矩阵',
-    icon: 'fa-solid fa-shield-halved',
-    badge: '矩阵',
-    badgeType: 'purple'
+    icon: 'fa-solid fa-shield-halved'
   })
 
   govItems.push({
@@ -793,7 +781,7 @@ const navGroups = computed(() => {
     name: '开放与安全',
     title: '开放凭证、接入终端、护栏策略与审计',
     icon: 'fa-solid fa-fingerprint',
-    badge: 'OPEN',
+    badge: 'GATEWAY',
     badgeType: 'emerald'
   })
 
