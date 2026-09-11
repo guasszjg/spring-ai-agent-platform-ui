@@ -142,10 +142,16 @@
                 <span v-if="(k.scopes || []).length > 3" class="sec-muted">+{{ k.scopes.length - 3 }}</span>
               </td>
               <td>{{ (k.agentScope || []).length ? k.agentScope.length + ' 个' : '全部可运行' }}</td>
-              <td><span class="sec-status" :class="'st-' + (k.status || '').toLowerCase()">{{ statusLabel(k.status) }}</span></td>
+              <td>
+                <span v-if="k.status === 'ROTATING'" class="sec-status" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);" :title="'宽限截至: ' + formatTime(k.graceExpiresAt)">
+                  <i class="fa-solid fa-clock-rotate-left"></i> 轮换中 (24h)
+                </span>
+                <span v-else class="sec-status" :class="'st-' + (k.status || '').toLowerCase()">{{ statusLabel(k.status) }}</span>
+              </td>
               <td>{{ k.lastUsedAt ? formatTime(k.lastUsedAt) : '—' }}</td>
               <td style="text-align:right;">
                 <div v-if="!isViewer" class="agent-actions sec-row-actions">
+                  <button v-if="k.status === 'ACTIVE'" class="btn-card-action btn-action-icon" title="平滑轮换凭证 (旧Key进入24h宽限期)" @click="openRotateModal(k)"><i class="fa-solid fa-arrows-rotate"></i></button>
                   <button v-if="k.status === 'ACTIVE'" class="btn-card-action btn-action-icon" title="停用" @click="setKeyStatus(k, 'DISABLED')"><i class="fa-solid fa-pause"></i></button>
                   <button v-else-if="k.status === 'DISABLED'" class="btn-card-action btn-action-icon" title="启用" @click="setKeyStatus(k, 'ACTIVE')"><i class="fa-solid fa-play"></i></button>
                   <button v-if="k.status !== 'REVOKED'" class="btn-card-action btn-action-icon btn-action-danger" title="吊销" @click="setKeyStatus(k, 'REVOKED')"><i class="fa-solid fa-ban"></i></button>
@@ -1048,6 +1054,176 @@
       </div>
     </div>
   </div>
+
+    <!-- Alert Rules Section -->
+    <section v-show="innerTab === 'alerts'" class="sec-block">
+      <div class="sec-card-head" style="margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <h3 style="margin: 0; font-size: 1.15rem; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-bell" style="color: var(--accent-amber);"></i> 实时告警与通知规则
+          </h3>
+          <p class="sec-help" style="margin: 4px 0 0 0;">监控高危调用拦截、拒绝率激增与配额熔断，通过 Webhook 实时通知运营与安全团队</p>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button v-if="!isViewer" class="btn-create-agent" @click="openCreateAlertModal">
+            <i class="fa-solid fa-plus"></i> 新建告警规则
+          </button>
+          <button class="btn-filter-pill" @click="loadAlertRules">
+            <i class="fa-solid fa-rotate"></i> 刷新
+          </button>
+        </div>
+      </div>
+
+      <div class="table-view-card users-table-card">
+        <div v-if="!alertRules.length" class="users-empty-state">
+          <div class="empty-icon-wrap"><i class="fa-regular fa-bell-slash"></i></div>
+          <h4>暂无告警规则</h4>
+          <p>点击上方「新建告警规则」添加基于指标阈值的 Webhook 监控规则</p>
+        </div>
+        <table v-else class="agent-table">
+          <thead>
+            <tr>
+              <th>规则名称</th>
+              <th>监控指标</th>
+              <th>触发阈值</th>
+              <th>统计窗口</th>
+              <th>Webhook 地址</th>
+              <th>静默期</th>
+              <th>上次触发</th>
+              <th>启用状态</th>
+              <th style="text-align: right;">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in alertRules" :key="r.id">
+              <td style="font-weight: 600; color: var(--text-primary);">{{ r.name }}</td>
+              <td>
+                <span class="badge-tag-mono" style="font-size: 11px;">{{ alertMetricLabel(r.metric) }}</span>
+              </td>
+              <td>
+                <span style="font-weight: 600; color: var(--accent-rose);">
+                  {{ r.metric === 'CALL_DENIED_RATE' ? (r.threshold * 100).toFixed(0) + '%' : r.threshold }}
+                </span>
+              </td>
+              <td>{{ r.timeWindowMinutes }} 分钟</td>
+              <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" :title="r.webhookUrl">
+                <code style="font-size: 11px;">{{ r.webhookUrl }}</code>
+              </td>
+              <td>{{ r.silenceMinutes }} 分钟</td>
+              <td>{{ formatTime(r.lastTriggeredAt) }}</td>
+              <td>
+                <span class="sec-status" :class="r.enabled ? 'st-active' : 'st-disabled'">
+                  {{ r.enabled ? '已启用' : '已停用' }}
+                </span>
+              </td>
+              <td style="text-align: right;">
+                <div v-if="!isViewer" class="agent-actions sec-row-actions">
+                  <button class="btn-card-action btn-action-icon" title="测试 Webhook 发送" @click="testAlertWebhook(r)">
+                    <i class="fa-solid fa-paper-plane"></i>
+                  </button>
+                  <button class="btn-card-action btn-action-icon" title="编辑" @click="editAlertRule(r)">
+                    <i class="fa-solid fa-pen"></i>
+                  </button>
+                  <button class="btn-card-action btn-action-icon btn-action-danger" title="删除" @click="deleteAlertRule(r)">
+                    <i class="fa-regular fa-trash-can"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Rotate Key Modal -->
+    <div v-if="rotateModal.open" class="modal-backdrop open" @click.self="rotateModal.open = false">
+      <div class="modal-dialog" style="max-width: 460px;">
+        <div class="modal-header">
+          <h3 style="color: var(--accent-amber);"><i class="fa-solid fa-arrows-rotate"></i> 平滑轮换 API 凭证</h3>
+          <button class="btn-modal-close" @click="rotateModal.open = false"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size: 13px; line-height: 1.6; color: var(--text-secondary); margin-bottom: 16px;">
+            轮换操作将为凭证 <strong>「{{ rotateModal.key?.name }}」</strong> 生成一把全新的密钥明文。<br>
+            旧密钥不会立刻失效，而是进入 <strong style="color: #f59e0b;">24 小时平滑宽限期</strong>，宽限期内新旧两把密钥均可正常调用，确保线上业务无感平稳迁移。
+          </p>
+          <div class="form-group-styled">
+            <label>宽限时长 (小时)</label>
+            <input v-model.number="rotateModal.graceHours" type="number" class="form-control-styled" min="1" max="168">
+            <span class="form-help-text">推荐 24 小时，超时后旧密钥将自动变为已失效 (REVOKED)</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" @click="rotateModal.open = false">取消</button>
+          <button type="button" class="btn-create-agent" :disabled="rotateModal.saving" @click="confirmRotateKey">
+            <i :class="rotateModal.saving ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-check'"></i>
+            <span>{{ rotateModal.saving ? '正在轮换...' : '立即轮换并生成新密钥' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alert Rule Create/Edit Modal -->
+    <div v-if="alertModal.open" class="modal-backdrop open" @click.self="alertModal.open = false">
+      <div class="modal-dialog" style="max-width: 520px;">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-bell"></i> {{ alertModal.id ? '编辑告警规则' : '新建告警规则' }}</h3>
+          <button class="btn-modal-close" @click="alertModal.open = false"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <form @submit.prevent="saveAlertRuleForm">
+          <div class="modal-body">
+            <div class="form-group-styled">
+              <label>规则名称 *</label>
+              <input v-model="alertModal.name" class="form-control-styled" placeholder="例如：高危调用激增告警" required>
+            </div>
+            <div class="form-group-styled">
+              <label>监控指标 *</label>
+              <select v-model="alertModal.metric" class="form-control-styled">
+                <option value="CALL_DENIED_RATE">调用拒绝率超标 (CALL_DENIED_RATE)</option>
+                <option value="HIGH_RISK_COUNT">高危拦截频发 (HIGH_RISK_COUNT)</option>
+                <option value="QUOTA_EXCEEDED_COUNT">配额熔断频发 (QUOTA_EXCEEDED_COUNT)</option>
+              </select>
+            </div>
+            <div class="sec-split" style="grid-template-columns: 1fr 1fr; gap: 14px;">
+              <div class="form-group-styled">
+                <label>触发阈值 * {{ alertModal.metric === 'CALL_DENIED_RATE' ? '(小数，如0.2=20%)' : '(次数)' }}</label>
+                <input v-model.number="alertModal.threshold" type="number" step="0.01" class="form-control-styled" required>
+              </div>
+              <div class="form-group-styled">
+                <label>统计窗口 (分钟)</label>
+                <input v-model.number="alertModal.timeWindowMinutes" type="number" class="form-control-styled" min="1" max="1440" required>
+              </div>
+            </div>
+            <div class="form-group-styled">
+              <label>Webhook URL *</label>
+              <input v-model="alertModal.webhookUrl" class="form-control-styled" placeholder="https://oapi.dingtalk.com/robot/send?..." required>
+            </div>
+            <div class="sec-split" style="grid-template-columns: 1fr 1fr; gap: 14px;">
+              <div class="form-group-styled">
+                <label>签名秘钥 (Secret，可选)</label>
+                <input v-model="alertModal.webhookSecret" type="password" class="form-control-styled" placeholder="HMAC-SHA256 签名私钥">
+              </div>
+              <div class="form-group-styled">
+                <label>静默防抖时长 (分钟)</label>
+                <input v-model.number="alertModal.silenceMinutes" type="number" class="form-control-styled" min="1" max="1440" required>
+              </div>
+            </div>
+            <div class="form-group-styled" style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
+              <label style="margin: 0; cursor: pointer;">是否立即启用</label>
+              <input v-model="alertModal.enabled" type="checkbox" style="width: 18px; height: 18px; cursor: pointer;">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn-secondary" @click="alertModal.open = false">取消</button>
+            <button type="submit" class="btn-create-agent" :disabled="alertModal.saving">
+              <i :class="alertModal.saving ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-check'"></i>
+              <span>保存规则</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
 </template>
 
 <script setup>
@@ -1078,7 +1254,8 @@ const tabs = [
   { id: 'usage', name: '用量统计', icon: 'fa-solid fa-chart-simple' },
   { id: 'policy', name: '护栏策略', icon: 'fa-solid fa-shield-halved' },
   { id: 'audit', name: '审计日志', icon: 'fa-solid fa-list' },
-  { id: 'identity', name: '账号对接', icon: 'fa-solid fa-link' }
+  { id: 'identity', name: '账号对接', icon: 'fa-solid fa-link' },
+  { id: 'alerts', name: '告警规则', icon: 'fa-solid fa-bell' }
 ]
 
 watch(() => props.initialTab, (v) => {
@@ -1846,6 +2023,153 @@ watch(innerTab, (tab) => {
   if (tab === 'usage') loadUsage()
 })
 
+
+// Alert Rules State & Methods
+const alertRules = ref([])
+const alertModal = reactive({
+  open: false,
+  id: '',
+  name: '',
+  metric: 'CALL_DENIED_RATE',
+  threshold: 0.2,
+  timeWindowMinutes: 15,
+  webhookUrl: '',
+  webhookSecret: '',
+  enabled: true,
+  silenceMinutes: 30,
+  saving: false
+})
+
+const rotateModal = reactive({
+  open: false,
+  key: null,
+  graceHours: 24,
+  saving: false
+})
+
+function alertMetricLabel(m) {
+  return ({
+    CALL_DENIED_RATE: '调用拒绝率超标',
+    HIGH_RISK_COUNT: '高危拦截频发',
+    QUOTA_EXCEEDED_COUNT: '配额熔断频发'
+  })[m] || m
+}
+
+async function loadAlertRules() {
+  const res = await http.get('/api/security/alerts/rules')
+  if (res.success) {
+    alertRules.value = res.data || []
+  }
+}
+
+function openCreateAlertModal() {
+  Object.assign(alertModal, {
+    open: true,
+    id: '',
+    name: '',
+    metric: 'CALL_DENIED_RATE',
+    threshold: 0.2,
+    timeWindowMinutes: 15,
+    webhookUrl: '',
+    webhookSecret: '',
+    enabled: true,
+    silenceMinutes: 30,
+    saving: false
+  })
+}
+
+function editAlertRule(r) {
+  Object.assign(alertModal, {
+    open: true,
+    id: r.id,
+    name: r.name,
+    metric: r.metric,
+    threshold: r.threshold,
+    timeWindowMinutes: r.timeWindowMinutes || 15,
+    webhookUrl: r.webhookUrl,
+    webhookSecret: r.webhookSecret || '',
+    enabled: r.enabled !== false,
+    silenceMinutes: r.silenceMinutes || 30,
+    saving: false
+  })
+}
+
+async function saveAlertRuleForm() {
+  alertModal.saving = true
+  try {
+    const res = await http.post('/api/security/alerts/rules', {
+      id: alertModal.id || undefined,
+      name: alertModal.name,
+      metric: alertModal.metric,
+      threshold: alertModal.threshold,
+      timeWindowMinutes: alertModal.timeWindowMinutes,
+      webhookUrl: alertModal.webhookUrl,
+      webhookSecret: alertModal.webhookSecret,
+      enabled: alertModal.enabled,
+      silenceMinutes: alertModal.silenceMinutes
+    })
+    if (res.success) {
+      alertModal.open = false
+      showToast('告警规则已保存', 'success')
+      await loadAlertRules()
+    } else {
+      showToast(res.message || '保存失败', 'error')
+    }
+  } finally {
+    alertModal.saving = false
+  }
+}
+
+async function testAlertWebhook(r) {
+  showToast('正在发送测试 Webhook...', 'info')
+  const res = await http.post(`/api/security/alerts/rules/${r.id}/test`)
+  if (res.success && res.data?.success) {
+    showToast(`Webhook 测试发送成功 (HTTP ${res.data.statusCode}, ${res.data.latencyMs}ms)`, 'success')
+  } else {
+    showToast(res.data?.error || res.message || 'Webhook 测试失败', 'error')
+  }
+}
+
+async function deleteAlertRule(r) {
+  if (!confirm(`确定删除告警规则「${r.name}」吗？`)) return
+  const res = await http.del(`/api/security/alerts/rules/${r.id}`)
+  if (res.success) {
+    showToast('告警规则已删除', 'success')
+    await loadAlertRules()
+  } else {
+    showToast(res.message || '删除失败', 'error')
+  }
+}
+
+// Key Graceful Rotation
+function openRotateModal(k) {
+  rotateModal.key = k
+  rotateModal.graceHours = 24
+  rotateModal.open = true
+}
+
+async function confirmRotateKey() {
+  if (!rotateModal.key) return
+  rotateModal.saving = true
+  try {
+    const res = await http.post(`/api/open-api-keys/${rotateModal.key.id}/rotate`, {
+      graceHours: rotateModal.graceHours || 24
+    })
+    if (res.success) {
+      rotateModal.open = false
+      plaintextModal.value = res.data?.newPlaintext || ''
+      plaintextModal.open = true
+      showToast('凭证已平滑轮换，新密钥已生效，旧密钥进入 24h 宽限期', 'success')
+      await loadAll()
+    } else {
+      showToast(res.message || '轮换失败', 'error')
+    }
+  } finally {
+    rotateModal.saving = false
+  }
+}
+
+watch(innerTab, (tab) => { if (tab === 'alerts') loadAlertRules() })
 onMounted(loadAll)
 </script>
 

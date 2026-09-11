@@ -115,6 +115,7 @@
             <th>用户身份</th>
             <th>系统角色</th>
             <th>运行状态</th>
+            <th>开放资产</th>
             <th>安全凭据</th>
             <th>注册时间</th>
             <th style="text-align: right;">账号治理操作</th>
@@ -151,6 +152,18 @@
               <div class="badge-status" :class="statusClass(u.status)">
                 <span class="status-dot"></span>
                 <span>{{ statusLabel(u.status) }}</span>
+              </div>
+            </td>
+
+            <!-- Open Platform Assets -->
+            <td>
+              <div style="display: flex; flex-direction: column; gap: 2px; font-size: 11px;">
+                <span style="color: var(--text-primary); font-weight: 500;">
+                  <i class="fa-solid fa-key" style="color: var(--accent-blue); width: 14px;"></i> {{ u.keyCount || 0 }} 凭证
+                  <span style="color: var(--text-muted); margin: 0 4px;">·</span>
+                  <i class="fa-solid fa-mobile-screen" style="color: var(--accent-emerald); width: 14px;"></i> {{ u.clientCount || 0 }} 终端
+                </span>
+                <span style="color: var(--text-muted);">今日调用: <strong style="color: var(--text-secondary);">{{ u.todayCalls || 0 }}</strong> 次</span>
               </div>
             </td>
 
