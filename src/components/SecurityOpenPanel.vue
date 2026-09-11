@@ -401,29 +401,80 @@
 
     <!-- Audit -->
     <section v-show="innerTab === 'audit'" class="sec-block">
+      <div class="sec-card-head" style="margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <div class="form-group-inline" style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">风险等级:</label>
+            <select v-model="auditFilterRisk" class="filter-select-sm" @change="auditPage = 1; loadAudit()">
+              <option value="">全部风险</option>
+              <option value="HIGH">高危 (HIGH)</option>
+              <option value="MEDIUM">中危 (MEDIUM)</option>
+              <option value="LOW">低危 (LOW)</option>
+            </select>
+          </div>
+          <div class="form-group-inline" style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">执行结果:</label>
+            <select v-model="auditFilterResult" class="filter-select-sm" @change="auditPage = 1; loadAudit()">
+              <option value="">全部结果</option>
+              <option value="SUCCESS">成功 (SUCCESS)</option>
+              <option value="DENIED">已拦截 (DENIED)</option>
+              <option value="BLOCKED">内容阻断 (BLOCKED)</option>
+              <option value="ERROR">执行异常 (ERROR)</option>
+            </select>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-filter-pill" @click="exportAuditCsv">
+            <i class="fa-solid fa-file-export"></i> 导出审计 CSV
+          </button>
+          <button class="btn-filter-pill" @click="loadAudit">
+            <i class="fa-solid fa-rotate"></i> 刷新
+          </button>
+        </div>
+      </div>
+
       <div class="table-view-card users-table-card">
         <div v-if="!auditEvents.length" class="users-empty-state">
           <div class="empty-icon-wrap"><i class="fa-solid fa-clipboard-list"></i></div>
           <h4>暂无审计记录</h4>
-          <p>开放调用、凭证签发与策略变更会按发生时间出现在这里</p>
+          <p>开放调用、凭证签发、安全阻断与管理操作会按发生时间出现在这里</p>
         </div>
         <table v-else class="agent-table">
           <thead>
             <tr>
               <th>时间</th>
-              <th>动作</th>
+              <th>操作主体</th>
+              <th>动作行为</th>
               <th>结果</th>
-              <th>原因</th>
-              <th>资源</th>
+              <th>风险等级</th>
+              <th>原因码</th>
+              <th>关联资源</th>
+              <th>IP / 请求ID</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="ev in auditEvents" :key="ev.id">
-              <td>{{ formatTime(ev.occurredAt) }}</td>
-              <td>{{ ev.action }}</td>
+              <td style="white-space: nowrap;">{{ formatTime(ev.occurredAt) }}</td>
+              <td>
+                <span class="badge-tag-mono" style="font-size: 11px;">{{ ev.actorType }}</span>
+                <span v-if="ev.actorUserId" style="margin-left: 4px; font-size: 12px; color: var(--text-muted);">{{ ev.actorUserId }}</span>
+              </td>
+              <td><code style="font-size: 12px;">{{ ev.action }}</code></td>
               <td><span class="sec-status" :class="'st-' + (ev.result || '').toLowerCase()">{{ statusLabel(ev.result) }}</span></td>
-              <td>{{ ev.reasonCode || '—' }}</td>
-              <td>{{ ev.resourceType }} {{ ev.resourceId || '' }}</td>
+              <td>
+                <span v-if="ev.riskLevel === 'HIGH'" class="status-badge danger" style="font-size: 11px;">高危</span>
+                <span v-else-if="ev.riskLevel === 'MEDIUM'" class="status-badge warning" style="font-size: 11px;">中危</span>
+                <span v-else class="status-badge success" style="font-size: 11px;">低危</span>
+              </td>
+              <td><span style="font-size: 12px; color: var(--text-secondary);">{{ ev.reasonCode || '—' }}</span></td>
+              <td>
+                <span v-if="ev.resourceType" style="font-size: 12px;">{{ ev.resourceType }} <span v-if="ev.resourceId" style="color: var(--text-muted);">#{{ ev.resourceId }}</span></span>
+                <span v-else style="color: var(--text-muted);">—</span>
+              </td>
+              <td style="font-size: 11px; color: var(--text-muted);">
+                <div>{{ ev.clientIp || '127.0.0.1' }}</div>
+                <div v-if="ev.requestId" style="font-family: monospace; font-size: 10px;">{{ ev.requestId }}</div>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -1058,6 +1109,8 @@ const policy = reactive({
 const sensitiveText = ref('')
 const savingPolicy = ref(false)
 const auditEvents = ref([])
+const auditFilterRisk = ref('')
+const auditFilterResult = ref('')
 const auditPage = ref(1)
 const auditPageResult = ref({ total: 0, page: 1, totalPages: 1, size: 10 })
 const providers = ref([])
@@ -1333,6 +1386,7 @@ function statusLabel(s) {
     PENDING: '待审批',
     SUCCESS: '成功',
     DENIED: '拒绝',
+    BLOCKED: '阻断',
     ERROR: '失败',
     PENDING_SYNC: '待同步',
     SYNC_FAILED: '同步失败'
@@ -1375,7 +1429,10 @@ async function loadAll() {
 }
 
 async function loadAudit() {
-  const res = await http.get('/api/security/audit-events', { page: auditPage.value, size: 10 })
+  const params = { page: auditPage.value, size: 10 }
+  if (auditFilterRisk.value) params.riskLevel = auditFilterRisk.value
+  if (auditFilterResult.value) params.result = auditFilterResult.value
+  const res = await http.get('/api/security/audit-events', params)
   if (res.success) {
     auditEvents.value = res.data?.records || res.data?.content || []
     auditPageResult.value = {
@@ -1385,6 +1442,20 @@ async function loadAudit() {
       size: res.data?.size || 10
     }
   }
+}
+
+function exportAuditCsv() {
+  const query = new URLSearchParams()
+  if (auditFilterRisk.value) query.append('riskLevel', auditFilterRisk.value)
+  if (auditFilterResult.value) query.append('result', auditFilterResult.value)
+  const qs = query.toString() ? '?' + query.toString() : ''
+  const link = document.createElement('a')
+  link.href = '/api/security/audit-events/export-csv' + qs
+  link.setAttribute('download', `audit_events_${new Date().toISOString().slice(0, 10)}.csv`)
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  showToast('正在导出并下载审计日志 CSV', 'success')
 }
 
 function changeAuditPage(delta) {
