@@ -245,6 +245,50 @@
                 </tbody>
               </table>
             </div>
+
+            <div class="spec-sub-section" style="margin-top: 16px;">
+              <h5 style="margin: 0 0 8px 0; font-size: 0.86rem; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
+                <i class="fa-solid fa-reply-all" style="color: var(--accent-blue);"></i> 网关响应标头规范 (Gateway Response Headers)
+              </h5>
+              <div class="table-responsive">
+                <table class="spec-table">
+                  <thead>
+                    <tr>
+                      <th>响应标头 (Header)</th>
+                      <th>类型</th>
+                      <th>说明</th>
+                      <th>示例</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><code>X-RateLimit-Limit</code></td>
+                      <td><span class="type-pill">integer</span></td>
+                      <td>当前终端或凭证配置的每分钟请求上限 (RPM)</td>
+                      <td><code>120</code></td>
+                    </tr>
+                    <tr>
+                      <td><code>X-RateLimit-Remaining</code></td>
+                      <td><span class="type-pill">integer</span></td>
+                      <td>当前窗口内令牌桶剩余可用请求令牌数</td>
+                      <td><code>118</code></td>
+                    </tr>
+                    <tr>
+                      <td><code>X-RateLimit-Reset</code></td>
+                      <td><span class="type-pill">integer</span></td>
+                      <td>令牌桶完全补充恢复至上限的剩余秒数</td>
+                      <td><code>45</code></td>
+                    </tr>
+                    <tr>
+                      <td><code>X-Idempotent-Replay</code></td>
+                      <td><span class="type-pill">boolean</span></td>
+                      <td>若命中 24h 幂等键防抖由网关重放缓存结果，则此标头值为 true</td>
+                      <td><code>true</code></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
           <!-- Path / Query Parameters Spec -->
@@ -421,8 +465,26 @@
                   <tr>
                     <td><span class="status-badge-err">429</span></td>
                     <td><code>rate_limited</code></td>
-                    <td>超过每分钟最大请求频次限制 (RPM)</td>
-                    <td>降低调用并发或引入退避重试机制</td>
+                    <td>超过每分钟最大请求频次限制 (RPM 令牌桶耗尽)</td>
+                    <td>降低调用并发，或引入指数退避重试 (Exponential Backoff)</td>
+                  </tr>
+                  <tr>
+                    <td><span class="status-badge-err">429</span></td>
+                    <td><code>quota_exceeded</code></td>
+                    <td>今日累计 Token 消耗达到预设日熔断上限（成本保护）</td>
+                    <td>联系管理员提升 Token 每日配额，或等待次日 00:00 自动重置</td>
+                  </tr>
+                  <tr>
+                    <td><span class="status-badge-err">403</span></td>
+                    <td><code>outside_allowed_hours</code></td>
+                    <td>当前时间不在允许的运营服务时段（工作时间窗）内</td>
+                    <td>请在护栏策略指定的有效服务时间内发起调用</td>
+                  </tr>
+                  <tr>
+                    <td><span class="status-badge-err">403</span></td>
+                    <td><code>client_inactive</code></td>
+                    <td>上报的接入终端处于停用状态</td>
+                    <td>请前往「接入终端」管理列表中重新启用该终端</td>
                   </tr>
                 </tbody>
               </table>

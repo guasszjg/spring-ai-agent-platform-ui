@@ -180,13 +180,76 @@
             <option value="PENDING">待审批</option>
             <option value="DISABLED">停用</option>
           </select>
+          <button
+            v-if="!isViewer"
+            type="button"
+            class="btn-outline-action"
+            :disabled="selectedPendingClientIds.length === 0 || batchApproving"
+            @click="batchApproveSelected"
+            title="批量批准选中的待审批接入终端"
+          >
+            <i :class="batchApproving ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-check-double'"></i>
+            <span>批量批准 ({{ selectedPendingClientIds.length }})</span>
+          </button>
+          <button
+            type="button"
+            class="btn-outline-action"
+            @click="exportCsv"
+            title="导出全部接入终端清单为 CSV 表格"
+          >
+            <i class="fa-solid fa-file-export"></i>
+            <span>导出 CSV</span>
+          </button>
+          <button
+            v-if="!isViewer"
+            type="button"
+            class="btn-outline-action"
+            @click="openImportCsvModal"
+            title="批量导入接入终端"
+          >
+            <i class="fa-solid fa-file-import"></i>
+            <span>导入 CSV</span>
+          </button>
           <button v-if="!isViewer" class="btn-create-user" @click="openCreateClient">
             <i class="fa-solid fa-plus"></i><span>登记终端</span>
           </button>
         </div>
       </div>
+
+      <!-- Selection Banner -->
+      <div v-if="selectedClientIds.length > 0" class="sec-selection-banner">
+        <div class="selection-banner-text">
+          <i class="fa-solid fa-circle-check" style="color: var(--accent-blue);"></i>
+          <span>已选中 <strong>{{ selectedClientIds.length }}</strong> 个终端</span>
+          <span v-if="selectedPendingClientIds.length > 0" class="selection-pending-badge">
+            含 {{ selectedPendingClientIds.length }} 个待审批
+          </span>
+        </div>
+        <div class="selection-banner-actions">
+          <button
+            v-if="!isViewer && selectedPendingClientIds.length > 0"
+            type="button"
+            class="btn-chat-primary"
+            style="padding: 4px 12px; font-size: 0.82rem;"
+            :disabled="batchApproving"
+            @click="batchApproveSelected"
+          >
+            <i :class="batchApproving ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-check'"></i>
+            <span>一键批准 ({{ selectedPendingClientIds.length }})</span>
+          </button>
+          <button
+            type="button"
+            class="btn-secondary"
+            style="padding: 4px 12px; font-size: 0.82rem;"
+            @click="selectedClientIds = []"
+          >
+            取消全选
+          </button>
+        </div>
+      </div>
+
       <div class="table-view-card users-table-card">
-          <div v-if="!filteredClients.length" class="users-empty-state">
+        <div v-if="!filteredClients.length" class="users-empty-state">
           <div class="empty-icon-wrap"><i class="fa-solid fa-mobile-screen"></i></div>
           <h4>{{ clients.length ? '没有匹配的接入终端' : '尚未登记接入终端' }}</h4>
           <p>{{ clients.length ? '可尝试更换关键词或状态筛选' : '护栏策略可设为强制校验 SN / MAC，未知设备将按策略拦截或待审批' }}</p>
@@ -194,21 +257,50 @@
         <table v-else class="agent-table">
           <thead>
             <tr>
+              <th style="width: 44px; text-align: center;">
+                <input
+                  type="checkbox"
+                  class="custom-table-checkbox"
+                  :checked="isAllCurrentPageSelected"
+                  :indeterminate.prop="isPartialCurrentPageSelected"
+                  @change="toggleSelectAllCurrentPage"
+                >
+              </th>
               <th>标识</th>
               <th>所属账号</th>
               <th>类型</th>
               <th>标签</th>
+              <th>独立限流 / 日配额</th>
               <th>状态</th>
               <th>最近活跃</th>
               <th style="text-align:right;">操作</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="c in pagedClients" :key="c.id">
+            <tr
+              v-for="c in pagedClients"
+              :key="c.id"
+              :class="{ 'row-selected': selectedClientIds.includes(c.id) }"
+            >
+              <td style="text-align: center;">
+                <input
+                  type="checkbox"
+                  class="custom-table-checkbox"
+                  :value="c.id"
+                  v-model="selectedClientIds"
+                >
+              </td>
               <td><code class="sec-code">{{ c.clientId }}</code></td>
               <td>{{ accountLabel(c) }}</td>
-              <td>{{ c.clientType }}</td>
+              <td><span class="sec-client-type-badge">{{ c.clientType }}</span></td>
               <td>{{ c.label || '—' }}</td>
+              <td>
+                <div v-if="c.rateLimitRpm || c.dailyTokenQuota" class="sec-quota-badge-row">
+                  <span v-if="c.rateLimitRpm" class="sec-chip" title="专属每分钟并发限流">{{ c.rateLimitRpm }} RPM</span>
+                  <span v-if="c.dailyTokenQuota" class="sec-chip sec-chip-quota" title="专属单机每日Token额度">{{ c.dailyTokenQuota.toLocaleString() }} T/日</span>
+                </div>
+                <span v-else class="sec-muted" title="沿用全局护栏策略配置">全局策略</span>
+              </td>
               <td><span class="sec-status" :class="'st-' + (c.status || '').toLowerCase()">{{ statusLabel(c.status) }}</span></td>
               <td>{{ c.lastSeenAt ? formatTime(c.lastSeenAt) : '—' }}</td>
               <td style="text-align:right;">
@@ -217,6 +309,7 @@
                   <button v-if="c.status === 'ACTIVE'" class="btn-card-action btn-action-icon" title="停用" @click="setClientStatus(c, 'DISABLED')"><i class="fa-solid fa-pause"></i></button>
                   <button v-else-if="c.status === 'DISABLED'" class="btn-card-action btn-action-icon" title="启用" @click="setClientStatus(c, 'ACTIVE')"><i class="fa-solid fa-play"></i></button>
                   <button v-if="c.status === 'PENDING'" class="btn-card-action btn-action-icon" title="拒绝并停用" @click="setClientStatus(c, 'DISABLED')"><i class="fa-solid fa-ban"></i></button>
+                  <button class="btn-card-action btn-action-icon" title="编辑限流与配额" @click="openEditClient(c)"><i class="fa-solid fa-pen"></i></button>
                   <button class="btn-card-action btn-action-icon btn-action-danger" title="删除终端" @click="askDelete('client', c)"><i class="fa-regular fa-trash-can"></i></button>
                 </div>
               </td>
@@ -250,18 +343,34 @@
           </div>
         </div>
         <div class="table-view-card sec-pad">
-          <h3 class="sec-block-title">限流与长度</h3>
+          <h3 class="sec-block-title">限流与配额熔断</h3>
           <div class="form-item">
-            <label class="form-label">默认 RPM</label>
+            <label class="form-label">
+              <span>默认并发限流 (RPM)</span>
+              <span class="sec-muted-hint">基于 Bucket4j 令牌桶</span>
+            </label>
             <input v-model.number="policy.defaultRpm" type="number" min="1" class="modal-input" :disabled="isViewer">
+            <p class="form-field-tip">每分钟允许的最大请求数，超出返回 HTTP 429 <code>rate_limited</code> 并带 <code>X-RateLimit-*</code> 标头。</p>
+          </div>
+          <div class="form-item">
+            <label class="form-label">
+              <span>每日 Token 熔断上限（成本保护）</span>
+              <span class="sec-muted-hint">留空表示不限制日用量</span>
+            </label>
+            <input v-model.number="policy.defaultDailyTokens" type="number" min="1000" step="1000" class="modal-input" placeholder="例如：500000（留空不限）" :disabled="isViewer">
+            <p class="form-field-tip">开发者账号今日累计 Token 消耗达到该值时，网关自动熔断切断，返回 HTTP 429 <code>quota_exceeded</code>。</p>
           </div>
           <div class="form-item">
             <label class="form-label">最大输入字符</label>
             <input v-model.number="policy.maxInputChars" type="number" min="256" class="modal-input" :disabled="isViewer">
           </div>
           <div class="form-item">
-            <label class="form-label">允许时段（如 08:00-22:00，空则不限）</label>
-            <input v-model="policy.allowedHours" class="modal-input" placeholder="留空表示全天" :disabled="isViewer">
+            <label class="form-label">
+              <span>允许调用时段（工作时间窗）</span>
+              <span class="sec-muted-hint">留空表示 24 小时开放</span>
+            </label>
+            <input v-model="policy.allowedHours" class="modal-input" placeholder="例如：08:00-20:00 或 09:00-18:00" :disabled="isViewer">
+            <p class="form-field-tip">格式为 <code>HH:mm-HH:mm</code>，非指定时段调用将被安全网关拦截并返回 HTTP 403 <code>outside_allowed_hours</code>。</p>
           </div>
         </div>
         <div class="table-view-card sec-pad">
@@ -679,15 +788,15 @@
   </div>
 
   <div v-if="clientModalOpen" class="modal-backdrop open" @click.self="clientModalOpen = false">
-    <div class="modal-dialog">
+    <div class="modal-dialog" style="max-width: 520px;">
       <div class="modal-header">
-        <h3>登记接入终端</h3>
+        <h3><i class="fa-solid fa-mobile-screen"></i> {{ clientForm.id ? '编辑接入终端' : '登记接入终端' }}</h3>
         <button class="btn-modal-close" @click="clientModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <form class="modal-body" @submit.prevent="saveClient">
         <div class="form-item">
           <label class="form-label">类型</label>
-          <select v-model="clientForm.clientType" class="form-control-styled">
+          <select v-model="clientForm.clientType" class="form-control-styled" :disabled="!!clientForm.id">
             <option>SN</option>
             <option>MAC</option>
             <option>IMEI</option>
@@ -696,21 +805,101 @@
           </select>
         </div>
         <div class="form-item">
-          <label class="form-label">标识</label>
-          <input v-model="clientForm.clientId" class="modal-input" required>
+          <label class="form-label">标识 (Client ID)</label>
+          <input v-model="clientForm.clientId" class="modal-input" required :disabled="!!clientForm.id" placeholder="例如：SN20260901-089">
         </div>
         <div class="form-item">
-          <label class="form-label">标签</label>
-          <input v-model="clientForm.label" class="modal-input" placeholder="深圳门店-3号广告机">
+          <label class="form-label">标签 / 备注</label>
+          <input v-model="clientForm.label" class="modal-input" placeholder="例如：深圳门店-3号广告机">
+        </div>
+        <div class="form-grid-2">
+          <div class="form-item">
+            <label class="form-label">专属限流 RPM (留空跟随策略)</label>
+            <input v-model.number="clientForm.rateLimitRpm" type="number" min="1" class="modal-input" placeholder="例如：60">
+          </div>
+          <div class="form-item">
+            <label class="form-label">专属每日 Token 额度 (留空不限)</label>
+            <input v-model.number="clientForm.dailyTokenQuota" type="number" min="1000" step="1000" class="modal-input" placeholder="例如：50000">
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-secondary" @click="clientModalOpen = false">取消</button>
           <button type="submit" class="btn-create-agent">
             <i class="fa-solid fa-check"></i>
-            <span>保存</span>
+            <span>{{ clientForm.id ? '保存修改' : '确认登记' }}</span>
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Import CSV Modal -->
+  <div v-if="importModalOpen" class="modal-backdrop open" @click.self="importModalOpen = false">
+    <div class="modal-dialog" style="max-width: 680px;">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-file-import" style="color: var(--accent-blue);"></i> 批量导入接入终端 (CSV)</h3>
+        <button type="button" class="btn-modal-close" @click="importModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="import-tips-box">
+          <div class="import-tips-title"><i class="fa-solid fa-circle-info"></i> CSV 格式规范说明</div>
+          <p>支持通过 Excel / 记事本导出的 <code>.csv</code> 文件或直接粘贴文本。首行为表头：</p>
+          <code class="sec-code">终端类型,终端标识,标签名称,授权智能体,限流RPM,每日Token配额</code>
+          <p style="margin-top: 6px;">支持 <code>SN / MAC / IMEI / APP_ID / CUSTOM_KEY</code>，同时也完全兼容本平台导出的标准 CSV 表格。</p>
+        </div>
+
+        <div class="import-upload-row">
+          <input
+            type="file"
+            ref="csvFileInputRef"
+            accept=".csv,text/csv"
+            style="display: none;"
+            @change="handleCsvFileSelected"
+          >
+          <button type="button" class="btn-outline-action" @click="$refs.csvFileInputRef.click()">
+            <i class="fa-solid fa-upload"></i><span>选择 CSV 文件...</span>
+          </button>
+          <button type="button" class="btn-outline-action" @click="downloadTemplateCsv">
+            <i class="fa-solid fa-download"></i><span>下载导入模板</span>
+          </button>
+          <span v-if="importFileName" class="import-file-name"><i class="fa-solid fa-file-csv"></i> {{ importFileName }}</span>
+        </div>
+
+        <div class="form-item" style="margin-top: 14px;">
+          <label class="form-label">或直接在此粘贴 CSV 文本内容：</label>
+          <textarea
+            v-model="importCsvText"
+            rows="7"
+            class="modal-input code-font"
+            placeholder="SN,DEV-SN-001,车间测试机,,120,50000&#10;MAC,00:1A:2B:3C:4D:5E,前台迎宾屏,,60,20000"
+          ></textarea>
+        </div>
+
+        <!-- Import Result Feedback -->
+        <div v-if="importResult" class="import-result-summary" :class="{ 'has-errors': importResult.failed > 0 }">
+          <div class="result-summary-head">
+            <i :class="importResult.failed > 0 ? 'fa-solid fa-triangle-exclamation' : 'fa-solid fa-circle-check'" :style="{ color: importResult.failed > 0 ? 'var(--accent-amber)' : 'var(--accent-emerald)' }"></i>
+            <span>导入完成：共解析 {{ importResult.total }} 行，成功导入 <strong>{{ importResult.imported }}</strong> 条，失败 <strong>{{ importResult.failed }}</strong> 条</span>
+          </div>
+          <div v-if="importResult.errors && importResult.errors.length" class="result-error-list">
+            <div v-for="(err, idx) in importResult.errors" :key="idx" class="result-error-item">
+              <i class="fa-solid fa-xmark"></i> {{ err }}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" @click="importModalOpen = false">关闭</button>
+        <button
+          type="button"
+          class="btn-create-agent"
+          :disabled="!importCsvText.trim() || importingCsv"
+          @click="executeImportCsv"
+        >
+          <i :class="importingCsv ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-cloud-arrow-up'"></i>
+          <span>{{ importingCsv ? '导入中...' : '开始导入' }}</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -857,6 +1046,7 @@ const PAGE_SIZE = 10
 const policy = reactive({
   clientPolicy: 'OFF',
   defaultRpm: 120,
+  defaultDailyTokens: null,
   maxInputChars: 8000,
   allowedHours: '',
   piiMask: false,
@@ -929,7 +1119,7 @@ function scopeName(id) {
 const plaintextModal = reactive({ open: false, value: '' })
 
 const clientModalOpen = ref(false)
-const clientForm = reactive({ clientType: 'SN', clientId: '', label: '' })
+const clientForm = reactive({ id: '', clientType: 'SN', clientId: '', label: '', rateLimitRpm: null, dailyTokenQuota: null })
 
 const providerModalOpen = ref(false)
 const providerForm = reactive({
@@ -983,6 +1173,134 @@ const pagedClients = computed(() => {
   const start = (clientPage.value - 1) * PAGE_SIZE
   return filteredClients.value.slice(start, start + PAGE_SIZE)
 })
+
+// Clients Selection & Batch Operations
+const selectedClientIds = ref([])
+const batchApproving = ref(false)
+
+const selectedPendingClientIds = computed(() => {
+  return clients.value
+    .filter(c => selectedClientIds.value.includes(c.id) && c.status === 'PENDING')
+    .map(c => c.id)
+})
+
+const isAllCurrentPageSelected = computed(() => {
+  if (!pagedClients.value.length) return false
+  return pagedClients.value.every(c => selectedClientIds.value.includes(c.id))
+})
+
+const isPartialCurrentPageSelected = computed(() => {
+  if (!pagedClients.value.length) return false
+  const any = pagedClients.value.some(c => selectedClientIds.value.includes(c.id))
+  return any && !isAllCurrentPageSelected.value
+})
+
+function toggleSelectAllCurrentPage(e) {
+  const checked = e.target.checked
+  const pageIds = pagedClients.value.map(c => c.id)
+  if (checked) {
+    const set = new Set([...selectedClientIds.value, ...pageIds])
+    selectedClientIds.value = Array.from(set)
+  } else {
+    selectedClientIds.value = selectedClientIds.value.filter(id => !pageIds.includes(id))
+  }
+}
+
+async function batchApproveSelected() {
+  const ids = selectedPendingClientIds.value
+  if (!ids.length) {
+    showToast('所选终端中没有待审批设备', 'warning')
+    return
+  }
+  batchApproving.value = true
+  try {
+    const res = await http.post('/api/security/clients/batch-approve', { ids })
+    if (res.success) {
+      const count = res.data?.approvedCount ?? ids.length
+      showToast(`批量审批成功，已批准 ${count} 个终端`, 'success')
+      selectedClientIds.value = []
+      await loadAll()
+    } else {
+      showToast(res.message || '批量审批失败', 'error')
+    }
+  } catch (err) {
+    showToast(err.message || '网络请求错误', 'error')
+  } finally {
+    batchApproving.value = false
+  }
+}
+
+// CSV Export & Import
+function exportCsv() {
+  const link = document.createElement('a')
+  link.href = '/api/security/clients/export-csv'
+  link.setAttribute('download', `clients_${new Date().toISOString().slice(0, 10)}.csv`)
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  showToast('正在导出并下载接入终端 CSV 文件', 'success')
+}
+
+const importModalOpen = ref(false)
+const importCsvText = ref('')
+const importFileName = ref('')
+const importingCsv = ref(false)
+const importResult = ref(null)
+
+function openImportCsvModal() {
+  importCsvText.value = ''
+  importFileName.value = ''
+  importResult.value = null
+  importModalOpen.value = true
+}
+
+function handleCsvFileSelected(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  importFileName.value = file.name
+  const reader = new FileReader()
+  reader.onload = (evt) => {
+    importCsvText.value = evt.target.result || ''
+  }
+  reader.readAsText(file, 'UTF-8')
+}
+
+function downloadTemplateCsv() {
+  const template = '\uFEFF终端类型,终端标识,标签名称,授权智能体,限流RPM,每日Token配额\n' +
+    'SN,DEV-SN-SAMPLE01,车间测试机1号,,120,50000\n' +
+    'MAC,00:1A:2B:3C:4D:5E,前台迎宾屏,,60,20000\n' +
+    'CUSTOM_KEY,dev_app_key_001,移动APP端,,120,\n'
+  const blob = new Blob([template], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'clients_import_template.csv'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+async function executeImportCsv() {
+  if (!importCsvText.value.trim()) return
+  importingCsv.value = true
+  importResult.value = null
+  try {
+    const res = await http.post('/api/security/clients/import-csv', { csv: importCsvText.value })
+    if (res.success) {
+      importResult.value = res.data
+      const failed = res.data?.failed || 0
+      showToast(`导入完成：成功 ${res.data.imported} 条，失败 ${failed} 条`, failed > 0 ? 'warning' : 'success')
+      await loadAll()
+    } else {
+      showToast(res.message || '导入失败', 'error')
+    }
+  } catch (err) {
+    showToast(err.message || '导入请求出错', 'error')
+  } finally {
+    importingCsv.value = false
+  }
+}
 
 watch(keyQuery, () => { keyPage.value = 1 })
 watch(clientQuery, () => { clientPage.value = 1 })
@@ -1149,17 +1467,38 @@ function copyPlaintext() {
 }
 
 function openCreateClient() {
+  clientForm.id = ''
   clientForm.clientType = 'SN'
   clientForm.clientId = ''
   clientForm.label = ''
+  clientForm.rateLimitRpm = null
+  clientForm.dailyTokenQuota = null
+  clientModalOpen.value = true
+}
+
+function openEditClient(c) {
+  clientForm.id = c.id
+  clientForm.clientType = c.clientType
+  clientForm.clientId = c.clientId
+  clientForm.label = c.label || ''
+  clientForm.rateLimitRpm = c.rateLimitRpm || null
+  clientForm.dailyTokenQuota = c.dailyTokenQuota || null
   clientModalOpen.value = true
 }
 
 async function saveClient() {
-  const res = await http.post('/api/security/clients', { ...clientForm })
+  const payload = {
+    clientType: clientForm.clientType,
+    clientId: clientForm.clientId,
+    label: clientForm.label,
+    rateLimitRpm: clientForm.rateLimitRpm || null,
+    dailyTokenQuota: clientForm.dailyTokenQuota || null
+  }
+  if (clientForm.id) payload.id = clientForm.id
+  const res = await http.post('/api/security/clients', payload)
   if (res.success) {
     clientModalOpen.value = false
-    showToast('终端已登记', 'success')
+    showToast(clientForm.id ? '终端配置已更新' : '终端已成功登记', 'success')
     await loadAll()
   } else showToast(res.message || '保存失败', 'error')
 }
@@ -2613,6 +2952,203 @@ onMounted(loadAll)
   color: #fff;
   font-weight: 600;
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.btn-outline-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 0.88rem;
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-outline-action:hover:not(:disabled) {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.btn-outline-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sec-selection-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: var(--radius-md);
+  font-size: 0.88rem;
+  animation: fadeIn 0.2s ease;
+}
+
+.selection-banner-text {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-primary);
+}
+
+.selection-pending-badge {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.selection-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.custom-table-checkbox {
+  accent-color: var(--accent-blue);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.row-selected {
+  background: rgba(59, 130, 246, 0.05) !important;
+}
+
+.sec-quota-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sec-chip-quota {
+  background: rgba(168, 85, 247, 0.12) !important;
+  color: #c084fc !important;
+  border: 1px solid rgba(168, 85, 247, 0.25);
+}
+
+.sec-client-type-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.form-field-tip {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin: 4px 0 0 0;
+  line-height: 1.4;
+}
+
+.sec-muted-hint {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin-left: 6px;
+  font-weight: normal;
+}
+
+.import-tips-box {
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.import-tips-title {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.import-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.import-file-name {
+  font-size: 0.82rem;
+  color: var(--accent-blue);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.import-result-summary {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  font-size: 0.85rem;
+}
+
+.import-result-summary.has-errors {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.result-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.result-error-list {
+  margin-top: 8px;
+  max-height: 120px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.result-error-item {
+  font-size: 0.78rem;
+  color: var(--accent-rose);
+  background: rgba(244, 63, 94, 0.08);
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.code-font {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 @media (max-width: 1100px) {
