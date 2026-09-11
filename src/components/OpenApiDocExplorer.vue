@@ -235,6 +235,13 @@
                     <td><code>user_terminal_01</code></td>
                     <td>终端透传的最终用户标识，用于用户级多维用量分析与审计追溯</td>
                   </tr>
+                  <tr v-if="currentEndpoint.method !== 'GET'">
+                    <td><code>Idempotency-Key</code></td>
+                    <td><span class="type-pill">string</span></td>
+                    <td><span class="badge-opt">推荐防抖</span></td>
+                    <td><code>idemp_8a39b2f1c0</code></td>
+                    <td>写操作（POST/PUT/DELETE）幂等防抖键 (24h 有效)。携带相同 Key 重复调用将直接返回缓存结果，防止弱网下重复创建或扣费。</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -459,6 +466,10 @@
                   <div class="header-kv">
                     <span class="k">X-End-User:</span>
                     <input v-model="activeEndUser" class="inline-header-input" placeholder="user_terminal_01">
+                  </div>
+                  <div v-if="currentEndpoint.method !== 'GET'" class="header-kv">
+                    <span class="k">Idempotency-Key:</span>
+                    <input v-model="activeIdempotencyKey" class="inline-header-input" placeholder="可选防抖键，如 idemp_001">
                   </div>
                 </div>
               </div>
@@ -750,6 +761,7 @@ const customKeySecret = ref(sessionStorage.getItem('open_api_debug_key') || '')
 const activeClientType = ref('SN')
 const activeClientId = ref(props.clients.length ? props.clients[0].clientId : 'DEV-SN-001')
 const activeEndUser = ref('user_terminal_01')
+const activeIdempotencyKey = ref('')
 
 watch(customKeySecret, (v) => {
   if (v) sessionStorage.setItem('open_api_debug_key', v)
@@ -944,6 +956,9 @@ async function executeRequest() {
   }
   if (activeEndUser.value) {
     headers['X-End-User'] = activeEndUser.value
+  }
+  if (ep.method !== 'GET' && activeIdempotencyKey.value.trim()) {
+    headers['Idempotency-Key'] = activeIdempotencyKey.value.trim()
   }
 
   // 3. Build Body
