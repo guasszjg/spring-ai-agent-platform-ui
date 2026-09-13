@@ -456,6 +456,15 @@
           <i class="fa-solid fa-crosshairs"></i>
           <span>召回测试与调试</span>
         </button>
+        <button
+          class="kb-subtab-btn"
+          :class="{ active: activeSubTab === 'cost-governance' }"
+          @click="openCostGovernanceTab"
+        >
+          <i class="fa-solid fa-chart-line"></i>
+          <span>成本看板与治理</span>
+          <span class="badge-subtab-p3">P3</span>
+        </button>
       </div>
 
       <!-- TAB 1: 文件文档库 -->
@@ -842,6 +851,29 @@
             <p class="retrieval-header-desc">
               在不修改知识库线上持久配置的前提下，快速输入业务提问，验证切片召回质量、相似度得分分布、多路重排效果与端到端检索延迟。
             </p>
+
+            <!-- P3 模式切换: 单引擎标准调试 vs 双引擎影子评测 -->
+            <div class="retrieval-mode-switcher">
+              <button
+                type="button"
+                class="mode-switch-btn"
+                :class="{ active: retrievalMode === 'single' }"
+                @click="retrievalMode = 'single'"
+              >
+                <i class="fa-solid fa-bullseye"></i>
+                <span>标准单引擎调试</span>
+              </button>
+              <button
+                type="button"
+                class="mode-switch-btn"
+                :class="{ active: retrievalMode === 'shadow' }"
+                @click="retrievalMode = 'shadow'"
+              >
+                <i class="fa-solid fa-code-compare"></i>
+                <span>双引擎影子 A/B 评测</span>
+                <span class="badge-mode-p3">P3 推荐</span>
+              </button>
+            </div>
           </div>
           <button type="button" class="btn-toggle-params" @click="showParamDrawer = !showParamDrawer">
             <i class="fa-solid fa-sliders"></i>
@@ -1060,11 +1092,12 @@
             <button
               type="button"
               class="btn-execute-test"
-              :disabled="testingRetrieval || !retrievalQuery.trim()"
+              :class="{ 'btn-shadow-mode': retrievalMode === 'shadow' }"
+              :disabled="(testingRetrieval || testingShadow) || !retrievalQuery.trim()"
               @click="executeRetrievalTest()"
             >
-              <i :class="testingRetrieval ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-paper-plane'"></i>
-              <span>{{ testingRetrieval ? '正在检索...' : '执行检索' }}</span>
+              <i :class="(testingRetrieval || testingShadow) ? 'fa-solid fa-spinner fa-spin' : (retrievalMode === 'shadow' ? 'fa-solid fa-bolt' : 'fa-solid fa-paper-plane')"></i>
+              <span>{{ (testingRetrieval || testingShadow) ? '正在执行评测...' : (retrievalMode === 'shadow' ? '执行双引擎影子评测' : '执行检索') }}</span>
             </button>
           </div>
 
@@ -1084,165 +1117,439 @@
         </div>
 
         <!-- 检索结果状态汇总栏 -->
-        <div v-if="retrievalResult" class="retrieval-result-banner">
-          <div class="result-banner-left">
-            <span class="result-stat-chip hit-count">
-              <i class="fa-solid fa-bullseye"></i>
-              命中 <strong>{{ retrievalResult.chunks?.length || 0 }}</strong> 个分块
-            </span>
-            <span class="result-stat-chip latency">
-              <i class="fa-solid fa-bolt"></i>
-              端到端耗时: <strong>{{ retrievalResult.latencyMs }} ms</strong>
-            </span>
-            <span class="result-stat-chip engine">
-              <i class="fa-solid fa-microchip"></i>
-              生效引擎: <strong>{{ retrievalResult.engineResolution?.effectiveEngine || 'DIFY' }}</strong>
-              <span class="engine-src-tag">({{ formatEngineSource(retrievalResult.engineResolution?.source) }})</span>
-            </span>
-            <span v-if="retrievalResult.metrics?.totalTokens" class="result-stat-chip" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3);">
-              <i class="fa-solid fa-coins"></i>
-              Token 消耗: <strong>{{ retrievalResult.metrics.totalTokens }}</strong> / {{ retrievalResult.metrics.maxContextTokens || 3000 }}
-            </span>
-            <span v-if="retrievalResult.metrics?.rewrittenQuery && retrievalResult.metrics.rewrittenQuery !== retrievalResult.query" class="result-stat-chip" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);">
-              <i class="fa-solid fa-wand-magic-sparkles"></i>
-              改写后 Query: <strong>"{{ retrievalResult.metrics.rewrittenQuery }}"</strong>
-            </span>
-          </div>
-          <div class="result-banner-right">
-            <span class="result-query-tag" :title="retrievalResult.query">
-              Query: "{{ retrievalResult.query }}"
-            </span>
-          </div>
-        </div>
-
-        <!-- 结果切片列表 -->
-        <div v-if="retrievalResult && retrievalResult.chunks && retrievalResult.chunks.length > 0" class="retrieval-chunks-grid">
-          <div
-            v-for="(chunk, cIdx) in retrievalResult.chunks"
-            :key="cIdx"
-            class="retrieval-chunk-card"
-          >
-            <div class="chunk-card-header">
-              <div class="chunk-rank-box">
-                <span class="chunk-rank-badge" :class="'rank-' + Math.min(cIdx + 1, 3)">#{{ cIdx + 1 }}</span>
-                <span class="chunk-doc-name" :title="chunk.sourceName">
-                  <i class="fa-solid fa-file-lines"></i> {{ chunk.sourceName || '未命名文档' }}
-                </span>
-                <span v-if="chunk.metadata?.parentExpanded" class="tag-parent-expanded" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); font-size: 11px; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
-                  <i class="fa-solid fa-diagram-project"></i> 已展开父块
-                </span>
-                <span v-if="chunk.segmentIndex !== null && chunk.segmentIndex !== undefined" class="chunk-seg-index">
-                  分段 #{{ chunk.segmentIndex }}
-                </span>
-                <span v-if="chunk.tokenCount" class="chunk-tokens">
-                  {{ chunk.tokenCount }} Tokens
-                </span>
-              </div>
-              <div class="chunk-score-group">
-                <!-- 综合得分 -->
-                <span class="chunk-score-pill score-fused" :class="getScoreClass(chunk.score)">
-                  <i class="fa-solid fa-chart-simple"></i> 得分: {{ formatScore(chunk.score) }}
-                </span>
-                <!-- 向量得分 -->
-                <span v-if="chunk.vectorScore" class="chunk-score-pill score-sub">
-                  向量: {{ formatScore(chunk.vectorScore) }}
-                </span>
-                <!-- 关键词得分 -->
-                <span v-if="chunk.keywordScore" class="chunk-score-pill score-sub">
-                  关键词: {{ formatScore(chunk.keywordScore) }}
-                </span>
-                <!-- 重排得分 -->
-                <span v-if="chunk.rerankScore" class="chunk-score-pill score-sub score-rerank">
-                  Rerank: {{ formatScore(chunk.rerankScore) }}
-                </span>
-              </div>
-            </div>
-
-            <!-- 切片文本正文 -->
-            <div class="chunk-card-body">
-              <div v-if="chunk.metadata?.originalChildContent" class="child-toggle-bar" style="margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
-                <span style="font-size: 11.5px; color: #c084fc;">
-                  <i class="fa-solid fa-diagram-project"></i> {{ showOriginalChildMap.has(cIdx) ? '当前展示：原始命中子切片 (精准匹配)' : '当前展示：展开后的父块完整段落 (大上下文)' }}
-                </span>
-                <button type="button" class="btn-toggle-child" style="font-size: 11px; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.1); color: #c084fc; cursor: pointer;" @click="toggleOriginalChild(cIdx)">
-                  <i class="fa-solid fa-repeat"></i> {{ showOriginalChildMap.has(cIdx) ? '切换为父块完整段落' : '查看原始命中子块' }}
-                </button>
-              </div>
-              <div
-                class="chunk-content-text"
-                :class="{ collapsed: !expandedChunks.has(cIdx) && (showOriginalChildMap.has(cIdx) ? chunk.metadata?.originalChildContent : chunk.content)?.length > 300 }"
-              >
-                {{ showOriginalChildMap.has(cIdx) ? chunk.metadata?.originalChildContent : chunk.content }}
-              </div>
-              <button
-                v-if="(showOriginalChildMap.has(cIdx) ? chunk.metadata?.originalChildContent : chunk.content)?.length > 300"
-                type="button"
-                class="btn-expand-chunk"
-                @click="toggleChunkExpand(cIdx)"
-              >
-                {{ expandedChunks.has(cIdx) ? '收起段落' : '展开全文 (' + (showOriginalChildMap.has(cIdx) ? chunk.metadata?.originalChildContent : chunk.content).length + ' 字符)' }}
-                <i class="fa-solid" :class="expandedChunks.has(cIdx) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-              </button>
-            </div>
-
-            <!-- 卡片底部操作 -->
-            <div class="chunk-card-footer">
-              <div class="chunk-id-text" :title="chunk.chunkId">
-                <span v-if="chunk.chunkId">Chunk ID: {{ chunk.chunkId }}</span>
-              </div>
-              <button
-                type="button"
-                class="btn-copy-chunk"
-                title="复制此切片文本"
-                @click="copyChunkText(chunk.content)"
-              >
-                <i class="fa-regular fa-clone"></i> <span>复制内容</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 智能诊断与空状态 -->
-        <div
-          v-else-if="retrievalResult && (!retrievalResult.chunks || retrievalResult.chunks.length === 0)"
-          class="retrieval-empty-state"
-        >
-          <div class="empty-icon-wrap diagnostic-icon">
-            <i class="fa-solid fa-triangle-exclamation"></i>
-          </div>
-          <h3>未召回任何匹配分块</h3>
-          <div class="diagnostic-box">
-            <div class="diagnostic-reason">
-              <i class="fa-solid fa-stethoscope"></i>
-              <span>
-                <strong>诊断分析：</strong>当前相似度阈值设置为 <strong>{{ Number(testParams.scoreThreshold).toFixed(2) }}</strong>，
-                {{ testParams.scoreThreshold >= 0.6 ? '阈值设置偏高，导致相关性稍弱的候选分块被严格过滤；' : '库内文档中可能缺少与该查询语义相近的段落内容；' }}
-                检索策略当前为 <strong>{{ getSearchMethodLabel(testParams.searchMethod) }}</strong>。
+        <!-- 模式 1: 单引擎标准调试结果展示 -->
+        <template v-if="retrievalMode === 'single'">
+          <!-- 检索结果状态汇总栏 -->
+          <div v-if="retrievalResult" class="retrieval-result-banner">
+            <div class="result-banner-left">
+              <span class="result-stat-chip hit-count">
+                <i class="fa-solid fa-bullseye"></i>
+                命中 <strong>{{ retrievalResult.chunks?.length || 0 }}</strong> 个分块
+              </span>
+              <span class="result-stat-chip latency">
+                <i class="fa-solid fa-bolt"></i>
+                端到端耗时: <strong>{{ retrievalResult.latencyMs }} ms</strong>
+              </span>
+              <span class="result-stat-chip engine">
+                <i class="fa-solid fa-microchip"></i>
+                生效引擎: <strong>{{ retrievalResult.engineResolution?.effectiveEngine || 'DIFY' }}</strong>
+                <span class="engine-src-tag">({{ formatEngineSource(retrievalResult.engineResolution?.source) }})</span>
+              </span>
+              <span v-if="retrievalResult.metrics?.totalTokens" class="result-stat-chip" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3);">
+                <i class="fa-solid fa-coins"></i>
+                Token 消耗: <strong>{{ retrievalResult.metrics.totalTokens }}</strong> / {{ retrievalResult.metrics.maxContextTokens || 3000 }}
+              </span>
+              <span v-if="retrievalResult.metrics?.rewrittenQuery && retrievalResult.metrics.rewrittenQuery !== retrievalResult.query" class="result-stat-chip" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                改写后 Query: <strong>"{{ retrievalResult.metrics.rewrittenQuery }}"</strong>
               </span>
             </div>
-            <div class="diagnostic-actions">
-              <button type="button" class="btn-diag-action" @click="retryWithLowerThreshold">
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                <span>一键调优：阈值降至 0.3 并采用混合检索重试</span>
-              </button>
-              <button type="button" class="btn-diag-action secondary" @click="retryWithZeroThreshold">
-                <i class="fa-solid fa-filter-circle-xmark"></i>
-                <span>解除阈值过滤 (0.0) 查看原始候选段落</span>
-              </button>
+            <div class="result-banner-right">
+              <span class="result-query-tag" :title="retrievalResult.query">
+                Query: "{{ retrievalResult.query }}"
+              </span>
             </div>
           </div>
-        </div>
+
+          <!-- 结果切片列表 -->
+          <div v-if="retrievalResult && retrievalResult.chunks && retrievalResult.chunks.length > 0" class="retrieval-chunks-grid">
+            <div
+              v-for="(chunk, cIdx) in retrievalResult.chunks"
+              :key="cIdx"
+              class="retrieval-chunk-card"
+            >
+              <div class="chunk-card-header">
+                <div class="chunk-rank-box">
+                  <span class="chunk-rank-badge" :class="'rank-' + Math.min(cIdx + 1, 3)">#{{ cIdx + 1 }}</span>
+                  <span class="chunk-doc-name" :title="chunk.sourceName">
+                    <i class="fa-solid fa-file-lines"></i> {{ chunk.sourceName || '未命名文档' }}
+                  </span>
+                  <span v-if="chunk.metadata?.parentExpanded" class="tag-parent-expanded" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); font-size: 11px; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                    <i class="fa-solid fa-diagram-project"></i> 已展开父块
+                  </span>
+                  <span v-if="chunk.segmentIndex !== null && chunk.segmentIndex !== undefined" class="chunk-seg-index">
+                    分段 #{{ chunk.segmentIndex }}
+                  </span>
+                  <span v-if="chunk.tokenCount" class="chunk-tokens">
+                    {{ chunk.tokenCount }} Tokens
+                  </span>
+                </div>
+                <div class="chunk-score-group">
+                  <span class="chunk-score-pill score-fused" :class="getScoreClass(chunk.score)">
+                    <i class="fa-solid fa-chart-simple"></i> 得分: {{ formatScore(chunk.score) }}
+                  </span>
+                  <span v-if="chunk.vectorScore" class="chunk-score-pill score-sub">
+                    向量: {{ formatScore(chunk.vectorScore) }}
+                  </span>
+                  <span v-if="chunk.keywordScore" class="chunk-score-pill score-sub">
+                    关键词: {{ formatScore(chunk.keywordScore) }}
+                  </span>
+                  <span v-if="chunk.rerankScore" class="chunk-score-pill score-sub score-rerank">
+                    重排: {{ formatScore(chunk.rerankScore) }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- 切片主体内容 -->
+              <div class="chunk-card-body">
+                <div
+                  class="chunk-content-text"
+                  :class="{ collapsed: !expandedChunks.has(cIdx) }"
+                >
+                  {{ chunk.content }}
+                </div>
+                <div v-if="chunk.metadata?.parentExpanded && chunk.metadata?.originalChildContent" class="original-child-expand-box" style="margin-top: 8px;">
+                  <button type="button" class="btn-toggle-orig-child" style="background: none; border: none; font-size: 11px; color: #a78bfa; cursor: pointer; padding: 0; display: inline-flex; align-items: center; gap: 4px;" @click="toggleOriginalChild(cIdx)">
+                    <i :class="showOriginalChildMap.has(cIdx) ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>
+                    <span>{{ showOriginalChildMap.has(cIdx) ? '收起高精度命中子切片' : '查看高精度命中子切片（展开前原文）' }}</span>
+                  </button>
+                  <div v-if="showOriginalChildMap.has(cIdx)" style="margin-top: 6px; padding: 8px 12px; background: rgba(147, 51, 234, 0.08); border-left: 3px solid #a855f7; border-radius: 4px; font-size: 12px; color: #e2e8f0; line-height: 1.5;">
+                    {{ chunk.metadata.originalChildContent }}
+                  </div>
+                </div>
+                <button
+                  v-if="chunk.content && chunk.content.length > 200"
+                  type="button"
+                  class="btn-expand-chunk"
+                  @click="toggleChunkExpand(cIdx)"
+                >
+                  <span>{{ expandedChunks.has(cIdx) ? '收起内容' : '展开全文' }}</span>
+                  <i class="fa-solid" :class="expandedChunks.has(cIdx) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                </button>
+              </div>
+
+              <!-- 卡片底部操作 -->
+              <div class="chunk-card-footer">
+                <div class="chunk-id-text" :title="chunk.chunkId">
+                  <span v-if="chunk.chunkId">Chunk ID: {{ chunk.chunkId }}</span>
+                </div>
+                <button
+                  type="button"
+                  class="btn-copy-chunk"
+                  title="复制此切片文本"
+                  @click="copyChunkText(chunk.content)"
+                >
+                  <i class="fa-regular fa-clone"></i> <span>复制内容</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 智能诊断与空状态 -->
+          <div
+            v-else-if="retrievalResult && (!retrievalResult.chunks || retrievalResult.chunks.length === 0)"
+            class="retrieval-empty-state"
+          >
+            <div class="empty-icon-wrap diagnostic-icon">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3>未召回任何匹配分块</h3>
+            <div class="diagnostic-box">
+              <div class="diagnostic-reason">
+                <i class="fa-solid fa-stethoscope"></i>
+                <span>
+                  <strong>诊断分析：</strong>当前相似度阈值设置为 <strong>{{ Number(testParams.scoreThreshold).toFixed(2) }}</strong>，
+                  {{ testParams.scoreThreshold >= 0.6 ? '阈值设置偏高，导致相关性稍弱的候选分块被严格过滤；' : '库内文档中可能缺少与该查询语义相近的段落内容；' }}
+                  检索策略当前为 <strong>{{ getSearchMethodLabel(testParams.searchMethod) }}</strong>。
+                </span>
+              </div>
+              <div class="diagnostic-actions">
+                <button type="button" class="btn-diag-action" @click="retryWithLowerThreshold">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i>
+                  <span>一键调优：阈值降至 0.3 并采用混合检索重试</span>
+                </button>
+                <button type="button" class="btn-diag-action secondary" @click="retryWithZeroThreshold">
+                  <i class="fa-solid fa-filter-circle-xmark"></i>
+                  <span>解除阈值过滤 (0.0) 查看原始候选段落</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- 模式 2: 双引擎影子 A/B 对比评测结果展示 (Phase P3) -->
+        <template v-else-if="retrievalMode === 'shadow' && shadowResult">
+          <div class="shadow-evaluation-container">
+            <!-- 影子评测对比看板 -->
+            <div class="shadow-summary-banner">
+              <div class="shadow-banner-top">
+                <div class="shadow-badge-row">
+                  <span class="shadow-badge-main"><i class="fa-solid fa-code-compare"></i> 双引擎影子流量评测报告</span>
+                  <span class="shadow-query-pill" :title="shadowResult.query">提问: "{{ shadowResult.query }}"</span>
+                </div>
+                <div class="shadow-overlap-box">
+                  <div class="overlap-title">
+                    <span>Jaccard 召回交集重叠率:</span>
+                    <strong class="overlap-val text-emerald">{{ (shadowResult.overlapRatio * 100).toFixed(0) }}%</strong>
+                  </div>
+                  <div class="shadow-track">
+                    <div class="shadow-bar-fill" :style="{ width: Math.min(100, Math.max(0, shadowResult.overlapRatio * 100)) + '%' }"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 3 核心对比指标 -->
+              <div class="shadow-metrics-grid">
+                <div class="shadow-metric-card">
+                  <div class="metric-card-header">
+                    <i class="fa-solid fa-stopwatch text-blue"></i>
+                    <span>端到端延迟对比</span>
+                  </div>
+                  <div class="metric-card-body">
+                    <div class="metric-versus-row">
+                      <span>自研: <strong class="text-blue">{{ shadowResult.primaryLatencyMs }} ms</strong></span>
+                      <span class="versus-dot">vs</span>
+                      <span>Dify: <strong>{{ shadowResult.secondaryLatencyMs }} ms</strong></span>
+                    </div>
+                    <span class="shadow-delta-tag" :class="shadowResult.latencyDiffMs <= 0 ? 'faster' : 'slower'">
+                      <i :class="shadowResult.latencyDiffMs <= 0 ? 'fa-solid fa-gauge-high' : 'fa-solid fa-gauge-simple'"></i>
+                      {{ shadowResult.latencyDiffMs <= 0 ? '自研引擎快 ' + Math.abs(shadowResult.latencyDiffMs) + ' ms' : '自研引擎慢 ' + shadowResult.latencyDiffMs + ' ms' }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="shadow-metric-card">
+                  <div class="metric-card-header">
+                    <i class="fa-solid fa-coins text-purple"></i>
+                    <span>上下文 Token 装填</span>
+                  </div>
+                  <div class="metric-card-body">
+                    <div class="metric-versus-row">
+                      <span>自研: <strong class="text-purple">{{ shadowResult.primaryTokens }}</strong></span>
+                      <span class="versus-dot">vs</span>
+                      <span>Dify: <strong>{{ shadowResult.secondaryTokens }}</strong></span>
+                    </div>
+                    <span class="shadow-delta-tag info">
+                      <i class="fa-solid fa-shield-halved"></i>
+                      {{ shadowResult.primaryTokens <= shadowResult.secondaryTokens ? '预算裁剪节省 ' + Math.max(0, shadowResult.secondaryTokens - shadowResult.primaryTokens) + ' Tokens' : '召回上下文更充实' }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="shadow-metric-card">
+                  <div class="metric-card-header">
+                    <i class="fa-solid fa-chart-pie text-emerald"></i>
+                    <span>独有召回分布</span>
+                  </div>
+                  <div class="metric-card-body">
+                    <div class="metric-versus-row">
+                      <span>自研独有: <strong>{{ shadowResult.primaryOnlyCount }}</strong> 块</span>
+                      <span class="versus-dot">|</span>
+                      <span>Dify独有: <strong>{{ shadowResult.secondaryOnlyCount }}</strong> 块</span>
+                    </div>
+                    <span class="shadow-delta-tag neutral">
+                      共评测 {{ (shadowResult.primaryChunks?.length || 0) + (shadowResult.secondaryChunks?.length || 0) }} 候选切片
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 左右双栏并排切片对比 (Side-by-Side Comparison) -->
+            <div class="shadow-compare-grid">
+              <!-- 左栏: Spring AI 自研引擎 -->
+              <div class="shadow-col col-primary">
+                <div class="shadow-col-header">
+                  <div class="col-title-wrap">
+                    <i class="fa-solid fa-brain text-blue"></i>
+                    <h4>Spring AI 原生自研引擎</h4>
+                    <span class="col-count-tag">{{ shadowResult.primaryChunks?.length || 0 }} 命中切片</span>
+                  </div>
+                  <span class="engine-indicator-pill spring-ai">主评测路径</span>
+                </div>
+
+                <div v-if="!shadowResult.primaryChunks || shadowResult.primaryChunks.length === 0" class="col-empty-card">
+                  <i class="fa-solid fa-inbox"></i>
+                  <span>自研引擎暂无匹配切片</span>
+                </div>
+
+                <div v-else class="col-chunks-list">
+                  <div
+                    v-for="(chunk, idx) in shadowResult.primaryChunks"
+                    :key="'prim-' + idx"
+                    class="shadow-chunk-item"
+                  >
+                    <div class="chunk-item-top">
+                      <div class="chunk-item-meta">
+                        <span class="chunk-rank-badge rank-1">#{{ idx + 1 }}</span>
+                        <span class="chunk-doc-title" :title="chunk.sourceName">
+                          <i class="fa-solid fa-file-lines"></i> {{ chunk.sourceName || '未命名文档' }}
+                        </span>
+                        <span v-if="chunk.metadata?.parentExpanded" class="tag-parent-expanded" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; font-size: 11px; padding: 1px 6px; border-radius: 4px;">
+                          <i class="fa-solid fa-diagram-project"></i> 父块展开
+                        </span>
+                      </div>
+                      <div class="chunk-item-stats">
+                        <span class="chunk-score-tag">得分: {{ formatScore(chunk.score) }}</span>
+                        <span v-if="chunk.tokenCount" class="chunk-tokens-tag">{{ chunk.tokenCount }} T</span>
+                        <button type="button" class="btn-copy-small" title="复制文本" @click="copyChunkText(chunk.content)">
+                          <i class="fa-regular fa-clone"></i>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="chunk-item-text">
+                      {{ chunk.content }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 右栏: Dify 托管引擎 -->
+              <div class="shadow-col col-secondary">
+                <div class="shadow-col-header">
+                  <div class="col-title-wrap">
+                    <i class="fa-solid fa-link text-purple"></i>
+                    <h4>Dify 托管外部引擎</h4>
+                    <span class="col-count-tag">{{ shadowResult.secondaryChunks?.length || 0 }} 命中切片</span>
+                  </div>
+                  <span class="engine-indicator-pill dify">对照基准路径</span>
+                </div>
+
+                <div v-if="!shadowResult.secondaryChunks || shadowResult.secondaryChunks.length === 0" class="col-empty-card">
+                  <i class="fa-solid fa-inbox"></i>
+                  <span>Dify 引擎暂无匹配切片</span>
+                </div>
+
+                <div v-else class="col-chunks-list">
+                  <div
+                    v-for="(chunk, idx) in shadowResult.secondaryChunks"
+                    :key="'sec-' + idx"
+                    class="shadow-chunk-item"
+                  >
+                    <div class="chunk-item-top">
+                      <div class="chunk-item-meta">
+                        <span class="chunk-rank-badge" :class="'rank-' + Math.min(idx + 1, 3)">#{{ idx + 1 }}</span>
+                        <span class="chunk-doc-title" :title="chunk.sourceName">
+                          <i class="fa-solid fa-file-lines"></i> {{ chunk.sourceName || 'Dify 远端文档' }}
+                        </span>
+                      </div>
+                      <div class="chunk-item-stats">
+                        <span class="chunk-score-tag">得分: {{ formatScore(chunk.score) }}</span>
+                        <span v-if="chunk.tokenCount" class="chunk-tokens-tag">{{ chunk.tokenCount }} T</span>
+                        <button type="button" class="btn-copy-small" title="复制文本" @click="copyChunkText(chunk.content)">
+                          <i class="fa-regular fa-clone"></i>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="chunk-item-text">
+                      {{ chunk.content }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
 
         <!-- 初始空白引导 -->
-        <div v-else class="retrieval-placeholder-state">
+        <div v-if="(retrievalMode === 'single' && !retrievalResult) || (retrievalMode === 'shadow' && !shadowResult)" class="retrieval-placeholder-state">
           <div class="placeholder-icon">
             <i class="fa-solid fa-radar"></i>
           </div>
-          <h3>准备就绪，输入问题开始召回测试</h3>
+          <h3>{{ retrievalMode === 'shadow' ? '准备就绪，输入问题开始双引擎影子 A/B 评测' : '准备就绪，输入问题开始召回测试' }}</h3>
           <p>
-            输入您关心的业务问题，点击“执行检索”即可实时查看分块召回效果、得分详情与耗时指标。<br>
-            可展开上方“调试参数”临时调整 TopK、相似度阈值、检索模式或双路权重。
+            {{ retrievalMode === 'shadow'
+              ? '系统将同时把 Query 分发至 Spring AI 自研引擎与 Dify 托管引擎，毫秒级比对 Jaccard 召回重叠率、端到端延迟与 Token 上下文装填。'
+              : '输入您关心的业务问题，点击“执行检索”即可实时查看分块召回效果、得分详情与耗时指标。'
+            }}
           </p>
+        </div>
+      </div>
+
+      <!-- TAB 4: 知识库成本与治理看板 (Phase P3) -->
+      <div v-show="activeSubTab === 'cost-governance'" class="kb-tab-content cost-governance-tab">
+        <div class="cost-header-banner">
+          <div class="cost-banner-info">
+            <h3><i class="fa-solid fa-coins text-amber"></i> 知识库成本看板与多格式治理模型</h3>
+            <p>
+              遵循《Spring-AI自研RAG双引擎设计》第 10 章成本治理模型：向量嵌入按 ￥0.5 / 1M Tokens 计量，重新排序按 ￥0.003 / 次计量。动态 Token 预算制有效阻断超长上下文对大模型造成的冗余开销。
+            </p>
+          </div>
+          <button type="button" class="btn-refresh" :disabled="loadingCostStats" title="刷新成本与治理指标" @click="loadCostStats">
+            <i class="fa-solid fa-rotate" :class="{ 'fa-spin': loadingCostStats }"></i>
+            <span>刷新指标</span>
+          </button>
+        </div>
+
+        <div v-if="costStats" class="cost-stats-cards-grid">
+          <!-- 卡片 1: 嵌入消耗 -->
+          <div class="cost-card card-blue">
+            <div class="cost-card-icon"><i class="fa-solid fa-layer-group"></i></div>
+            <div class="cost-card-content">
+              <span class="cost-label">累计入库 Embedding Tokens</span>
+              <span class="cost-val">{{ (costStats.embeddingTokens || 0).toLocaleString() }}</span>
+              <span class="cost-sub">预估嵌入费用: ￥{{ (costStats.embeddingCostYuan || 0).toFixed(4) }} 元</span>
+            </div>
+          </div>
+          <!-- 卡片 2: 检索消耗与节省 -->
+          <div class="cost-card card-emerald">
+            <div class="cost-card-icon"><i class="fa-solid fa-bolt"></i></div>
+            <div class="cost-card-content">
+              <span class="cost-label">累计检索 Retrieval Tokens</span>
+              <span class="cost-val">{{ (costStats.retrievalTokens || 0).toLocaleString() }}</span>
+              <span class="cost-sub text-emerald">预算机制预估已节省 ~{{ (costStats.budgetSavedTokens || 0).toLocaleString() }} Tokens</span>
+            </div>
+          </div>
+          <!-- 卡片 3: 重排调用 -->
+          <div class="cost-card card-purple">
+            <div class="cost-card-icon"><i class="fa-solid fa-arrows-split-up-and-left"></i></div>
+            <div class="cost-card-content">
+              <span class="cost-label">累计 Rerank 重新排序调用</span>
+              <span class="cost-val">{{ (costStats.rerankCalls || 0).toLocaleString() }} <small>次</small></span>
+              <span class="cost-sub">重排调用费用: ￥{{ (costStats.rerankCostYuan || 0).toFixed(4) }} 元</span>
+            </div>
+          </div>
+          <!-- 卡片 4: 综合治理预估费用 -->
+          <div class="cost-card card-amber">
+            <div class="cost-card-icon"><i class="fa-solid fa-receipt"></i></div>
+            <div class="cost-card-content">
+              <span class="cost-label">知识库累计治理总费用</span>
+              <span class="cost-val text-amber">￥{{ (costStats.estimatedCostYuan || 0).toFixed(4) }} <small>元</small></span>
+              <span class="cost-sub">嵌入 + 重排序综合账单</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 多格式解析与 OCR 治理状态 -->
+        <div class="governance-details-grid">
+          <div class="gov-card">
+            <div class="gov-card-header">
+              <i class="fa-solid fa-file-shield text-blue"></i>
+              <h4>多格式文档解析与结构化提取能力 (Phase P3)</h4>
+            </div>
+            <div class="gov-card-body">
+              <div class="format-chips-list">
+                <span class="format-chip active"><i class="fa-solid fa-table"></i> CSV / TSV 表头自动透传</span>
+                <span class="format-chip active"><i class="fa-solid fa-file-word"></i> Word DOCX (OOXML 结构化解析)</span>
+                <span class="format-chip active"><i class="fa-solid fa-file-pdf"></i> PDF (原生字符流提取 + 扫描件判定)</span>
+                <span class="format-chip active"><i class="fa-solid fa-code"></i> JSON / TXT / Markdown (智能编码探测)</span>
+              </div>
+              <p class="gov-card-tip">
+                <i class="fa-solid fa-circle-check text-emerald"></i>
+                表格表头透传算法确保每一行切片均包含完整列头语义，杜绝传统分块后数据行上下文丢失的缺陷。
+              </p>
+            </div>
+          </div>
+
+          <div class="gov-card">
+            <div class="gov-card-header">
+              <i class="fa-solid fa-eye text-purple"></i>
+              <h4>可插拔 OCR 服务适配状态 (PaddleOCR / 图像识别)</h4>
+            </div>
+            <div class="gov-card-body">
+              <div class="ocr-status-row">
+                <span class="ocr-status-badge" :class="costStats?.ocrStatus?.enabled ? 'enabled' : 'disabled'">
+                  <i :class="costStats?.ocrStatus?.enabled ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-pause'"></i>
+                  {{ costStats?.ocrStatus?.enabled ? 'OCR 服务就绪 (' + (costStats?.ocrStatus?.provider || 'LOCAL_PADDLE') + ')' : 'OCR 插件处于休眠/降级模式' }}
+                </span>
+                <span class="ocr-feature-tag">扫描件自动判定 (页均字符 &lt; 50)</span>
+                <span class="ocr-feature-tag">数据不出内网</span>
+              </div>
+              <p class="gov-card-tip">
+                当检测到影印扫描件 PDF 或 PNG/JPG 图片时，系统将智能路由至本地 PaddleOCR 容器转写文字；未部署时自动平滑降级并保留元数据。
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1690,14 +1997,19 @@ watch(viewLayout, async (mode) => {
   if (!persistLayoutReady) return
   await http.put('/api/auth/preferences', { kbViewLayout: mode })
 })
-const activeSubTab = ref('documents') // 'documents' | 'faqs' | 'retrieval-test'
+const activeSubTab = ref('documents') // 'documents' | 'faqs' | 'retrieval-test' | 'cost-governance'
 const selectedKb = ref(null)
 
-// ==================== 召回测试与调试状态 (Phase P1) ====================
+// ==================== 召回测试与调试状态 (Phase P1 & P2 & P3) ====================
+const retrievalMode = ref('single') // 'single' | 'shadow'
 const showParamDrawer = ref(true)
 const retrievalQuery = ref('')
 const testingRetrieval = ref(false)
+const testingShadow = ref(false)
 const retrievalResult = ref(null)
+const shadowResult = ref(null)
+const costStats = ref(null)
+const loadingCostStats = ref(false)
 const retrievalVersions = ref([])
 const activeIndexVersion = ref(null)
 const expandedChunks = ref(new Set())
@@ -2117,6 +2429,8 @@ function openKbDetail(kb) {
   docPage.value = 1
   faqPage.value = 1
   retrievalResult.value = null
+  shadowResult.value = null
+  costStats.value = null
   retrievalQuery.value = ''
   loadDocuments()
   loadFaqCategories()
@@ -2128,7 +2442,7 @@ function backToList() {
   loadKnowledgeBases()
 }
 
-// ==================== 召回测试与调试逻辑 (Phase P1) ====================
+// ==================== 召回测试与调试逻辑 (Phase P1 & P2 & P3) ====================
 
 function openRetrievalTestTab() {
   activeSubTab.value = 'retrieval-test'
@@ -2145,6 +2459,23 @@ function openRetrievalTestTab() {
     testParams.maxContextTokens = 3000
     showOriginalChildMap.value = new Set()
     loadIndexVersions()
+  }
+}
+
+function openCostGovernanceTab() {
+  activeSubTab.value = 'cost-governance'
+  loadCostStats()
+}
+
+async function loadCostStats() {
+  if (!selectedKb.value) return
+  loadingCostStats.value = true
+  const res = await http.get(`/api/knowledge-bases/${selectedKb.value.id}/cost-stats`)
+  loadingCostStats.value = false
+  if (res.success && res.data) {
+    costStats.value = res.data
+  } else {
+    showToast(res.message || '获取成本与治理指标失败', 'error')
   }
 }
 
@@ -2169,10 +2500,16 @@ function onWeightSliderChange(val) {
 async function executeRetrievalTest(queryText) {
   const q = (queryText !== undefined && queryText !== null ? queryText : retrievalQuery.value || '').trim()
   if (!q) {
-    showToast('请输入召回测试查询语句', 'warning')
+    showToast('请输入查询语句', 'warning')
     return
   }
   retrievalQuery.value = q
+
+  // P3: 若当前处于影子对比模式，路由至双引擎对比接口
+  if (retrievalMode.value === 'shadow') {
+    return executeShadowTest(q)
+  }
+
   if (!selectedKb.value) return
 
   showOriginalChildMap.value = new Set()
@@ -2203,6 +2540,43 @@ async function executeRetrievalTest(queryText) {
     }
   } else {
     showToast(res.message || '召回测试失败', 'error')
+  }
+}
+
+async function executeShadowTest(queryText) {
+  const q = (queryText !== undefined && queryText !== null ? queryText : retrievalQuery.value || '').trim()
+  if (!q) {
+    showToast('请输入用于双引擎影子评测的查询语句', 'warning')
+    return
+  }
+  retrievalQuery.value = q
+  if (!selectedKb.value) return
+
+  testingShadow.value = true
+  const payload = {
+    query: q,
+    topK: Number(testParams.topK) || 5,
+    scoreThreshold: Number(testParams.scoreThreshold) || 0.0,
+    searchMethod: testParams.searchMethod,
+    rerankEnabled: testParams.rerankEnabled,
+    vectorWeight: Number(testParams.vectorWeight) || 0.7,
+    keywordWeight: Number(testParams.keywordWeight) || 0.3,
+    engineOverride: testParams.engineOverride || undefined,
+    expandParent: testParams.expandParent !== false,
+    rewriteEnabled: Boolean(testParams.rewriteEnabled),
+    maxContextTokens: Number(testParams.maxContextTokens) || 3000
+  }
+
+  const res = await http.post(`/api/knowledge-bases/${selectedKb.value.id}/shadow-test`, payload)
+  testingShadow.value = false
+
+  if (res.success && res.data) {
+    shadowResult.value = res.data
+    const overlap = Math.round((res.data.overlapRatio || 0) * 100)
+    const diff = res.data.latencyDiffMs || 0
+    showToast(`双引擎影子评测完成: Jaccard 重叠率 ${overlap}%, 延迟差 ${diff} ms`, 'success')
+  } else {
+    showToast(res.message || '双引擎影子评测执行失败', 'error')
   }
 }
 
@@ -3445,5 +3819,631 @@ onMounted(() => {
   color: #fff;
   box-shadow: none;
   transform: translateY(-1px);
+}
+
+/* ==================== P3 样式增强: 模式切换、双引擎影子评测与成本看板 ==================== */
+
+.badge-subtab-p3 {
+  display: inline-block;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+  margin-left: 4px;
+}
+
+.retrieval-mode-switcher {
+  display: inline-flex;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.mode-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mode-switch-btn:hover {
+  color: #f1f5f9;
+}
+
+.mode-switch-btn.active {
+  background: rgba(99, 102, 241, 0.25);
+  color: #818cf8;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.badge-mode-p3 {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.btn-execute-test.btn-shadow-mode {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+}
+
+.btn-execute-test.btn-shadow-mode:hover {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+}
+
+/* 影子评测对比容器 */
+.shadow-evaluation-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.shadow-summary-banner {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.shadow-banner-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.shadow-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.shadow-badge-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: #a5b4fc;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.shadow-query-pill {
+  font-size: 12.5px;
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.5);
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.shadow-overlap-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 220px;
+}
+
+.overlap-title {
+  font-size: 12.5px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.overlap-val {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.shadow-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(15, 23, 42, 0.8);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.shadow-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #34d399);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.shadow-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.shadow-metric-card {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.metric-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.metric-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metric-versus-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.versus-dot {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.shadow-delta-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.shadow-delta-tag.faster {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.shadow-delta-tag.slower {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.shadow-delta-tag.info {
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+}
+
+.shadow-delta-tag.neutral {
+  background: rgba(148, 163, 184, 0.1);
+  color: #94a3b8;
+}
+
+/* 双栏对比网格 */
+.shadow-compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .shadow-compare-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.shadow-col {
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.shadow-col.col-primary {
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+.shadow-col.col-secondary {
+  border-color: rgba(168, 85, 247, 0.3);
+}
+
+.shadow-col-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(30, 41, 59, 0.5);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.col-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.col-title-wrap h4 {
+  margin: 0;
+  font-size: 13.5px;
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+.col-count-tag {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+
+.engine-indicator-pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.engine-indicator-pill.spring-ai {
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.engine-indicator-pill.dify {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.col-empty-card {
+  padding: 40px 20px;
+  text-align: center;
+  color: #64748b;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.col-chunks-list {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 650px;
+  overflow-y: auto;
+}
+
+.shadow-chunk-item {
+  background: rgba(30, 41, 59, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.shadow-chunk-item:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  background: rgba(30, 41, 59, 0.8);
+}
+
+.chunk-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.chunk-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.chunk-doc-title {
+  font-size: 12px;
+  color: #cbd5e1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.chunk-item-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.chunk-score-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.chunk-tokens-tag {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.btn-copy-small {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 2px;
+  font-size: 12px;
+}
+
+.btn-copy-small:hover {
+  color: #60a5fa;
+}
+
+.chunk-item-text {
+  font-size: 12.5px;
+  color: #cbd5e1;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+/* ==================== 成本与治理看板 (Cost & Governance Tab) ==================== */
+.cost-governance-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: fadeIn 0.25s ease;
+}
+
+.cost-header-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 22px;
+  background: rgba(30, 41, 59, 0.55);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 12px;
+  gap: 16px;
+}
+
+.cost-banner-info h3 {
+  margin: 0 0 6px 0;
+  font-size: 16px;
+  color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cost-banner-info p {
+  margin: 0;
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.55;
+}
+
+.cost-stats-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.cost-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 18px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 12px;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.cost-card:hover {
+  transform: translateY(-2px);
+}
+
+.cost-card.card-blue { border-color: rgba(59, 130, 246, 0.35); }
+.cost-card.card-emerald { border-color: rgba(16, 185, 129, 0.35); }
+.cost-card.card-purple { border-color: rgba(168, 85, 247, 0.35); }
+.cost-card.card-amber { border-color: rgba(245, 158, 11, 0.4); }
+
+.cost-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.card-blue .cost-card-icon { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+.card-emerald .cost-card-icon { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+.card-purple .cost-card-icon { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+.card-amber .cost-card-icon { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+
+.cost-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cost-label {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.cost-val {
+  font-size: 20px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.cost-sub {
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+.governance-details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 860px) {
+  .governance-details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.gov-card {
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gov-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gov-card-header h4 {
+  margin: 0;
+  font-size: 14px;
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+.gov-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.format-chips-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.format-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: rgba(30, 41, 59, 0.7);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.format-chip.active {
+  border-color: rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.12);
+  color: #93c5fd;
+}
+
+.gov-card-tip {
+  margin: 0;
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.ocr-status-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ocr-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.ocr-status-badge.enabled {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.ocr-status-badge.disabled {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.ocr-feature-tag {
+  font-size: 11.5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.6);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 </style>
