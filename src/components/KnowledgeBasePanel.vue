@@ -1697,7 +1697,7 @@
           <div class="gov-card">
             <div class="gov-card-header">
               <i class="fa-solid fa-eye text-purple"></i>
-              <h4>可插拔 OCR 服务适配状态 (PaddleOCR / 图像识别)</h4>
+              <h4>可插拔 OCR 引擎适配状态 (本地部署 PaddleOCR / 在线云端 API 双模)</h4>
             </div>
             <div class="gov-card-body">
               <div class="ocr-status-row">
@@ -1705,11 +1705,11 @@
                   <i :class="costStats?.ocrStatus?.enabled ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-pause'"></i>
                   {{ costStats?.ocrStatus?.enabled ? 'OCR 服务就绪 (' + (costStats?.ocrStatus?.provider || 'LOCAL_PADDLE') + ')' : 'OCR 插件处于休眠/降级模式' }}
                 </span>
+                <span class="ocr-feature-tag">双模灵活选择：本地部署 PaddleOCR (数据不出网) / 在线云端 API (零运维)</span>
                 <span class="ocr-feature-tag">扫描件自动判定 (页均字符 &lt; 50)</span>
-                <span class="ocr-feature-tag">数据不出内网</span>
               </div>
               <p class="gov-card-tip">
-                当检测到影印扫描件 PDF 或 PNG/JPG 图片时，系统将智能路由至本地 PaddleOCR 容器转写文字；未部署时自动平滑降级并保留元数据。
+                支持【选项 1：本地部署 PaddleOCR 容器】（100% 离线内网）与【选项 2：在线云端 API / 通义千问-VL】（开箱即用免安装环境）双模自由配置。当检测到影印扫描件 PDF 或图片时智能路由执行文字转写；未启用时自动平滑降级并保留原始元数据。
               </p>
             </div>
           </div>
