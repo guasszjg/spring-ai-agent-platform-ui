@@ -847,6 +847,9 @@
               <span v-if="activeIndexVersion" class="badge-recall-version">
                 <i class="fa-solid fa-code-branch"></i> 索引快照: <strong>V{{ activeIndexVersion.versionNo }} ({{ activeIndexVersion.status }})</strong>
               </span>
+              <button type="button" class="badge-recall-version btn-offline-badge" title="查看 100% 私有化离线闭环自检报告" @click="openOfflineReadinessModal()">
+                <i class="fa-solid fa-shield-halved" style="color: #10b981;"></i> 离线闭环: <strong style="color: #34d399;">就绪</strong>
+              </button>
             </div>
             <p class="retrieval-header-desc">
               在不修改知识库线上持久配置的前提下，快速输入业务提问，验证切片召回质量、相似度得分分布、多路重排效果与端到端检索延迟。
@@ -1063,8 +1066,127 @@
               <select v-model="testParams.engineOverride" class="form-control-styled">
                 <option value="">跟随知识库配置 ({{ selectedKb?.provider || 'DIFY' }})</option>
                 <option value="DIFY">强制 DIFY 外挂引擎</option>
-                <option value="SPRING_AI">Spring AI 原生自研引擎 (P2 增强)</option>
+                <option value="SPRING_AI">Spring AI 原生自研引擎 (P4 增强)</option>
               </select>
+            </div>
+
+            <!-- P4 语义缓存 (Semantic Cache) -->
+            <div class="param-item">
+              <div class="param-label-row">
+                <label class="param-label">语义缓存加速 (Semantic Cache)</label>
+                <span class="param-val-badge" :style="{ color: testParams.cacheEnabled ? '#10b981' : '#94a3b8' }">
+                  {{ testParams.cacheEnabled ? '已启用 (< 5ms 响应)' : '已旁路' }}
+                </span>
+              </div>
+              <div class="rerank-toggle-row">
+                <button
+                  type="button"
+                  class="toggle-switch-btn"
+                  :class="{ active: testParams.cacheEnabled, 'switch-green': testParams.cacheEnabled }"
+                  @click="testParams.cacheEnabled = !testParams.cacheEnabled"
+                >
+                  <span class="switch-ball"></span>
+                </button>
+                <span class="toggle-switch-text">{{ testParams.cacheEnabled ? '余弦相似度 ≥ 0.95 判定同语义复用结果' : '强制穿透缓存发起完整检索与重排' }}</span>
+                <button
+                  type="button"
+                  class="btn-clear-cache-small"
+                  title="清空当前知识库已缓存的所有检索结果"
+                  :disabled="clearingCache"
+                  @click="clearSemanticCache()"
+                >
+                  <i :class="clearingCache ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-trash-can'"></i>
+                  <span>清空缓存</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- P4 图文跨模态多模态检索 (Chapter 18) -->
+            <div class="param-item">
+              <div class="param-label-row">
+                <label class="param-label">图文跨模态检索 (Multimodal RAG)</label>
+                <span class="param-val-badge" style="color: #c084fc;">
+                  {{ testParams.queryType === 'IMAGE' ? '以图搜图' : '以文搜图 / 混合检索' }}
+                </span>
+              </div>
+              <div class="method-pills" style="margin-bottom: 8px;">
+                <button
+                  type="button"
+                  class="method-pill"
+                  :class="{ active: testParams.queryType === 'TEXT' }"
+                  @click="testParams.queryType = 'TEXT'"
+                >
+                  <i class="fa-solid fa-font"></i> 以文搜图 / 文本
+                </button>
+                <button
+                  type="button"
+                  class="method-pill"
+                  :class="{ active: testParams.queryType === 'IMAGE' }"
+                  @click="testParams.queryType = 'IMAGE'"
+                >
+                  <i class="fa-solid fa-image"></i> 以图搜图
+                </button>
+              </div>
+              <div v-if="testParams.queryType === 'IMAGE'" class="image-query-box" style="margin-bottom: 8px;">
+                <input
+                  type="text"
+                  v-model="testParams.queryImageUrl"
+                  class="form-control-styled"
+                  placeholder="输入检索目标图片的 URL 或受控地址..."
+                />
+              </div>
+              <div class="rerank-toggle-row">
+                <button
+                  type="button"
+                  class="toggle-switch-btn"
+                  :class="{ active: testParams.injectImagesToLlm, 'switch-purple': testParams.injectImagesToLlm }"
+                  @click="testParams.injectImagesToLlm = !testParams.injectImagesToLlm"
+                >
+                  <span class="switch-ball"></span>
+                </button>
+                <span class="toggle-switch-text">{{ testParams.injectImagesToLlm ? '原图注入 LLM 上下文（消耗图片 Token）' : '默认仅返回引用卡片（第 18 章节约 67% Token）' }}</span>
+                <button
+                  type="button"
+                  class="btn-clear-cache-small"
+                  title="重新计算历史所有图片的 1024 维多模态视觉向量"
+                  :disabled="reembedding"
+                  @click="reembedImages()"
+                >
+                  <i :class="reembedding ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-arrows-rotate'"></i>
+                  <span>图片向量回填</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- P4 GraphRAG 实体多跳图谱检索 (Pilot) -->
+            <div class="param-item">
+              <div class="param-label-row">
+                <label class="param-label">GraphRAG 实体多跳图谱检索 (Pilot)</label>
+                <span class="param-val-badge" :style="{ color: testParams.graphSearchEnabled ? '#06b6d4' : '#94a3b8' }">
+                  {{ testParams.graphSearchEnabled ? '已开启' : '已关闭' }}
+                </span>
+              </div>
+              <div class="rerank-toggle-row">
+                <button
+                  type="button"
+                  class="toggle-switch-btn"
+                  :class="{ active: testParams.graphSearchEnabled, 'switch-cyan': testParams.graphSearchEnabled }"
+                  @click="testParams.graphSearchEnabled = !testParams.graphSearchEnabled"
+                >
+                  <span class="switch-ball"></span>
+                </button>
+                <span class="toggle-switch-text">{{ testParams.graphSearchEnabled ? '提取 Query 核心实体并沿知识图谱 1-hop / 2-hop 关系拓扑推导' : '仅使用常规分块检索' }}</span>
+                <button
+                  type="button"
+                  class="btn-clear-cache-small"
+                  style="border-color: rgba(6, 182, 212, 0.4); color: #06b6d4;"
+                  title="查看知识库已构建的实体拓扑关系网络"
+                  @click="openKnowledgeGraphModal()"
+                >
+                  <i class="fa-solid fa-circle-nodes"></i>
+                  <span>查看知识图谱</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1143,6 +1265,13 @@
                 <i class="fa-solid fa-wand-magic-sparkles"></i>
                 改写后 Query: <strong>"{{ retrievalResult.metrics.rewrittenQuery }}"</strong>
               </span>
+              <span v-if="retrievalResult.metrics?.semanticCacheHit" class="result-stat-chip cache-hit-chip">
+                <i class="fa-solid fa-bolt text-emerald"></i>
+                ⚡ 命中语义缓存 (响应 <strong>{{ retrievalResult.latencyMs }} ms</strong>, 节省 100% 检索与重排)
+                <span v-if="retrievalResult.metrics?.cacheSimilarity" style="opacity: 0.85; font-size: 11px;">
+                  (相似度: {{ (retrievalResult.metrics.cacheSimilarity * 100).toFixed(1) }}%)
+                </span>
+              </span>
             </div>
             <div class="result-banner-right">
               <span class="result-query-tag" :title="retrievalResult.query">
@@ -1157,15 +1286,27 @@
               v-for="(chunk, cIdx) in retrievalResult.chunks"
               :key="cIdx"
               class="retrieval-chunk-card"
+              :class="{ 'card-image-chunk': chunk.imageUrl || chunk.metadata?.isImage || chunk.chunkType === 'IMAGE', 'card-graph-chunk': chunk.chunkType === 'GRAPH' }"
             >
               <div class="chunk-card-header">
                 <div class="chunk-rank-box">
                   <span class="chunk-rank-badge" :class="'rank-' + Math.min(cIdx + 1, 3)">#{{ cIdx + 1 }}</span>
                   <span class="chunk-doc-name" :title="chunk.sourceName">
-                    <i class="fa-solid fa-file-lines"></i> {{ chunk.sourceName || '未命名文档' }}
+                    <i :class="chunk.chunkType === 'GRAPH' ? 'fa-solid fa-circle-nodes text-cyan' : ((chunk.imageUrl || chunk.metadata?.isImage || chunk.chunkType === 'IMAGE') ? 'fa-solid fa-image text-purple' : 'fa-solid fa-file-lines')"></i>
+                    {{ chunk.sourceName || '未命名文档' }}
                   </span>
                   <span v-if="chunk.metadata?.parentExpanded" class="tag-parent-expanded" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); font-size: 11px; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
                     <i class="fa-solid fa-diagram-project"></i> 已展开父块
+                  </span>
+                  <span v-if="chunk.metadata?.semanticCacheHit" class="tag-cache-hit">
+                    <i class="fa-solid fa-bolt"></i> 缓存命中
+                  </span>
+                  <span v-if="chunk.matchedBy" class="badge-matched-by" :class="'matched-' + chunk.matchedBy.toLowerCase()">
+                    <i class="fa-solid" :class="chunk.matchedBy === 'IMAGE_VECTOR' ? 'fa-image' : (chunk.matchedBy === 'CAPTION' ? 'fa-quote-left' : 'fa-font')"></i>
+                    {{ chunk.matchedBy === 'IMAGE_VECTOR' ? '视觉向量命中' : (chunk.matchedBy === 'CAPTION' ? '描述文本命中' : '文本命中') }}
+                  </span>
+                  <span v-if="chunk.chunkType === 'GRAPH'" class="tag-graph-hit">
+                    <i class="fa-solid fa-circle-nodes"></i> GraphRAG
                   </span>
                   <span v-if="chunk.segmentIndex !== null && chunk.segmentIndex !== undefined" class="chunk-seg-index">
                     分段 #{{ chunk.segmentIndex }}
@@ -1192,6 +1333,28 @@
 
               <!-- 切片主体内容 -->
               <div class="chunk-card-body">
+                <!-- P4 多模态图片预览卡片 (Chapter 18) -->
+                <div v-if="chunk.imageUrl || chunk.metadata?.isImage || chunk.chunkType === 'IMAGE'" class="chunk-image-card">
+                  <div class="image-thumb-wrap" @click="previewImgUrl = chunk.imageUrl">
+                    <img :src="chunk.imageUrl" alt="切片图片" class="chunk-img-thumb" @error="$event.target.style.display='none'" />
+                    <div class="thumb-zoom-overlay"><i class="fa-solid fa-magnifying-glass-plus"></i> 点击放大</div>
+                  </div>
+                  <div class="image-meta-info">
+                    <div class="image-matched-row">
+                      <span class="badge-matched-by" :class="chunk.matchedBy === 'IMAGE_VECTOR' ? 'match-vector' : 'match-caption'">
+                        <i class="fa-solid fa-image"></i>
+                        {{ chunk.matchedBy === 'IMAGE_VECTOR' ? '多模态视觉向量命中' : (chunk.matchedBy === 'CAPTION' ? 'VLM 描述文本命中' : '图文关联命中') }}
+                      </span>
+                      <span v-if="chunk.imageUrl" class="image-url-link" :title="chunk.imageUrl">
+                        <i class="fa-solid fa-link"></i> {{ chunk.imageUrl }}
+                      </span>
+                    </div>
+                    <div v-if="chunk.imageCaption" class="image-caption-text">
+                      <i class="fa-solid fa-quote-left"></i> {{ chunk.imageCaption }}
+                    </div>
+                  </div>
+                </div>
+
                 <div
                   class="chunk-content-text"
                   :class="{ collapsed: !expandedChunks.has(cIdx) }"
@@ -1940,6 +2103,163 @@
         </button>
       </div>
     </div>
+
+    <!-- 模态框 4: GraphRAG 实体拓扑知识图谱 -->
+    <div class="modal-backdrop" :class="{ open: showGraphModal }">
+      <div class="modal-dialog modal-graph-dialog">
+        <div class="modal-header">
+          <div class="graph-modal-title">
+            <i class="fa-solid fa-circle-nodes text-cyan"></i>
+            <div>
+              <h3>GraphRAG 实体关系拓扑网络</h3>
+              <span class="graph-modal-subtitle">从知识库分块自动抽取的实体-谓词-实体三元组 (Subject-Predicate-Object)</span>
+            </div>
+          </div>
+          <button class="btn-modal-close" @click="showGraphModal = false"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body graph-modal-body">
+          <div v-if="loadingGraph" class="graph-loading-state">
+            <i class="fa-solid fa-spinner fa-spin fa-2x text-cyan"></i>
+            <p>正在装载实体关系拓扑与图谱索引...</p>
+          </div>
+          <div v-else class="graph-content-layout">
+            <!-- 统计指标条与搜索过滤 -->
+            <div class="graph-toolbar">
+              <div class="graph-stats-pills">
+                <span class="graph-stat-pill">
+                  <i class="fa-solid fa-dice-d20 text-cyan"></i>
+                  实体节点 (Entities): <strong>{{ knowledgeGraphData.nodes?.length || 0 }}</strong>
+                </span>
+                <span class="graph-stat-pill">
+                  <i class="fa-solid fa-share-nodes text-purple"></i>
+                  关系三元组 (Triplets): <strong>{{ knowledgeGraphData.edges?.length || 0 }}</strong>
+                </span>
+              </div>
+              <div class="graph-search-wrap">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input
+                  type="text"
+                  v-model="graphSearchQuery"
+                  class="form-control-styled graph-search-input"
+                  placeholder="搜索实体或关系，如：智能体、模型、PostgreSQL..."
+                />
+                <button v-if="graphSearchQuery" class="btn-clear-graph-search" @click="graphSearchQuery = ''">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- 三元组列表 -->
+            <div class="triplets-list-scroll">
+              <div v-if="filteredGraphEdges.length === 0" class="graph-empty-state">
+                <i class="fa-solid fa-circle-nodes fa-2x" style="opacity: 0.3; margin-bottom: 8px;"></i>
+                <p>{{ (knowledgeGraphData.edges?.length || 0) === 0 ? '当前知识库暂无抽取的实体三元组。文档切片入库时将自动提取实体与语义关系。' : '未找到匹配的实体或关系' }}</p>
+              </div>
+              <div
+                v-for="(edge, eIdx) in filteredGraphEdges"
+                :key="eIdx"
+                class="graph-triplet-card"
+              >
+                <div class="triplet-main-row">
+                  <span class="node-badge source-node">
+                    <i class="fa-solid fa-cube"></i> {{ edge.source }}
+                  </span>
+                  <div class="predicate-arrow">
+                    <span class="predicate-line"></span>
+                    <span class="predicate-label">{{ edge.predicate }}</span>
+                    <i class="fa-solid fa-chevron-right arrow-head"></i>
+                  </div>
+                  <span class="node-badge target-node">
+                    <i class="fa-solid fa-circle-dot"></i> {{ edge.target }}
+                  </span>
+                </div>
+                <div v-if="edge.sourceChunk" class="triplet-source-chunk">
+                  <i class="fa-solid fa-quote-left"></i>
+                  <span>{{ edge.sourceChunk }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" @click="showGraphModal = false">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 模态框 5: 100% 私有化离线闭环自检报告 -->
+    <div class="modal-backdrop" :class="{ open: showOfflineModal }">
+      <div class="modal-dialog modal-offline-dialog">
+        <div class="modal-header">
+          <div class="offline-modal-title">
+            <i class="fa-solid fa-shield-halved text-emerald"></i>
+            <div>
+              <h3>100% 私有化全离线闭环模式自检报告</h3>
+              <span class="offline-modal-subtitle">验证所有检索、向量化、重排与解析算子完全运行于本地局域网，无任何外部公网依赖</span>
+            </div>
+          </div>
+          <button class="btn-modal-close" @click="showOfflineModal = false"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body offline-modal-body">
+          <div v-if="loadingOfflineReport" class="graph-loading-state">
+            <i class="fa-solid fa-spinner fa-spin fa-2x text-emerald"></i>
+            <p>正在诊断本地向量库、算子与离线服务状态...</p>
+          </div>
+          <div v-else-if="offlineReport" class="offline-content-layout">
+            <!-- 总览卡片 -->
+            <div class="offline-overview-banner" :class="{ 'banner-ready': offlineReport.airGappedReady }">
+              <div class="overview-left">
+                <i class="fa-solid" :class="offlineReport.airGappedReady ? 'fa-circle-check text-emerald fa-2x' : 'fa-triangle-exclamation text-amber fa-2x'"></i>
+                <div>
+                  <h4>{{ offlineReport.airGappedReady ? '全链路离线就绪 (100% Air-Gapped Ready)' : '离线配置待优化' }}</h4>
+                  <p>{{ offlineReport.summary }}</p>
+                </div>
+              </div>
+              <div class="overview-badges">
+                <span class="badge-air-gapped">
+                  <i class="fa-solid fa-network-wired"></i>
+                  局域网/内网纯净
+                </span>
+                <span class="badge-air-gapped">
+                  <i class="fa-solid fa-lock"></i>
+                  数据零出境
+                </span>
+              </div>
+            </div>
+
+            <!-- 6 大组件诊断卡片网格 -->
+            <div class="offline-components-grid">
+              <div
+                v-for="comp in offlineReport.components"
+                :key="comp.componentName"
+                class="offline-component-card"
+                :class="{ 'card-ready': comp.ready, 'card-warn': !comp.ready }"
+              >
+                <div class="comp-header">
+                  <div class="comp-name-box">
+                    <span class="comp-status-dot" :class="comp.ready ? 'dot-green' : 'dot-red'"></span>
+                    <strong class="comp-name">{{ comp.componentName }}</strong>
+                  </div>
+                  <span class="comp-tag" :class="comp.ready ? 'tag-local' : 'tag-warn'">
+                    {{ comp.ready ? '本地就绪' : '检查警告' }}
+                  </span>
+                </div>
+                <div class="comp-type-label">
+                  <i class="fa-solid fa-microchip"></i> {{ comp.implementationType }}
+                </div>
+                <p class="comp-desc">{{ comp.description }}</p>
+              </div>
+            </div>
+          </div>
+          <div v-else class="graph-empty-state">
+            <p>暂无离线自检数据</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" @click="showOfflineModal = false">关闭报告</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -2015,6 +2335,17 @@ const activeIndexVersion = ref(null)
 const expandedChunks = ref(new Set())
 const showOriginalChildMap = ref(new Set())
 
+// P4 新增状态: 语义缓存、多模态、图谱与离线
+const clearingCache = ref(false)
+const reembedding = ref(false)
+const showGraphModal = ref(false)
+const loadingGraph = ref(false)
+const graphSearchQuery = ref('')
+const knowledgeGraphData = ref({ nodes: [], edges: [] })
+const showOfflineModal = ref(false)
+const loadingOfflineReport = ref(false)
+const offlineReport = ref(null)
+
 const testParams = reactive({
   topK: 5,
   scoreThreshold: 0.5,
@@ -2026,7 +2357,24 @@ const testParams = reactive({
   indexVersionId: '',
   expandParent: true,
   rewriteEnabled: false,
-  maxContextTokens: 3000
+  maxContextTokens: 3000,
+  cacheEnabled: true,
+  queryType: 'TEXT',
+  queryImageUrl: '',
+  injectImagesToLlm: false,
+  graphSearchEnabled: false
+})
+
+const filteredGraphEdges = computed(() => {
+  const edges = knowledgeGraphData.value?.edges || []
+  const q = (graphSearchQuery.value || '').trim().toLowerCase()
+  if (!q) return edges
+  return edges.filter(e =>
+    (e.source || '').toLowerCase().includes(q) ||
+    (e.target || '').toLowerCase().includes(q) ||
+    (e.predicate || '').toLowerCase().includes(q) ||
+    (e.sourceChunk || '').toLowerCase().includes(q)
+  )
 })
 
 function toggleOriginalChild(cIdx) {
@@ -2457,6 +2805,11 @@ function openRetrievalTestTab() {
     testParams.expandParent = true
     testParams.rewriteEnabled = false
     testParams.maxContextTokens = 3000
+    testParams.cacheEnabled = true
+    testParams.queryType = 'TEXT'
+    testParams.queryImageUrl = ''
+    testParams.injectImagesToLlm = false
+    testParams.graphSearchEnabled = false
     showOriginalChildMap.value = new Set()
     loadIndexVersions()
   }
@@ -2526,7 +2879,12 @@ async function executeRetrievalTest(queryText) {
     indexVersionId: testParams.indexVersionId || undefined,
     expandParent: testParams.expandParent !== false,
     rewriteEnabled: Boolean(testParams.rewriteEnabled),
-    maxContextTokens: Number(testParams.maxContextTokens) || 3000
+    maxContextTokens: Number(testParams.maxContextTokens) || 3000,
+    cacheEnabled: testParams.cacheEnabled !== false,
+    queryType: testParams.queryType || 'TEXT',
+    queryImageUrl: testParams.queryImageUrl || undefined,
+    injectImagesToLlm: Boolean(testParams.injectImagesToLlm),
+    graphSearchEnabled: Boolean(testParams.graphSearchEnabled)
   }
 
   const res = await http.post(`/api/knowledge-bases/${selectedKb.value.id}/retrieval-test`, payload)
@@ -2564,7 +2922,12 @@ async function executeShadowTest(queryText) {
     engineOverride: testParams.engineOverride || undefined,
     expandParent: testParams.expandParent !== false,
     rewriteEnabled: Boolean(testParams.rewriteEnabled),
-    maxContextTokens: Number(testParams.maxContextTokens) || 3000
+    maxContextTokens: Number(testParams.maxContextTokens) || 3000,
+    cacheEnabled: testParams.cacheEnabled !== false,
+    queryType: testParams.queryType || 'TEXT',
+    queryImageUrl: testParams.queryImageUrl || undefined,
+    injectImagesToLlm: Boolean(testParams.injectImagesToLlm),
+    graphSearchEnabled: Boolean(testParams.graphSearchEnabled)
   }
 
   const res = await http.post(`/api/knowledge-bases/${selectedKb.value.id}/shadow-test`, payload)
@@ -2577,6 +2940,78 @@ async function executeShadowTest(queryText) {
     showToast(`双引擎影子评测完成: Jaccard 重叠率 ${overlap}%, 延迟差 ${diff} ms`, 'success')
   } else {
     showToast(res.message || '双引擎影子评测执行失败', 'error')
+  }
+}
+
+async function clearSemanticCache() {
+  if (!selectedKb.value) return
+  clearingCache.value = true
+  try {
+    const res = await http.delete(`/api/knowledge-bases/${selectedKb.value.id}/cache/clear`)
+    if (res.success) {
+      showToast('语义缓存已成功清空', 'success')
+    } else {
+      showToast(res.message || '清空缓存失败', 'error')
+    }
+  } catch (err) {
+    showToast('清空缓存请求出错', 'error')
+  } finally {
+    clearingCache.value = false
+  }
+}
+
+async function reembedImages() {
+  if (!selectedKb.value) return
+  reembedding.value = true
+  try {
+    const res = await http.post(`/api/knowledge-bases/${selectedKb.value.id}/images/reembed`)
+    if (res.success) {
+      const updatedCount = res.data?.updatedCount || 0
+      showToast(`图片向量重算回填完成，共处理 ${updatedCount} 个图片切片`, 'success')
+    } else {
+      showToast(res.message || '图片重算失败', 'error')
+    }
+  } catch (err) {
+    showToast('图片重算请求出错', 'error')
+  } finally {
+    reembedding.value = false
+  }
+}
+
+async function openKnowledgeGraphModal() {
+  if (!selectedKb.value) return
+  showGraphModal.value = true
+  loadingGraph.value = true
+  try {
+    const res = await http.get(`/api/knowledge-bases/${selectedKb.value.id}/graph`)
+    if (res.success && res.data) {
+      knowledgeGraphData.value = res.data
+    } else {
+      knowledgeGraphData.value = { nodes: [], edges: [] }
+    }
+  } catch (err) {
+    knowledgeGraphData.value = { nodes: [], edges: [] }
+  } finally {
+    loadingGraph.value = false
+  }
+}
+
+async function openOfflineReadinessModal() {
+  showOfflineModal.value = true
+  loadingOfflineReport.value = true
+  try {
+    const kbId = selectedKb.value?.id
+    const url = kbId ? `/api/knowledge-bases/${kbId}/offline-status` : `/api/knowledge-bases/offline-status`
+    const res = await http.get(url)
+    if (res.success && res.data) {
+      offlineReport.value = res.data
+    } else {
+      offlineReport.value = null
+    }
+  } catch (err) {
+    offlineReport.value = null
+  } finally {
+    loadingOfflineReport.value = false
   }
 }
 
@@ -4445,5 +4880,553 @@ onMounted(() => {
   background: rgba(15, 23, 42, 0.6);
   color: #cbd5e1;
   border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+/* ==================== P4 差异化超越与多模态样式 (Phase P4) ==================== */
+.btn-offline-badge {
+  background: rgba(16, 185, 129, 0.12) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-offline-badge:hover {
+  background: rgba(16, 185, 129, 0.22) !important;
+  border-color: rgba(16, 185, 129, 0.5) !important;
+}
+
+.switch-green.active {
+  background: #10b981 !important;
+}
+
+.switch-cyan.active {
+  background: #06b6d4 !important;
+}
+
+.switch-purple.active {
+  background: #8b5cf6 !important;
+}
+
+.btn-clear-cache-small {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  border-radius: 4px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #f87171;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.btn-clear-cache-small:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
+}
+
+.cache-hit-chip {
+  background: rgba(16, 185, 129, 0.15) !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  color: #34d399 !important;
+}
+
+.tag-cache-hit {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tag-graph-hit {
+  background: rgba(6, 182, 212, 0.15);
+  color: #22d3ee;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge-matched-by {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(139, 92, 246, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.badge-matched-by.match-vector,
+.badge-matched-by.matched-image_vector {
+  background: rgba(168, 85, 247, 0.18);
+  color: #d8b4fe;
+  border-color: rgba(168, 85, 247, 0.35);
+}
+
+.badge-matched-by.match-caption,
+.badge-matched-by.matched-caption {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.badge-matched-by.matched-text_only {
+  background: rgba(100, 116, 139, 0.15);
+  color: #94a3b8;
+  border-color: rgba(100, 116, 139, 0.3);
+}
+
+.card-image-chunk {
+  border-left: 3px solid #a855f7 !important;
+}
+
+.card-graph-chunk {
+  border-left: 3px solid #06b6d4 !important;
+}
+
+/* 多模态图文切片展示卡片 (Chapter 18) */
+.chunk-image-card {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  border-radius: 8px;
+}
+
+.image-thumb-wrap {
+  position: relative;
+  width: 120px;
+  height: 80px;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+  cursor: pointer;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: #0b1120;
+}
+
+.chunk-img-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.2s ease;
+}
+
+.thumb-zoom-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #f1f5f9;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.image-thumb-wrap:hover .thumb-zoom-overlay {
+  opacity: 1;
+}
+
+.image-thumb-wrap:hover .chunk-img-thumb {
+  transform: scale(1.05);
+}
+
+.image-meta-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.image-matched-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.image-url-link {
+  font-size: 11px;
+  color: #94a3b8;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-caption-text {
+  font-size: 12.5px;
+  color: #cbd5e1;
+  font-style: italic;
+  line-height: 1.5;
+  background: rgba(30, 41, 59, 0.4);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border-left: 3px solid #8b5cf6;
+}
+
+/* GraphRAG 弹窗样式 */
+.modal-graph-dialog {
+  max-width: 780px !important;
+}
+
+.graph-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.graph-modal-title i {
+  font-size: 24px;
+}
+
+.graph-modal-title h3 {
+  margin: 0 0 2px 0;
+  font-size: 16px;
+  color: #f1f5f9;
+}
+
+.graph-modal-subtitle {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.graph-modal-body {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 16px 20px !important;
+}
+
+.graph-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.graph-stats-pills {
+  display: flex;
+  gap: 8px;
+}
+
+.graph-stat-pill {
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.graph-search-wrap {
+  position: relative;
+  min-width: 260px;
+}
+
+.graph-search-wrap i.fa-magnifying-glass {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  font-size: 12px;
+}
+
+.graph-search-input {
+  padding-left: 30px !important;
+  padding-right: 28px !important;
+  font-size: 12px !important;
+}
+
+.btn-clear-graph-search {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.triplets-list-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.graph-triplet-card {
+  padding: 12px 14px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(6, 182, 212, 0.25);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.graph-triplet-card:hover {
+  border-color: rgba(6, 182, 212, 0.5);
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.triplet-main-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.node-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.source-node {
+  background: rgba(6, 182, 212, 0.15);
+  color: #22d3ee;
+  border: 1px solid rgba(6, 182, 212, 0.35);
+}
+
+.target-node {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+
+.predicate-arrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.predicate-label {
+  font-size: 11.5px;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.arrow-head {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.triplet-source-chunk {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: #94a3b8;
+  line-height: 1.4;
+  padding: 6px 10px;
+  background: rgba(30, 41, 59, 0.35);
+  border-radius: 4px;
+  display: flex;
+  gap: 6px;
+}
+
+.graph-empty-state,
+.graph-loading-state {
+  text-align: center;
+  padding: 36px 16px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+/* 100% 私有化离线报告弹窗样式 */
+.modal-offline-dialog {
+  max-width: 820px !important;
+}
+
+.offline-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.offline-modal-title h3 {
+  margin: 0 0 2px 0;
+  font-size: 16px;
+  color: #f1f5f9;
+}
+
+.offline-modal-subtitle {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.offline-modal-body {
+  max-height: 65vh;
+  overflow-y: auto;
+  padding: 18px 22px !important;
+}
+
+.offline-overview-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.overview-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.overview-left h4 {
+  margin: 0 0 4px 0;
+  font-size: 15px;
+  color: #f1f5f9;
+}
+
+.overview-left p {
+  margin: 0;
+  font-size: 12.5px;
+  color: #94a3b8;
+}
+
+.overview-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.badge-air-gapped {
+  font-size: 11.5px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.offline-components-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.offline-component-card {
+  padding: 14px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.offline-component-card.card-ready {
+  border-left: 3px solid #10b981;
+}
+
+.offline-component-card.card-warn {
+  border-left: 3px solid #f59e0b;
+}
+
+.comp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.comp-name-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comp-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dot-green {
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+}
+
+.dot-red {
+  background: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+}
+
+.comp-name {
+  font-size: 13px;
+  color: #f1f5f9;
+}
+
+.comp-tag {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.tag-local {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.tag-warn {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.comp-type-label {
+  font-size: 11.5px;
+  color: #60a5fa;
+  margin-bottom: 6px;
+}
+
+.comp-desc {
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.45;
+  margin: 0;
 }
 </style>
