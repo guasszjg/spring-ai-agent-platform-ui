@@ -425,7 +425,7 @@
         </div>
       </div>
 
-      <!-- 内部子 Tab 切换（文档库 vs 问答FAQ） -->
+      <!-- 内部子 Tab 切换（文档库 vs 问答FAQ vs 召回测试） -->
       <div class="kb-subtabs-bar">
         <button
           class="kb-subtab-btn"
@@ -442,6 +442,14 @@
         >
           <i class="fa-solid fa-comments-question-check"></i>
           <span>业务问答与 FAQ ({{ selectedKb?.faqCount || 0 }})</span>
+        </button>
+        <button
+          class="kb-subtab-btn"
+          :class="{ active: activeSubTab === 'retrieval-test' }"
+          @click="openRetrievalTestTab"
+        >
+          <i class="fa-solid fa-crosshairs"></i>
+          <span>召回测试与调试</span>
         </button>
       </div>
 
@@ -810,6 +818,349 @@
             </button>
           </div>
         </section>
+      </div>
+
+      <!-- TAB 3: 召回测试与调试 (Phase P1) -->
+      <div v-show="activeSubTab === 'retrieval-test'" class="kb-tab-content retrieval-test-tab">
+        <!-- 调试提示条与测试说明 -->
+        <div class="retrieval-test-header-card">
+          <div class="retrieval-header-info">
+            <div class="retrieval-title-row">
+              <span class="badge-recall-test"><i class="fa-solid fa-crosshairs"></i> 召回调试控制台</span>
+              <span class="badge-recall-engine">
+                <i class="fa-solid fa-cube"></i> 当前物理引擎: <strong>{{ testParams.engineOverride || selectedKb?.provider || 'DIFY' }}</strong>
+              </span>
+              <span v-if="activeIndexVersion" class="badge-recall-version">
+                <i class="fa-solid fa-code-branch"></i> 索引快照: <strong>V{{ activeIndexVersion.versionNo }} ({{ activeIndexVersion.status }})</strong>
+              </span>
+            </div>
+            <p class="retrieval-header-desc">
+              在不修改知识库线上持久配置的前提下，快速输入业务提问，验证切片召回质量、相似度得分分布、多路重排效果与端到端检索延迟。
+            </p>
+          </div>
+          <button type="button" class="btn-toggle-params" @click="showParamDrawer = !showParamDrawer">
+            <i class="fa-solid fa-sliders"></i>
+            <span>{{ showParamDrawer ? '收起调试参数' : '展开调试参数' }}</span>
+            <i class="fa-solid" :class="showParamDrawer ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+          </button>
+        </div>
+
+        <!-- 临时调试参数微调面板 -->
+        <div v-show="showParamDrawer" class="retrieval-params-card">
+          <div class="params-card-title">
+            <i class="fa-solid fa-flask-vial text-blue"></i>
+            <span>本次测试临时覆盖参数（仅对本次调试生效，不写入知识库配置）</span>
+          </div>
+          <div class="params-grid">
+            <!-- 检索方式 -->
+            <div class="param-item">
+              <label class="param-label">检索策略 (Search Method)</label>
+              <div class="method-pills">
+                <button
+                  type="button"
+                  class="method-pill"
+                  :class="{ active: testParams.searchMethod === 'hybrid_search' }"
+                  @click="testParams.searchMethod = 'hybrid_search'"
+                >
+                  <i class="fa-solid fa-layer-group"></i> 混合检索
+                </button>
+                <button
+                  type="button"
+                  class="method-pill"
+                  :class="{ active: testParams.searchMethod === 'semantic_search' }"
+                  @click="testParams.searchMethod = 'semantic_search'"
+                >
+                  <i class="fa-solid fa-brain"></i> 向量检索
+                </button>
+                <button
+                  type="button"
+                  class="method-pill"
+                  :class="{ active: testParams.searchMethod === 'full_text_search' }"
+                  @click="testParams.searchMethod = 'full_text_search'"
+                >
+                  <i class="fa-solid fa-font"></i> 全文检索
+                </button>
+              </div>
+            </div>
+
+            <!-- Top K -->
+            <div class="param-item">
+              <div class="param-label-row">
+                <label class="param-label">Top K 召回条数</label>
+                <span class="param-val-badge">{{ testParams.topK }} 条</span>
+              </div>
+              <input
+                type="range"
+                v-model.number="testParams.topK"
+                min="1"
+                max="20"
+                step="1"
+                class="form-range-styled"
+              >
+            </div>
+
+            <!-- 相似度阈值 Score Threshold -->
+            <div class="param-item">
+              <div class="param-label-row">
+                <label class="param-label">相似度得分阈值 (Score Threshold)</label>
+                <span class="param-val-badge">{{ Number(testParams.scoreThreshold).toFixed(2) }}</span>
+              </div>
+              <input
+                type="range"
+                v-model.number="testParams.scoreThreshold"
+                min="0.0"
+                max="1.0"
+                step="0.05"
+                class="form-range-styled"
+              >
+              <div class="param-hint">低于该得分的切片将被过滤（设为 0.0 表示不过滤）</div>
+            </div>
+
+            <!-- Rerank 开关 -->
+            <div class="param-item">
+              <div class="param-label-row">
+                <label class="param-label">Rerank 二次重排</label>
+                <span class="param-val-badge" :style="{ color: testParams.rerankEnabled ? '#10b981' : '#94a3b8' }">
+                  {{ testParams.rerankEnabled ? '已启用' : '已关闭' }}
+                </span>
+              </div>
+              <div class="rerank-toggle-row">
+                <button
+                  type="button"
+                  class="toggle-switch-btn"
+                  :class="{ active: testParams.rerankEnabled }"
+                  @click="testParams.rerankEnabled = !testParams.rerankEnabled"
+                >
+                  <span class="switch-ball"></span>
+                </button>
+                <span class="toggle-switch-text">{{ testParams.rerankEnabled ? '对候选切片计算交叉相关度重排序' : '仅使用初筛综合得分' }}</span>
+              </div>
+            </div>
+
+            <!-- 权重配置（仅在混合检索时显示） -->
+            <div v-if="testParams.searchMethod === 'hybrid_search'" class="param-item param-item-span2">
+              <div class="param-label-row">
+                <label class="param-label">混合检索双路权重配比</label>
+                <span class="param-val-badge">语义 {{ Math.round(testParams.vectorWeight * 100) }}% : 关键词 {{ Math.round(testParams.keywordWeight * 100) }}%</span>
+              </div>
+              <div class="weights-slider-box">
+                <input
+                  type="range"
+                  :value="testParams.vectorWeight"
+                  min="0.1"
+                  max="0.9"
+                  step="0.05"
+                  class="form-range-styled"
+                  @input="onWeightSliderChange($event.target.value)"
+                >
+                <div class="weights-scale-labels">
+                  <span>偏向语义意图 (0.9 : 0.1)</span>
+                  <span>7:3 黄金配比</span>
+                  <span>偏向精准关键词 (0.1 : 0.9)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 引擎覆盖 (L3 调试覆盖) -->
+            <div class="param-item">
+              <label class="param-label">物理引擎覆盖 (L3 Debug Override)</label>
+              <select v-model="testParams.engineOverride" class="form-control-styled">
+                <option value="">跟随知识库配置 ({{ selectedKb?.provider || 'DIFY' }})</option>
+                <option value="DIFY">强制 DIFY 外挂引擎</option>
+                <option value="SPRING_AI">原生 SPRING_AI 引擎 (研发就绪中)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 提问输入框与执行操作 -->
+        <div class="retrieval-query-box">
+          <div class="query-input-wrap">
+            <i class="fa-solid fa-magnifying-glass query-icon"></i>
+            <input
+              type="text"
+              v-model="retrievalQuery"
+              class="query-input"
+              placeholder="输入用于召回测试的查询语句，按回车或点击“执行检索”..."
+              @keyup.enter="executeRetrievalTest()"
+            >
+            <button
+              v-if="retrievalQuery"
+              type="button"
+              class="btn-clear-query"
+              title="清空输入"
+              @click="retrievalQuery = ''"
+            >
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+            <button
+              type="button"
+              class="btn-execute-test"
+              :disabled="testingRetrieval || !retrievalQuery.trim()"
+              @click="executeRetrievalTest()"
+            >
+              <i :class="testingRetrieval ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-paper-plane'"></i>
+              <span>{{ testingRetrieval ? '正在检索...' : '执行检索' }}</span>
+            </button>
+          </div>
+
+          <!-- 推荐提问 Chips -->
+          <div class="sample-queries-row">
+            <span class="sample-label"><i class="fa-regular fa-lightbulb"></i> 快速测试建议：</span>
+            <button
+              v-for="(q, idx) in sampleQueries"
+              :key="idx"
+              type="button"
+              class="query-chip"
+              @click="executeRetrievalTest(q)"
+            >
+              {{ q }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 检索结果状态汇总栏 -->
+        <div v-if="retrievalResult" class="retrieval-result-banner">
+          <div class="result-banner-left">
+            <span class="result-stat-chip hit-count">
+              <i class="fa-solid fa-bullseye"></i>
+              命中 <strong>{{ retrievalResult.chunks?.length || 0 }}</strong> 个分块
+            </span>
+            <span class="result-stat-chip latency">
+              <i class="fa-solid fa-bolt"></i>
+              端到端耗时: <strong>{{ retrievalResult.latencyMs }} ms</strong>
+            </span>
+            <span class="result-stat-chip engine">
+              <i class="fa-solid fa-microchip"></i>
+              生效引擎: <strong>{{ retrievalResult.engineResolution?.effectiveEngine || 'DIFY' }}</strong>
+              <span class="engine-src-tag">({{ formatEngineSource(retrievalResult.engineResolution?.source) }})</span>
+            </span>
+          </div>
+          <div class="result-banner-right">
+            <span class="result-query-tag" :title="retrievalResult.query">
+              Query: "{{ retrievalResult.query }}"
+            </span>
+          </div>
+        </div>
+
+        <!-- 结果切片列表 -->
+        <div v-if="retrievalResult && retrievalResult.chunks && retrievalResult.chunks.length > 0" class="retrieval-chunks-grid">
+          <div
+            v-for="(chunk, cIdx) in retrievalResult.chunks"
+            :key="cIdx"
+            class="retrieval-chunk-card"
+          >
+            <div class="chunk-card-header">
+              <div class="chunk-rank-box">
+                <span class="chunk-rank-badge" :class="'rank-' + Math.min(cIdx + 1, 3)">#{{ cIdx + 1 }}</span>
+                <span class="chunk-doc-name" :title="chunk.sourceName">
+                  <i class="fa-solid fa-file-lines"></i> {{ chunk.sourceName || '未命名文档' }}
+                </span>
+                <span v-if="chunk.segmentIndex !== null && chunk.segmentIndex !== undefined" class="chunk-seg-index">
+                  分段 #{{ chunk.segmentIndex }}
+                </span>
+                <span v-if="chunk.tokenCount" class="chunk-tokens">
+                  {{ chunk.tokenCount }} Tokens
+                </span>
+              </div>
+              <div class="chunk-score-group">
+                <!-- 综合得分 -->
+                <span class="chunk-score-pill score-fused" :class="getScoreClass(chunk.score)">
+                  <i class="fa-solid fa-chart-simple"></i> 得分: {{ formatScore(chunk.score) }}
+                </span>
+                <!-- 向量得分 -->
+                <span v-if="chunk.vectorScore" class="chunk-score-pill score-sub">
+                  向量: {{ formatScore(chunk.vectorScore) }}
+                </span>
+                <!-- 关键词得分 -->
+                <span v-if="chunk.keywordScore" class="chunk-score-pill score-sub">
+                  关键词: {{ formatScore(chunk.keywordScore) }}
+                </span>
+                <!-- 重排得分 -->
+                <span v-if="chunk.rerankScore" class="chunk-score-pill score-sub score-rerank">
+                  Rerank: {{ formatScore(chunk.rerankScore) }}
+                </span>
+              </div>
+            </div>
+
+            <!-- 切片文本正文 -->
+            <div class="chunk-card-body">
+              <div
+                class="chunk-content-text"
+                :class="{ collapsed: !expandedChunks.has(cIdx) && chunk.content?.length > 300 }"
+              >
+                {{ chunk.content }}
+              </div>
+              <button
+                v-if="chunk.content?.length > 300"
+                type="button"
+                class="btn-expand-chunk"
+                @click="toggleChunkExpand(cIdx)"
+              >
+                {{ expandedChunks.has(cIdx) ? '收起段落' : '展开全文 (' + chunk.content.length + ' 字符)' }}
+                <i class="fa-solid" :class="expandedChunks.has(cIdx) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+              </button>
+            </div>
+
+            <!-- 卡片底部操作 -->
+            <div class="chunk-card-footer">
+              <div class="chunk-id-text" :title="chunk.chunkId">
+                <span v-if="chunk.chunkId">Chunk ID: {{ chunk.chunkId }}</span>
+              </div>
+              <button
+                type="button"
+                class="btn-copy-chunk"
+                title="复制此切片文本"
+                @click="copyChunkText(chunk.content)"
+              >
+                <i class="fa-regular fa-clone"></i> <span>复制内容</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 智能诊断与空状态 -->
+        <div
+          v-else-if="retrievalResult && (!retrievalResult.chunks || retrievalResult.chunks.length === 0)"
+          class="retrieval-empty-state"
+        >
+          <div class="empty-icon-wrap diagnostic-icon">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+          </div>
+          <h3>未召回任何匹配分块</h3>
+          <div class="diagnostic-box">
+            <div class="diagnostic-reason">
+              <i class="fa-solid fa-stethoscope"></i>
+              <span>
+                <strong>诊断分析：</strong>当前相似度阈值设置为 <strong>{{ Number(testParams.scoreThreshold).toFixed(2) }}</strong>，
+                {{ testParams.scoreThreshold >= 0.6 ? '阈值设置偏高，导致相关性稍弱的候选分块被严格过滤；' : '库内文档中可能缺少与该查询语义相近的段落内容；' }}
+                检索策略当前为 <strong>{{ getSearchMethodLabel(testParams.searchMethod) }}</strong>。
+              </span>
+            </div>
+            <div class="diagnostic-actions">
+              <button type="button" class="btn-diag-action" @click="retryWithLowerThreshold">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>一键调优：阈值降至 0.3 并采用混合检索重试</span>
+              </button>
+              <button type="button" class="btn-diag-action secondary" @click="retryWithZeroThreshold">
+                <i class="fa-solid fa-filter-circle-xmark"></i>
+                <span>解除阈值过滤 (0.0) 查看原始候选段落</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 初始空白引导 -->
+        <div v-else class="retrieval-placeholder-state">
+          <div class="placeholder-icon">
+            <i class="fa-solid fa-radar"></i>
+          </div>
+          <h3>准备就绪，输入问题开始召回测试</h3>
+          <p>
+            输入您关心的业务问题，点击“执行检索”即可实时查看分块召回效果、得分详情与耗时指标。<br>
+            可展开上方“调试参数”临时调整 TopK、相似度阈值、检索模式或双路权重。
+          </p>
+        </div>
       </div>
     </div>
 
@@ -1219,8 +1570,36 @@ watch(viewLayout, async (mode) => {
   if (!persistLayoutReady) return
   await http.put('/api/auth/preferences', { kbViewLayout: mode })
 })
-const activeSubTab = ref('documents') // 'documents' | 'faqs'
+const activeSubTab = ref('documents') // 'documents' | 'faqs' | 'retrieval-test'
 const selectedKb = ref(null)
+
+// ==================== 召回测试与调试状态 (Phase P1) ====================
+const showParamDrawer = ref(true)
+const retrievalQuery = ref('')
+const testingRetrieval = ref(false)
+const retrievalResult = ref(null)
+const retrievalVersions = ref([])
+const activeIndexVersion = ref(null)
+const expandedChunks = ref(new Set())
+
+const testParams = reactive({
+  topK: 5,
+  scoreThreshold: 0.5,
+  searchMethod: 'hybrid_search',
+  rerankEnabled: true,
+  vectorWeight: 0.7,
+  keywordWeight: 0.3,
+  engineOverride: '',
+  indexVersionId: ''
+})
+
+const sampleQueries = [
+  '退款流程是怎样的？',
+  '支持哪些文档格式上传？',
+  '系统配置参数说明',
+  '故障排查与应急指南',
+  '服务协议与违约条款'
+]
 
 // 知识库列表状态
 const kbList = ref([])
@@ -1578,6 +1957,8 @@ function openKbDetail(kb) {
   activeSubTab.value = 'documents'
   docPage.value = 1
   faqPage.value = 1
+  retrievalResult.value = null
+  retrievalQuery.value = ''
   loadDocuments()
   loadFaqCategories()
   loadFaqs()
@@ -1586,6 +1967,136 @@ function openKbDetail(kb) {
 function backToList() {
   currentView.value = 'list'
   loadKnowledgeBases()
+}
+
+// ==================== 召回测试与调试逻辑 (Phase P1) ====================
+
+function openRetrievalTestTab() {
+  activeSubTab.value = 'retrieval-test'
+  if (selectedKb.value) {
+    testParams.topK = (selectedKb.value.topK !== null && selectedKb.value.topK !== undefined) ? selectedKb.value.topK : 5
+    testParams.scoreThreshold = (selectedKb.value.scoreThreshold !== null && selectedKb.value.scoreThreshold !== undefined) ? selectedKb.value.scoreThreshold : 0.5
+    testParams.searchMethod = selectedKb.value.searchMethod || 'hybrid_search'
+    testParams.rerankEnabled = selectedKb.value.rerankEnabled !== undefined ? selectedKb.value.rerankEnabled : true
+    testParams.vectorWeight = (selectedKb.value.vectorWeight !== null && selectedKb.value.vectorWeight !== undefined) ? selectedKb.value.vectorWeight : 0.7
+    testParams.keywordWeight = (selectedKb.value.keywordWeight !== null && selectedKb.value.keywordWeight !== undefined) ? selectedKb.value.keywordWeight : 0.3
+    testParams.engineOverride = ''
+    loadIndexVersions()
+  }
+}
+
+async function loadIndexVersions() {
+  if (!selectedKb.value) return
+  const res = await http.get(`/api/knowledge-bases/${selectedKb.value.id}/index-versions`)
+  if (res.success && res.data) {
+    retrievalVersions.value = res.data
+    if (res.data.length > 0) {
+      activeIndexVersion.value = res.data[0]
+      testParams.indexVersionId = res.data[0].id
+    }
+  }
+}
+
+function onWeightSliderChange(val) {
+  const v = Number(val) || 0.7
+  testParams.vectorWeight = v
+  testParams.keywordWeight = Number((1.0 - v).toFixed(2))
+}
+
+async function executeRetrievalTest(queryText) {
+  const q = (queryText !== undefined && queryText !== null ? queryText : retrievalQuery.value || '').trim()
+  if (!q) {
+    showToast('请输入召回测试查询语句', 'warning')
+    return
+  }
+  retrievalQuery.value = q
+  if (!selectedKb.value) return
+
+  testingRetrieval.value = true
+  const payload = {
+    query: q,
+    topK: Number(testParams.topK) || 5,
+    scoreThreshold: Number(testParams.scoreThreshold) || 0.0,
+    searchMethod: testParams.searchMethod,
+    rerankEnabled: testParams.rerankEnabled,
+    vectorWeight: Number(testParams.vectorWeight) || 0.7,
+    keywordWeight: Number(testParams.keywordWeight) || 0.3,
+    engineOverride: testParams.engineOverride || undefined,
+    indexVersionId: testParams.indexVersionId || undefined
+  }
+
+  const res = await http.post(`/api/knowledge-bases/${selectedKb.value.id}/retrieval-test`, payload)
+  testingRetrieval.value = false
+
+  if (res.success && res.data) {
+    retrievalResult.value = res.data
+    const hitCount = res.data.chunks?.length || 0
+    if (hitCount > 0) {
+      showToast(`检索完成：成功召回 ${hitCount} 个匹配分块（耗时 ${res.data.latencyMs} ms）`, 'success')
+    }
+  } else {
+    showToast(res.message || '召回测试失败', 'error')
+  }
+}
+
+function retryWithLowerThreshold() {
+  testParams.scoreThreshold = 0.3
+  testParams.searchMethod = 'hybrid_search'
+  executeRetrievalTest()
+}
+
+function retryWithZeroThreshold() {
+  testParams.scoreThreshold = 0.0
+  executeRetrievalTest()
+}
+
+function toggleChunkExpand(cIdx) {
+  const s = new Set(expandedChunks.value)
+  if (s.has(cIdx)) {
+    s.delete(cIdx)
+  } else {
+    s.add(cIdx)
+  }
+  expandedChunks.value = s
+}
+
+function copyChunkText(content) {
+  if (!content) return
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(content).then(() => {
+      showToast('分块内容已复制到剪贴板', 'success')
+    }).catch(() => {
+      showToast('复制失败，请手动选择文字复制', 'error')
+    })
+  } else {
+    const el = document.createElement('textarea')
+    el.value = content
+    document.body.appendChild(el)
+    el.select()
+    document.execCommand('copy')
+    document.body.removeChild(el)
+    showToast('分块内容已复制到剪贴板', 'success')
+  }
+}
+
+function formatScore(score) {
+  if (score === null || score === undefined) return '-'
+  return Number(score).toFixed(3)
+}
+
+function getScoreClass(score) {
+  const n = Number(score || 0)
+  if (n >= 0.8) return 'score-high'
+  if (n >= 0.6) return 'score-mid'
+  return 'score-low'
+}
+
+function formatEngineSource(source) {
+  if (!source) return '默认'
+  if (source === 'L1_SYSTEM_DEFAULT') return '系统默认 L1'
+  if (source === 'L2_KB_BINDING') return '知识库绑定 L2'
+  if (source === 'L3_DEBUG_OVERRIDE') return '调试临时覆盖 L3'
+  return source
 }
 
 // ==================== 文档管理逻辑 ====================
@@ -2012,3 +2523,732 @@ onMounted(() => {
   loadViewLayoutPreference()
 })
 </script>
+
+<style scoped>
+.retrieval-test-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: fadeIn 0.25s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.retrieval-test-header-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: rgba(30, 41, 59, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  gap: 16px;
+}
+
+.retrieval-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.badge-recall-test {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: #a5b4fc;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.badge-recall-engine, .badge-recall-version {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  color: #93c5fd;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.retrieval-header-desc {
+  margin: 0;
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.btn-toggle-params {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(51, 65, 85, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.btn-toggle-params:hover {
+  background: rgba(71, 85, 105, 0.7);
+  border-color: #60a5fa;
+  color: #fff;
+}
+
+.retrieval-params-card {
+  padding: 16px 20px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+}
+
+.params-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #cbd5e1;
+  margin-bottom: 14px;
+}
+
+.params-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.param-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.param-item-span2 {
+  grid-column: span 2;
+}
+
+@media (max-width: 768px) {
+  .param-item-span2 {
+    grid-column: span 1;
+  }
+}
+
+.param-label {
+  font-size: 12.5px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.param-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.param-val-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.12);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.param-hint {
+  font-size: 11.5px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.method-pills {
+  display: flex;
+  gap: 8px;
+  background: rgba(30, 41, 59, 0.6);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.method-pill {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #94a3b8;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.method-pill.active {
+  background: #3b82f6;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.35);
+}
+
+.rerank-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.toggle-switch-btn {
+  width: 42px;
+  height: 24px;
+  background: #475569;
+  border: none;
+  border-radius: 12px;
+  padding: 2px;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.25s ease;
+}
+
+.toggle-switch-btn.active {
+  background: #10b981;
+}
+
+.switch-ball {
+  display: block;
+  width: 20px;
+  height: 20px;
+  background: #ffffff;
+  border-radius: 50%;
+  transition: transform 0.25s ease;
+}
+
+.toggle-switch-btn.active .switch-ball {
+  transform: translateX(18px);
+}
+
+.toggle-switch-text {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.weights-slider-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.weights-scale-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.retrieval-query-box {
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.query-input-wrap {
+  display: flex;
+  align-items: center;
+  position: relative;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 10px;
+  padding: 4px 6px 4px 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.query-input-wrap:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.query-icon {
+  color: #64748b;
+  margin-right: 10px;
+  font-size: 15px;
+}
+
+.query-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #f8fafc;
+  font-size: 14px;
+  outline: none;
+}
+
+.query-input::placeholder {
+  color: #64748b;
+}
+
+.btn-clear-query {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+  margin-right: 8px;
+}
+
+.btn-clear-query:hover {
+  color: #f8fafc;
+}
+
+.btn-execute-test {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border: none;
+  color: #ffffff;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-execute-test:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-execute-test:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sample-queries-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sample-label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.query-chip {
+  background: rgba(51, 65, 85, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.query-chip:hover {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+}
+
+.retrieval-result-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  gap: 12px;
+}
+
+.result-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.result-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.result-stat-chip.hit-count {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+
+.result-stat-chip.latency {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+}
+
+.result-stat-chip.engine {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #60a5fa;
+}
+
+.engine-src-tag {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.result-query-tag {
+  font-size: 12px;
+  color: #94a3b8;
+  max-width: 300px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.retrieval-chunks-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.retrieval-chunk-card {
+  background: rgba(30, 41, 59, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.retrieval-chunk-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+}
+
+.chunk-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(15, 23, 42, 0.5);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chunk-rank-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.chunk-rank-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #475569;
+  color: #f1f5f9;
+}
+
+.chunk-rank-badge.rank-1 {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+}
+
+.chunk-rank-badge.rank-2 {
+  background: linear-gradient(135deg, #94a3b8, #64748b);
+  color: #fff;
+}
+
+.chunk-rank-badge.rank-3 {
+  background: linear-gradient(135deg, #b45309, #78350f);
+  color: #fff;
+}
+
+.chunk-doc-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.chunk-seg-index, .chunk-tokens {
+  font-size: 11.5px;
+  color: #94a3b8;
+  background: rgba(51, 65, 85, 0.5);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.chunk-score-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chunk-score-pill {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.chunk-score-pill.score-fused {
+  border-width: 1px;
+  border-style: solid;
+}
+
+.chunk-score-pill.score-high {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #34d399;
+}
+
+.chunk-score-pill.score-mid {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: #60a5fa;
+}
+
+.chunk-score-pill.score-low {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.5);
+  color: #fbbf24;
+}
+
+.chunk-score-pill.score-sub {
+  background: rgba(51, 65, 85, 0.5);
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: normal;
+}
+
+.chunk-score-pill.score-rerank {
+  color: #c084fc;
+}
+
+.chunk-card-body {
+  padding: 14px 16px;
+}
+
+.chunk-content-text {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: #cbd5e1;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chunk-content-text.collapsed {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.btn-expand-chunk {
+  background: transparent;
+  border: none;
+  color: #60a5fa;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 6px 0 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-expand-chunk:hover {
+  text-decoration: underline;
+}
+
+.chunk-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: rgba(15, 23, 42, 0.3);
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.chunk-id-text {
+  font-size: 11px;
+  color: #64748b;
+  font-family: monospace;
+}
+
+.btn-copy-chunk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(51, 65, 85, 0.4);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 6px;
+  color: #cbd5e1;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-copy-chunk:hover {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: #3b82f6;
+  color: #60a5fa;
+}
+
+.retrieval-empty-state, .retrieval-placeholder-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 48px 24px;
+  background: rgba(30, 41, 59, 0.35);
+  border: 1px dashed rgba(148, 163, 184, 0.25);
+  border-radius: 12px;
+}
+
+.diagnostic-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin-bottom: 16px;
+}
+
+.placeholder-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin-bottom: 16px;
+}
+
+.retrieval-empty-state h3, .retrieval-placeholder-state h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  color: #f1f5f9;
+}
+
+.retrieval-placeholder-state p {
+  margin: 0;
+  font-size: 13.5px;
+  color: #94a3b8;
+  line-height: 1.6;
+}
+
+.diagnostic-box {
+  max-width: 600px;
+  width: 100%;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.diagnostic-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #cbd5e1;
+  text-align: left;
+  line-height: 1.6;
+}
+
+.diagnostic-reason i {
+  color: #f59e0b;
+  margin-top: 3px;
+  font-size: 15px;
+}
+
+.diagnostic-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn-diag-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: none;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-diag-action:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-diag-action.secondary {
+  background: rgba(51, 65, 85, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #cbd5e1;
+}
+
+.btn-diag-action.secondary:hover {
+  background: rgba(71, 85, 105, 0.8);
+  border-color: #94a3b8;
+  color: #fff;
+  box-shadow: none;
+  transform: translateY(-1px);
+}
+</style>
