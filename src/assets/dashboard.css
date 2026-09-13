@@ -2434,6 +2434,12 @@
   border: 1px solid rgba(59, 130, 246, 0.25);
 }
 
+.provider-badge.spring-ai {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.18), rgba(59, 130, 246, 0.18));
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+
 .indexing-badge {
   display: inline-flex;
   align-items: center;

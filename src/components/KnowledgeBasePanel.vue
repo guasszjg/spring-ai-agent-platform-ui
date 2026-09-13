@@ -185,8 +185,11 @@
                   : 'background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);'">
                   <i class="fa-solid fa-user"></i> {{ accountLabel(kb) }}
                 </span>
-                <span class="provider-badge dify">
-                  <i class="fa-solid fa-link"></i> Dify
+                <span v-if="kb.provider === 'SPRING_AI'" class="provider-badge spring-ai">
+                  <i class="fa-solid fa-brain"></i> Spring AI 自研
+                </span>
+                <span v-else class="provider-badge dify">
+                  <i class="fa-solid fa-link"></i> Dify 外挂
                 </span>
                 <span class="search-method-badge" :class="kb.searchMethod || 'hybrid_search'">
                   <i :class="getSearchMethodIcon(kb.searchMethod)"></i> {{ getSearchMethodLabel(kb.searchMethod, kb) }}
@@ -285,7 +288,8 @@
               </td>
               <td>{{ kb.isSystem ? '系统公共' : accountLabel(kb) }}</td>
               <td>
-                <span class="provider-badge dify">Dify 外挂</span>
+                <span v-if="kb.provider === 'SPRING_AI'" class="provider-badge spring-ai"><i class="fa-solid fa-brain"></i> Spring AI 自研</span>
+                <span v-else class="provider-badge dify"><i class="fa-solid fa-link"></i> Dify 外挂</span>
               </td>
               <td>
                 <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
@@ -398,7 +402,8 @@
           <div class="kb-detail-meta">
             <div class="kb-title-row">
               <h2>{{ selectedKb?.name }}</h2>
-              <span class="provider-badge dify"><i class="fa-solid fa-link"></i> Dify: {{ selectedKb?.externalDatasetId ? selectedKb.externalDatasetId.substring(0, 14) + '...' : '未绑定' }}</span>
+              <span v-if="selectedKb?.provider === 'SPRING_AI'" class="provider-badge spring-ai"><i class="fa-solid fa-brain"></i> Spring AI 自研引擎</span>
+              <span v-else class="provider-badge dify"><i class="fa-solid fa-link"></i> Dify: {{ selectedKb?.externalDatasetId ? selectedKb.externalDatasetId.substring(0, 14) + '...' : '未绑定' }}</span>
               <span class="search-method-badge" :class="selectedKb?.searchMethod || 'hybrid_search'">
                 <i :class="getSearchMethodIcon(selectedKb?.searchMethod)"></i> {{ getSearchMethodLabel(selectedKb?.searchMethod, selectedKb) }} (Top {{ selectedKb?.topK || 3 }})
               </span>
@@ -1168,7 +1173,7 @@
     <div class="modal-backdrop" :class="{ open: kbModalOpen }">
       <div class="modal-dialog" style="max-width: 680px;">
         <div class="modal-header">
-          <h3>{{ kbForm.id ? '编辑知识库配置' : '创建新知识库 (Dify RAG)' }}</h3>
+          <h3>{{ kbForm.id ? '编辑知识库配置' : (kbForm.provider === 'SPRING_AI' ? '创建新知识库 (Spring AI 原生自研)' : '创建新知识库 (Dify RAG)') }}</h3>
           <button class="btn-modal-close" @click="kbModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <form @submit.prevent="saveKnowledgeBase">
@@ -1195,16 +1200,40 @@
             </div>
 
             <div class="form-group">
-              <label class="form-label">底层 RAG 服务适配</label>
-              <div class="provider-radio-cards">
-                <div class="provider-radio-card active">
-                  <div class="provider-radio-title">
-                    <i class="fa-solid fa-link text-blue"></i> Dify 外挂 RAG 知识库
+              <label class="form-label">底层 RAG 服务适配 *</label>
+              <div class="provider-radio-cards" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div
+                  class="provider-radio-card"
+                  :class="{ active: kbForm.provider === 'SPRING_AI', disabled: !!kbForm.id }"
+                  :style="kbForm.provider === 'SPRING_AI' ? 'border-color: #a855f7; background: rgba(168, 85, 247, 0.08);' : ''"
+                  @click="!kbForm.id && (kbForm.provider = 'SPRING_AI')"
+                >
+                  <div class="provider-radio-title" style="display: flex; align-items: center; justify-content: space-between;">
+                    <span><i class="fa-solid fa-brain" style="color: #a855f7;"></i> Spring AI 原生自研</span>
+                    <span class="tag-recommend" style="background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4);">自研原生</span>
                   </div>
-                  <div class="provider-radio-desc">
-                    与后端配置好的 Dify 引擎双向 1:1 映射并自动创建数据集
+                  <div class="provider-radio-desc" style="font-size: 12px; margin-top: 6px; color: #94a3b8; line-height: 1.5;">
+                    本地智能切片管线 + 1024 维密集向量化 + 双路混合检索，全流程自主可控。
                   </div>
                 </div>
+
+                <div
+                  class="provider-radio-card"
+                  :class="{ active: kbForm.provider === 'DIFY', disabled: !!kbForm.id }"
+                  :style="kbForm.provider === 'DIFY' ? 'border-color: #3b82f6; background: rgba(59, 130, 246, 0.08);' : ''"
+                  @click="!kbForm.id && (kbForm.provider = 'DIFY')"
+                >
+                  <div class="provider-radio-title" style="display: flex; align-items: center; justify-content: space-between;">
+                    <span><i class="fa-solid fa-link text-blue"></i> Dify 外挂 RAG</span>
+                    <span style="font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: rgba(59, 130, 246, 0.15); color: #60a5fa;">外挂</span>
+                  </div>
+                  <div class="provider-radio-desc" style="font-size: 12px; margin-top: 6px; color: #94a3b8; line-height: 1.5;">
+                    与配置好的 Dify 引擎双向 1:1 映射，由 Dify 远程 API 托管切片与向量索引。
+                  </div>
+                </div>
+              </div>
+              <div v-if="kbForm.id" class="input-hint text-amber" style="margin-top: 6px;">
+                <i class="fa-solid fa-circle-info"></i> 知识库底层引擎类型在创建后不可变更
               </div>
             </div>
 
@@ -1851,7 +1880,7 @@ function openCreateKb() {
     name: '',
     description: '',
     avatar: '📚',
-    provider: 'DIFY',
+    provider: 'SPRING_AI',
     embeddingModel: 'text-embedding-v3',
     embeddingProvider: 'langgenius/tongyi/tongyi',
     searchMethod: 'hybrid_search',
@@ -1930,7 +1959,10 @@ async function saveKnowledgeBase() {
   savingKb.value = false
 
   if (res.success) {
-    showToast(kbForm.id ? '知识库信息更新成功' : '知识库创建成功并已映射至 Dify', 'success')
+    const successMsg = kbForm.id
+      ? '知识库信息更新成功'
+      : (kbForm.provider === 'SPRING_AI' ? 'Spring AI 原生自研知识库创建成功' : '知识库创建成功并已映射至 Dify')
+    showToast(successMsg, 'success')
     kbModalOpen.value = false
     loadKnowledgeBases()
     if (selectedKb.value && selectedKb.value.id === kbForm.id) {
