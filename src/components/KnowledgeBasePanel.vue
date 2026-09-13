@@ -195,7 +195,7 @@
                   <i :class="getSearchMethodIcon(kb.searchMethod)"></i> {{ getSearchMethodLabel(kb.searchMethod, kb) }}
                 </span>
                 <span class="model-badge" title="Embedding 向量模型">
-                  <i class="fa-solid fa-cube"></i> {{ kb.embeddingModel || 'text-embedding-v3' }}
+                  <i class="fa-solid fa-cube"></i> {{ getEmbeddingModelLabel(kb) }}
                 </span>
               </div>
             </div>
@@ -297,7 +297,7 @@
                     <i :class="getSearchMethodIcon(kb.searchMethod)"></i> {{ getSearchMethodLabel(kb.searchMethod, kb) }}
                   </span>
                   <span class="model-badge-sub">
-                    <i class="fa-solid fa-cube"></i> {{ kb.embeddingModel || 'text-embedding-v3' }}
+                    <i class="fa-solid fa-cube"></i> {{ getEmbeddingModelLabel(kb) }}
                   </span>
                 </div>
               </td>
@@ -408,7 +408,7 @@
                 <i :class="getSearchMethodIcon(selectedKb?.searchMethod)"></i> {{ getSearchMethodLabel(selectedKb?.searchMethod, selectedKb) }} (Top {{ selectedKb?.topK || 3 }})
               </span>
               <span class="model-badge" title="Embedding 向量模型">
-                <i class="fa-solid fa-cube"></i> {{ selectedKb?.embeddingModel || 'text-embedding-v3' }}
+                <i class="fa-solid fa-cube"></i> {{ getEmbeddingModelLabel(selectedKb) }}
               </span>
               <span v-if="selectedKb?.rerankEnabled" class="indexing-badge" title="重排序已开启">
                 <i class="fa-solid fa-arrows-spin"></i> Rerank 开启
@@ -1206,7 +1206,7 @@
                   class="provider-radio-card"
                   :class="{ active: kbForm.provider === 'SPRING_AI', disabled: !!kbForm.id }"
                   :style="kbForm.provider === 'SPRING_AI' ? 'border-color: #a855f7; background: rgba(168, 85, 247, 0.08);' : ''"
-                  @click="!kbForm.id && (kbForm.provider = 'SPRING_AI')"
+                  @click="!kbForm.id && onProviderSelect('SPRING_AI')"
                 >
                   <div class="provider-radio-title" style="display: flex; align-items: center; justify-content: space-between;">
                     <span><i class="fa-solid fa-brain" style="color: #a855f7;"></i> Spring AI 原生自研</span>
@@ -1221,7 +1221,7 @@
                   class="provider-radio-card"
                   :class="{ active: kbForm.provider === 'DIFY', disabled: !!kbForm.id }"
                   :style="kbForm.provider === 'DIFY' ? 'border-color: #3b82f6; background: rgba(59, 130, 246, 0.08);' : ''"
-                  @click="!kbForm.id && (kbForm.provider = 'DIFY')"
+                  @click="!kbForm.id && onProviderSelect('DIFY')"
                 >
                   <div class="provider-radio-title" style="display: flex; align-items: center; justify-content: space-between;">
                     <span><i class="fa-solid fa-link text-blue"></i> Dify 外挂 RAG</span>
@@ -1241,17 +1241,30 @@
             <div class="form-group">
               <label class="form-label">Embedding 向量模型</label>
               <div class="embedding-model-box">
-                <div class="embedding-model-item">
+                <!-- 自研引擎展示原生向量模型 -->
+                <div v-if="kbForm.provider === 'SPRING_AI'" class="embedding-model-item">
+                  <div class="model-info-row">
+                    <span class="model-name"><i class="fa-solid fa-cube" style="color: #a855f7;"></i> 平台原生向量管线 (1024 维)</span>
+                    <span class="tag-recommend" style="background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4);">自研原生</span>
+                  </div>
+                  <div class="model-desc">
+                    由 Spring AI 平台本地服务生成 1024 维密集特征向量并落库于 PostgreSQL。未配置外部商业 Key 时自动启用平台内置高维特征投影，零依赖且高可用。
+                  </div>
+                </div>
+
+                <!-- Dify 引擎展示 Dify 通义模型 -->
+                <div v-else class="embedding-model-item">
                   <div class="model-info-row">
                     <span class="model-name"><i class="fa-solid fa-cube text-blue"></i> text-embedding-v3</span>
-                    <span class="tag-recommend">官方推荐</span>
+                    <span class="tag-recommend">Dify 官方推荐</span>
                   </div>
                   <div class="model-desc">
                     通义千问高质量向量模型 (Provider: 通义千问)，适配 Dify 高精度语义切片与向量索引。
                   </div>
                 </div>
+
                 <div v-if="kbForm.id" class="input-hint text-amber" style="margin-top: 6px;">
-                  <i class="fa-solid fa-circle-info"></i> Dify 规则：已建立知识库的 Embedding 模型在初始化后不可变更
+                  <i class="fa-solid fa-circle-info"></i> {{ kbForm.provider === 'SPRING_AI' ? '提示：已建立知识库的向量维度已锁定为 1024 维' : 'Dify 规则：已建立知识库的 Embedding 模型在初始化后不可变更' }}
                 </div>
               </div>
             </div>
@@ -1874,6 +1887,28 @@ function onVectorWeightChange() {
   kbForm.keywordWeight = Math.round((1.0 - kbForm.vectorWeight) * 10) / 10
 }
 
+function onProviderSelect(type) {
+  kbForm.provider = type
+  if (type === 'SPRING_AI') {
+    kbForm.embeddingModel = 'spring-ai-native-1024'
+    kbForm.embeddingProvider = 'spring_ai'
+  } else {
+    kbForm.embeddingModel = 'text-embedding-v3'
+    kbForm.embeddingProvider = 'langgenius/tongyi/tongyi'
+  }
+}
+
+function getEmbeddingModelLabel(kb) {
+  if (!kb) return '自研原生 (1024维)'
+  if (kb.provider === 'SPRING_AI') {
+    if (!kb.embeddingModel || kb.embeddingModel === 'text-embedding-v3' || kb.embeddingModel === 'spring-ai-native-1024') {
+      return '自研原生 (1024维)'
+    }
+    return kb.embeddingModel
+  }
+  return kb.embeddingModel || 'text-embedding-v3'
+}
+
 function openCreateKb() {
   Object.assign(kbForm, {
     id: '',
@@ -1881,14 +1916,14 @@ function openCreateKb() {
     description: '',
     avatar: '📚',
     provider: 'SPRING_AI',
-    embeddingModel: 'text-embedding-v3',
-    embeddingProvider: 'langgenius/tongyi/tongyi',
+    embeddingModel: 'spring-ai-native-1024',
+    embeddingProvider: 'spring_ai',
     searchMethod: 'hybrid_search',
     topK: 3,
     rerankEnabled: true,
     rerankMode: 'weighted_score',
     rerankModel: 'qwen3-rerank',
-    rerankModelProvider: 'langgenius/tongyi/tongyi',
+    rerankModelProvider: 'spring_ai',
     vectorWeight: 0.7,
     keywordWeight: 0.3
   })
