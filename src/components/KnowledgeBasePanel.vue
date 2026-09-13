@@ -966,13 +966,72 @@
               </div>
             </div>
 
+            <!-- 父子分块展开 (P2 增强) -->
+            <div class="param-item">
+              <div class="param-label-row">
+                <label class="param-label">父子分块展开 (Parent-Child)</label>
+                <span class="param-val-badge" :style="{ color: testParams.expandParent ? '#c084fc' : '#94a3b8' }">
+                  {{ testParams.expandParent ? '已开启 (推荐)' : '已关闭' }}
+                </span>
+              </div>
+              <div class="rerank-toggle-row">
+                <button
+                  type="button"
+                  class="toggle-switch-btn"
+                  :class="{ active: testParams.expandParent, 'switch-purple': testParams.expandParent }"
+                  @click="testParams.expandParent = !testParams.expandParent"
+                >
+                  <span class="switch-ball"></span>
+                </button>
+                <span class="toggle-switch-text">{{ testParams.expandParent ? '命中子块后自动回溯展开父块大段落并跨段去重' : '仅返回命中的原始子切片' }}</span>
+              </div>
+            </div>
+
+            <!-- Query 智能改写与降噪 (P2 增强) -->
+            <div class="param-item">
+              <div class="param-label-row">
+                <label class="param-label">Query 意图改写与降噪</label>
+                <span class="param-val-badge" :style="{ color: testParams.rewriteEnabled ? '#60a5fa' : '#94a3b8' }">
+                  {{ testParams.rewriteEnabled ? '已开启' : '已关闭' }}
+                </span>
+              </div>
+              <div class="rerank-toggle-row">
+                <button
+                  type="button"
+                  class="toggle-switch-btn"
+                  :class="{ active: testParams.rewriteEnabled, 'switch-blue': testParams.rewriteEnabled }"
+                  @click="testParams.rewriteEnabled = !testParams.rewriteEnabled"
+                >
+                  <span class="switch-ball"></span>
+                </button>
+                <span class="toggle-switch-text">{{ testParams.rewriteEnabled ? '自动滤除前缀客套词与杂质标点，提炼核心主干' : '使用原始输入直接检索' }}</span>
+              </div>
+            </div>
+
+            <!-- Token 上下文预算上限 (P2 增强 - 修复 F4 缺陷) -->
+            <div class="param-item">
+              <div class="param-label-row">
+                <label class="param-label">上下文 Token 预算上限 (Budget Pruning)</label>
+                <span class="param-val-badge" style="color: #818cf8;">{{ testParams.maxContextTokens }} Tokens</span>
+              </div>
+              <input
+                type="range"
+                v-model.number="testParams.maxContextTokens"
+                min="1000"
+                max="6000"
+                step="200"
+                class="form-range-styled"
+              >
+              <div class="param-hint">动态计算并按大模型上下文窗口精准装填，废除硬编码截断</div>
+            </div>
+
             <!-- 引擎覆盖 (L3 调试覆盖) -->
             <div class="param-item">
               <label class="param-label">物理引擎覆盖 (L3 Debug Override)</label>
               <select v-model="testParams.engineOverride" class="form-control-styled">
                 <option value="">跟随知识库配置 ({{ selectedKb?.provider || 'DIFY' }})</option>
                 <option value="DIFY">强制 DIFY 外挂引擎</option>
-                <option value="SPRING_AI">原生 SPRING_AI 引擎 (研发就绪中)</option>
+                <option value="SPRING_AI">Spring AI 原生自研引擎 (P2 增强)</option>
               </select>
             </div>
           </div>
@@ -1040,6 +1099,14 @@
               生效引擎: <strong>{{ retrievalResult.engineResolution?.effectiveEngine || 'DIFY' }}</strong>
               <span class="engine-src-tag">({{ formatEngineSource(retrievalResult.engineResolution?.source) }})</span>
             </span>
+            <span v-if="retrievalResult.metrics?.totalTokens" class="result-stat-chip" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3);">
+              <i class="fa-solid fa-coins"></i>
+              Token 消耗: <strong>{{ retrievalResult.metrics.totalTokens }}</strong> / {{ retrievalResult.metrics.maxContextTokens || 3000 }}
+            </span>
+            <span v-if="retrievalResult.metrics?.rewrittenQuery && retrievalResult.metrics.rewrittenQuery !== retrievalResult.query" class="result-stat-chip" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              改写后 Query: <strong>"{{ retrievalResult.metrics.rewrittenQuery }}"</strong>
+            </span>
           </div>
           <div class="result-banner-right">
             <span class="result-query-tag" :title="retrievalResult.query">
@@ -1060,6 +1127,9 @@
                 <span class="chunk-rank-badge" :class="'rank-' + Math.min(cIdx + 1, 3)">#{{ cIdx + 1 }}</span>
                 <span class="chunk-doc-name" :title="chunk.sourceName">
                   <i class="fa-solid fa-file-lines"></i> {{ chunk.sourceName || '未命名文档' }}
+                </span>
+                <span v-if="chunk.metadata?.parentExpanded" class="tag-parent-expanded" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); font-size: 11px; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                  <i class="fa-solid fa-diagram-project"></i> 已展开父块
                 </span>
                 <span v-if="chunk.segmentIndex !== null && chunk.segmentIndex !== undefined" class="chunk-seg-index">
                   分段 #{{ chunk.segmentIndex }}
@@ -1090,19 +1160,27 @@
 
             <!-- 切片文本正文 -->
             <div class="chunk-card-body">
+              <div v-if="chunk.metadata?.originalChildContent" class="child-toggle-bar" style="margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-size: 11.5px; color: #c084fc;">
+                  <i class="fa-solid fa-diagram-project"></i> {{ showOriginalChildMap.has(cIdx) ? '当前展示：原始命中子切片 (精准匹配)' : '当前展示：展开后的父块完整段落 (大上下文)' }}
+                </span>
+                <button type="button" class="btn-toggle-child" style="font-size: 11px; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.1); color: #c084fc; cursor: pointer;" @click="toggleOriginalChild(cIdx)">
+                  <i class="fa-solid fa-repeat"></i> {{ showOriginalChildMap.has(cIdx) ? '切换为父块完整段落' : '查看原始命中子块' }}
+                </button>
+              </div>
               <div
                 class="chunk-content-text"
-                :class="{ collapsed: !expandedChunks.has(cIdx) && chunk.content?.length > 300 }"
+                :class="{ collapsed: !expandedChunks.has(cIdx) && (showOriginalChildMap.has(cIdx) ? chunk.metadata?.originalChildContent : chunk.content)?.length > 300 }"
               >
-                {{ chunk.content }}
+                {{ showOriginalChildMap.has(cIdx) ? chunk.metadata?.originalChildContent : chunk.content }}
               </div>
               <button
-                v-if="chunk.content?.length > 300"
+                v-if="(showOriginalChildMap.has(cIdx) ? chunk.metadata?.originalChildContent : chunk.content)?.length > 300"
                 type="button"
                 class="btn-expand-chunk"
                 @click="toggleChunkExpand(cIdx)"
               >
-                {{ expandedChunks.has(cIdx) ? '收起段落' : '展开全文 (' + chunk.content.length + ' 字符)' }}
+                {{ expandedChunks.has(cIdx) ? '收起段落' : '展开全文 (' + (showOriginalChildMap.has(cIdx) ? chunk.metadata?.originalChildContent : chunk.content).length + ' 字符)' }}
                 <i class="fa-solid" :class="expandedChunks.has(cIdx) ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
               </button>
             </div>
@@ -1623,6 +1701,7 @@ const retrievalResult = ref(null)
 const retrievalVersions = ref([])
 const activeIndexVersion = ref(null)
 const expandedChunks = ref(new Set())
+const showOriginalChildMap = ref(new Set())
 
 const testParams = reactive({
   topK: 5,
@@ -1632,8 +1711,21 @@ const testParams = reactive({
   vectorWeight: 0.7,
   keywordWeight: 0.3,
   engineOverride: '',
-  indexVersionId: ''
+  indexVersionId: '',
+  expandParent: true,
+  rewriteEnabled: false,
+  maxContextTokens: 3000
 })
+
+function toggleOriginalChild(cIdx) {
+  const s = new Set(showOriginalChildMap.value)
+  if (s.has(cIdx)) {
+    s.delete(cIdx)
+  } else {
+    s.add(cIdx)
+  }
+  showOriginalChildMap.value = s
+}
 
 const sampleQueries = [
   '退款流程是怎样的？',
@@ -2048,6 +2140,10 @@ function openRetrievalTestTab() {
     testParams.vectorWeight = (selectedKb.value.vectorWeight !== null && selectedKb.value.vectorWeight !== undefined) ? selectedKb.value.vectorWeight : 0.7
     testParams.keywordWeight = (selectedKb.value.keywordWeight !== null && selectedKb.value.keywordWeight !== undefined) ? selectedKb.value.keywordWeight : 0.3
     testParams.engineOverride = ''
+    testParams.expandParent = true
+    testParams.rewriteEnabled = false
+    testParams.maxContextTokens = 3000
+    showOriginalChildMap.value = new Set()
     loadIndexVersions()
   }
 }
@@ -2079,6 +2175,7 @@ async function executeRetrievalTest(queryText) {
   retrievalQuery.value = q
   if (!selectedKb.value) return
 
+  showOriginalChildMap.value = new Set()
   testingRetrieval.value = true
   const payload = {
     query: q,
@@ -2089,7 +2186,10 @@ async function executeRetrievalTest(queryText) {
     vectorWeight: Number(testParams.vectorWeight) || 0.7,
     keywordWeight: Number(testParams.keywordWeight) || 0.3,
     engineOverride: testParams.engineOverride || undefined,
-    indexVersionId: testParams.indexVersionId || undefined
+    indexVersionId: testParams.indexVersionId || undefined,
+    expandParent: testParams.expandParent !== false,
+    rewriteEnabled: Boolean(testParams.rewriteEnabled),
+    maxContextTokens: Number(testParams.maxContextTokens) || 3000
   }
 
   const res = await http.post(`/api/knowledge-bases/${selectedKb.value.id}/retrieval-test`, payload)
@@ -2798,6 +2898,34 @@ onMounted(() => {
 
 .toggle-switch-btn.active {
   background: #10b981;
+}
+
+.toggle-switch-btn.active.switch-purple {
+  background: #a855f7;
+}
+
+.toggle-switch-btn.active.switch-blue {
+  background: #3b82f6;
+}
+
+.child-toggle-bar {
+  padding: 6px 10px;
+  background: rgba(168, 85, 247, 0.08);
+  border: 1px dashed rgba(168, 85, 247, 0.25);
+  border-radius: 6px;
+}
+
+.btn-toggle-child {
+  transition: all 0.2s ease;
+}
+
+.btn-toggle-child:hover {
+  background: rgba(168, 85, 247, 0.2) !important;
+  border-color: rgba(168, 85, 247, 0.6) !important;
+}
+
+.tag-parent-expanded {
+  animation: fadeIn 0.3s ease;
 }
 
 .switch-ball {
