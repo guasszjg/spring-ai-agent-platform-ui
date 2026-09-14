@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
+import fs from 'node:fs'
 
 export default defineConfig({
   plugins: [vue()],
@@ -23,7 +24,12 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: fileURLToPath(new URL('../spring-ai-agent-platform/src/main/resources/static', import.meta.url)),
+    outDir: fileURLToPath(new URL(
+      fs.existsSync(fileURLToPath(new URL('../spring_ai', import.meta.url)))
+        ? '../spring_ai/src/main/resources/static'
+        : '../spring-ai-agent-platform/src/main/resources/static',
+      import.meta.url
+    )),
     emptyOutDir: true
   }
 })
