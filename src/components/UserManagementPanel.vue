@@ -387,8 +387,9 @@
 
           <div class="modal-footer">
             <button type="button" class="btn-secondary" @click="showCreateModal = false">取消</button>
-            <button type="submit" class="btn-chat-primary" :disabled="submitting">
-              <i v-if="submitting" class="fa-solid fa-spinner fa-spin"></i>
+            <button type="submit" class="btn-primary" :disabled="submitting">
+              <i v-if="submitting" class="fa-solid fa-circle-notch fa-spin"></i>
+              <i v-else class="fa-solid fa-user-plus"></i>
               <span>{{ submitting ? '创建中...' : '确认创建账号' }}</span>
             </button>
           </div>
@@ -523,10 +524,11 @@
             <button type="button" class="btn-secondary" @click="showPasswordModal = false">取消</button>
             <button
               type="submit"
-              class="btn-chat-primary"
-              :disabled="submitting || (passwordMode === 'CUSTOM' && (!passwordForm.newPassword || passwordForm.newPassword !== passwordForm.confirmPassword))"
+              class="btn-submit-password"
+              :disabled="submitting || (passwordMode === 'CUSTOM' && (!passwordForm.newPassword || passwordForm.newPassword !== passwordForm.confirmPassword || passwordForm.newPassword.length < 6))"
             >
-              <i v-if="submitting" class="fa-solid fa-spinner fa-spin"></i>
+              <i v-if="submitting" class="fa-solid fa-circle-notch fa-spin"></i>
+              <i v-else class="fa-solid fa-key"></i>
               <span>{{ submitting ? '正在修改...' : '确认修改密码' }}</span>
             </button>
           </div>
@@ -561,8 +563,9 @@
         </div>
 
         <div class="modal-footer" style="justify-content: center; margin-top: 24px; border-top: none; padding: 0;">
-          <button type="button" class="btn-chat-primary" style="min-width: 150px;" @click="showPasswordAlertModal = false">
-            我已安全记录
+          <button type="button" class="btn-primary" style="min-width: 150px;" @click="showPasswordAlertModal = false">
+            <i class="fa-solid fa-check"></i>
+            <span>我已安全记录</span>
           </button>
         </div>
       </div>
@@ -600,8 +603,9 @@
           </div>
           <div class="modal-footer">
             <button type="button" class="btn-secondary" @click="showEditModal = false">取消</button>
-            <button type="submit" class="btn-chat-primary" :disabled="submitting">
-              <i v-if="submitting" class="fa-solid fa-spinner fa-spin"></i>
+            <button type="submit" class="btn-primary" :disabled="submitting">
+              <i v-if="submitting" class="fa-solid fa-circle-notch fa-spin"></i>
+              <i v-else class="fa-solid fa-check"></i>
               <span>{{ submitting ? '保存中...' : '保存更改' }}</span>
             </button>
           </div>
@@ -670,8 +674,9 @@
 
           <div class="modal-footer">
             <button type="button" class="btn-secondary" @click="showRoleModal = false">取消</button>
-            <button type="button" class="btn-chat-primary" :disabled="submitting || targetRole === roleUser?.role" @click="handleUpdateRole">
-              <i v-if="submitting" class="fa-solid fa-spinner fa-spin"></i>
+            <button type="button" class="btn-primary" :disabled="submitting || targetRole === roleUser?.role" @click="handleUpdateRole">
+              <i v-if="submitting" class="fa-solid fa-circle-notch fa-spin"></i>
+              <i v-else class="fa-solid fa-shield-halved"></i>
               <span>{{ submitting ? '更新中...' : '确认更新角色' }}</span>
             </button>
           </div>

@@ -1623,14 +1623,36 @@
 }
 
 .btn-chat-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
   background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
   color: white;
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.btn-chat-primary:hover {
+.btn-chat-primary:hover:not(:disabled) {
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.5);
   transform: translateY(-1px);
+}
+
+.btn-chat-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-chat-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
 .btn-action-icon {

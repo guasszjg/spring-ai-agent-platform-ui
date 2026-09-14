@@ -510,7 +510,9 @@
             <label class="form-label" style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px;">修改姓名 / 昵称</label>
             <div style="display: flex; gap: 10px;">
               <input v-model="profileForm.nickname" class="form-control-styled" placeholder="输入新的昵称" required style="flex: 1;">
-              <button type="submit" class="btn-chat-primary" style="white-space: nowrap; padding: 0 16px;" :disabled="savingProfile">
+              <button type="submit" class="btn-profile-primary" :disabled="savingProfile">
+                <i v-if="savingProfile" class="fa-solid fa-circle-notch fa-spin"></i>
+                <i v-else class="fa-solid fa-check"></i>
                 <span>{{ savingProfile ? '更新中...' : '保存昵称' }}</span>
               </button>
             </div>
@@ -535,10 +537,20 @@
               <label class="form-label" style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 4px;">确认新密码</label>
               <input v-model="passwordForm.confirmPassword" type="password" class="form-control-styled" placeholder="请再次确认新密码" required minlength="6">
             </div>
-            <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
-              <button type="submit" class="btn-chat-primary" :disabled="changingPassword">
-                <i v-if="changingPassword" class="fa-solid fa-spinner fa-spin"></i>
-                <span>{{ changingPassword ? '提交中...' : '确认修改密码' }}</span>
+            <div v-if="passwordForm.newPassword && passwordForm.confirmPassword && passwordForm.newPassword !== passwordForm.confirmPassword" style="font-size: 0.8rem; color: #ef4444; display: flex; align-items: center; gap: 6px; padding: 2px 2px;">
+              <i class="fa-solid fa-circle-exclamation"></i>
+              <span>两次输入的新密码不一致</span>
+            </div>
+            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 6px;">
+              <button type="button" class="btn-secondary" @click="profileModalOpen = false">取消</button>
+              <button
+                type="submit"
+                class="btn-submit-password"
+                :disabled="changingPassword || !passwordForm.oldPassword || !passwordForm.newPassword || !passwordForm.confirmPassword || passwordForm.newPassword !== passwordForm.confirmPassword || passwordForm.newPassword.length < 6"
+              >
+                <i v-if="changingPassword" class="fa-solid fa-circle-notch fa-spin"></i>
+                <i v-else class="fa-solid fa-key"></i>
+                <span>{{ changingPassword ? '正在提交...' : '确认修改密码' }}</span>
               </button>
             </div>
           </form>
@@ -578,8 +590,13 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-secondary" @click="logout">退出登录</button>
-          <button type="submit" class="btn-chat-primary" :disabled="forcingPassword">
-            <i v-if="forcingPassword" class="fa-solid fa-spinner fa-spin"></i>
+          <button
+            type="submit"
+            class="btn-submit-password"
+            :disabled="forcingPassword || !forcePasswordForm.newPassword || forcePasswordForm.newPassword.length < 6 || forcePasswordForm.newPassword !== forcePasswordForm.confirmPassword"
+          >
+            <i v-if="forcingPassword" class="fa-solid fa-circle-notch fa-spin"></i>
+            <i v-else class="fa-solid fa-shield-halved"></i>
             <span>{{ forcingPassword ? '设置中...' : '设置密码并激活进入' }}</span>
           </button>
         </div>
