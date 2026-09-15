@@ -1121,7 +1121,13 @@ function escapeHtml(str) {
 }
 
 function formatHtml(content, isUser) {
-  let html = escapeHtml(content)
+  if (!content) return ''
+  let text = isUser ? content : content
+    .replace(/\[\d+\]/g, '')
+    .replace(/【\d+】/g, '')
+    .replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰]+/g, '')
+    .trim()
+  let html = escapeHtml(text)
   if (isUser) return html
   return html
     .replace(/```([a-zA-Z]*)\n([\s\S]*?)```/g, '<pre style="background: var(--bg-primary); padding: 10px; border-radius: 8px; margin: 8px 0; overflow-x: auto; font-family: monospace; font-size: 12px;"><code>$2</code></pre>')
