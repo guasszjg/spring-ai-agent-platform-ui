@@ -228,6 +228,11 @@
               </div>
               <p class="gateway-field-hint">支持自由输入模型标识（如 deepseek-v4-flash），或点击“测试连通性”自动拉取。</p>
             </div>
+
+            <label class="gateway-enable-row" style="margin-top: 10px; margin-bottom: 6px;">
+              <input v-model="form.openAiWebSearch" type="checkbox">
+              <span>启用服务端原生联网搜索 (Web Search，自动注入 web_search_options)</span>
+            </label>
           </template>
 
           <!-- 模式二：自定义 HTTP REST 接口 -->
@@ -360,6 +365,7 @@ const form = reactive({
   id: '', vendor: 'CUSTOM', protocol: 'OPENAI', name: '', baseUrl: '', apiKey: '', apiKeyMasked: '',
   defaultModel: '', models: '', timeoutMs: 30000, remark: '', enabled: false, configured: false,
   openAiHeaders: '',
+  openAiWebSearch: false,
   customHttpMethod: 'POST',
   customHeaders: '{\n  "Content-Type": "application/json;charset=utf-8"\n}',
   customBodyTemplate: '{\n  "prompt": "{{prompt}}"\n}',
@@ -478,6 +484,7 @@ function openCreate() {
     models: (preset.models || []).join(', '),
     timeoutMs: 30000, remark: '', enabled: true, configured: false,
     openAiHeaders: '',
+    openAiWebSearch: false,
     customHttpMethod: 'POST',
     customHeaders: '{\n  "Content-Type": "application/json;charset=utf-8"\n}',
     customBodyTemplate: '{\n  "prompt": "{{prompt}}"\n}',
@@ -519,6 +526,7 @@ function openEdit(provider) {
     enabled: provider.enabled,
     configured: provider.configured,
     openAiHeaders: openAiHdrs,
+    openAiWebSearch: !!(customCfg.webSearch || customCfg.enable_search),
     customHttpMethod: customCfg.httpMethod || 'POST',
     customHeaders: customCfg.headers ? JSON.stringify(customCfg.headers, null, 2) : '{\n  "Content-Type": "application/json;charset=utf-8"\n}',
     customBodyTemplate: customCfg.bodyTemplate || '{\n  "prompt": "{{prompt}}"\n}',
@@ -549,7 +557,8 @@ function loadSampleOpenAiHeaders() {
   }, null, 2)
   form.defaultModel = 'deepseek-v4-flash'
   form.apiKey = ''
-  showToast('已载入第三方 (鱼亮) Header 鉴权通道示例', 'info', 2000)
+  form.openAiWebSearch = true
+  showToast('已载入第三方 (鱼亮) Header 鉴权与联网搜索示例', 'info', 2000)
 }
 
 function loadSampleCustomConfig() {
@@ -672,8 +681,15 @@ async function saveProvider() {
     remark: form.remark.trim(),
     enabled: form.enabled
   }
+  const customConfigObj = {}
   if (openAiHeadersObj) {
-    payload.customConfig = JSON.stringify({ headers: openAiHeadersObj }, null, 2)
+    customConfigObj.headers = openAiHeadersObj
+  }
+  if (form.openAiWebSearch) {
+    customConfigObj.webSearch = true
+  }
+  if (Object.keys(customConfigObj).length > 0) {
+    payload.customConfig = JSON.stringify(customConfigObj, null, 2)
   }
   if (apiKey) payload.apiKey = apiKey
   const res = form.id
@@ -791,8 +807,15 @@ async function testInModal() {
     defaultModel: form.defaultModel.trim() || null,
     timeoutMs: form.timeoutMs || 15000
   }
+  const probeCustomCfg = {}
   if (openAiHeadersObj) {
-    payload.customConfig = JSON.stringify({ headers: openAiHeadersObj })
+    probeCustomCfg.headers = openAiHeadersObj
+  }
+  if (form.openAiWebSearch) {
+    probeCustomCfg.webSearch = true
+  }
+  if (Object.keys(probeCustomCfg).length > 0) {
+    payload.customConfig = JSON.stringify(probeCustomCfg)
   }
   if (apiKey) payload.apiKey = apiKey
   const res = await http.post('/api/model-gateway/probe', payload)
