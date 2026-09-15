@@ -61,7 +61,8 @@
             </td>
             <td>
               <code v-if="p.protocol === 'CUSTOM_HTTP'" class="gateway-key-mask" :title="p.baseUrl || '自定义接口'">{{ p.baseUrl ? p.baseUrl : '自定义模板' }}</code>
-              <code v-else class="gateway-key-mask">{{ p.configured ? p.apiKeyMasked : '未配置' }}</code>
+              <code v-else-if="p.apiKeyMasked" class="gateway-key-mask">{{ p.apiKeyMasked }}</code>
+              <code v-else class="gateway-key-mask">{{ p.configured ? '已配置' : '未配置' }}</code>
             </td>
             <td>
               <div class="gateway-model-cell">{{ p.defaultModel || '-' }}</div>
@@ -159,13 +160,36 @@
 
           <!-- 模式一：OpenAI 兼容协议 -->
           <template v-if="form.protocol !== 'CUSTOM_HTTP'">
-            <div class="form-group">
-              <label class="form-label">Base URL</label>
-              <input v-model="form.baseUrl" class="form-control-styled" placeholder="https://api.openai.com/v1" required>
+            <div v-if="form.vendor === 'CUSTOM'" class="gateway-custom-toolbar" style="margin-bottom: 12px;">
+              <span class="gateway-field-hint">支持标准 OpenAI 协议及无 Key、特定 Header 鉴权通道（如鱼亮 LLM，支持 Tool Call 与多轮对话）。</span>
+              <button type="button" class="btn-sample-load" @click="loadSampleOpenAiHeaders">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> 载入第三方(鱼亮)示例
+              </button>
             </div>
+
             <div class="form-group">
-              <label class="form-label">API Key</label>
-              <div v-if="form.configured" class="gateway-saved-key">
+              <label class="form-label">接口地址 (Base URL / Endpoint)</label>
+              <input v-model="form.baseUrl" class="form-control-styled" placeholder="如 https://api.openai.com/v1 或 http://82.157.197.25:9540/api/modelConfig/modelLlmModel" required>
+              <p class="gateway-field-hint">可填标准 Base URL（自动调用 /chat/completions），亦可直接填完整 Endpoint 地址。</p>
+            </div>
+
+            <div class="form-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label class="form-label" style="margin: 0;">自定义请求头 (Headers JSON，可选)</label>
+                <span class="gateway-var-tag">如 app_id / device_mac</span>
+              </div>
+              <textarea
+                v-model="form.openAiHeaders"
+                class="form-control-styled code-textarea"
+                rows="3"
+                placeholder='{\n  "app_id": "0JO1CFNCJ3",\n  "device_mac": "66666"\n}'
+              ></textarea>
+              <p class="gateway-field-hint">若接口无需 Bearer API Key，而是通过特定 Header 鉴权，在此配置即可。</p>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">API Key (可选)</label>
+              <div v-if="form.configured && form.apiKeyMasked && form.apiKeyMasked !== '[自定义Header鉴权]'" class="gateway-saved-key">
                 <span>当前密钥</span>
                 <code>{{ form.apiKeyMasked }}</code>
                 <em>已保存，明文不会回显</em>
@@ -175,17 +199,34 @@
                 class="form-control-styled"
                 type="password"
                 autocomplete="new-password"
-                :placeholder="form.configured ? '如需更换，在此输入新密钥' : 'sk-...'"
-                :required="!form.id && !form.configured"
+                :placeholder="form.openAiHeaders ? '若使用自定义 Header 鉴权，Key 可留空' : (form.configured ? '如需更换，在此输入新密钥' : 'sk-...')"
               >
             </div>
+
             <div class="form-group">
               <label class="form-label">默认模型</label>
-              <select v-model="form.defaultModel" class="form-control-styled" required>
-                <option value="" disabled>{{ modelOptions.length ? '请选择模型' : '先测试连通性，自动拉取模型' }}</option>
-                <option v-for="m in modelOptions" :key="m" :value="m">{{ m }}</option>
-              </select>
-              <p class="gateway-field-hint">填好密钥后点测试，会按供应商返回的模型列表选择。</p>
+              <div style="display: flex; gap: 8px;">
+                <input
+                  v-model="form.defaultModel"
+                  list="openAiModelOptions"
+                  class="form-control-styled"
+                  placeholder="如 deepseek-v4-flash，可自由输入或从下拉选择"
+                  required
+                >
+                <datalist id="openAiModelOptions">
+                  <option v-for="m in modelOptions" :key="m" :value="m">{{ m }}</option>
+                </datalist>
+                <select
+                  v-if="modelOptions.length"
+                  class="form-control-styled"
+                  style="width: 160px;"
+                  @change="if ($event.target.value) { form.defaultModel = $event.target.value; $event.target.value = ''; }"
+                >
+                  <option value="">快捷选择...</option>
+                  <option v-for="m in modelOptions" :key="m" :value="m">{{ m }}</option>
+                </select>
+              </div>
+              <p class="gateway-field-hint">支持自由输入模型标识（如 deepseek-v4-flash），或点击“测试连通性”自动拉取。</p>
             </div>
           </template>
 
@@ -318,6 +359,7 @@ const policy = reactive({
 const form = reactive({
   id: '', vendor: 'CUSTOM', protocol: 'OPENAI', name: '', baseUrl: '', apiKey: '', apiKeyMasked: '',
   defaultModel: '', models: '', timeoutMs: 30000, remark: '', enabled: false, configured: false,
+  openAiHeaders: '',
   customHttpMethod: 'POST',
   customHeaders: '{\n  "Content-Type": "application/json;charset=utf-8"\n}',
   customBodyTemplate: '{\n  "prompt": "{{prompt}}"\n}',
@@ -435,6 +477,7 @@ function openCreate() {
     apiKey: '', apiKeyMasked: '', defaultModel: preset.defaultModel || '',
     models: (preset.models || []).join(', '),
     timeoutMs: 30000, remark: '', enabled: true, configured: false,
+    openAiHeaders: '',
     customHttpMethod: 'POST',
     customHeaders: '{\n  "Content-Type": "application/json;charset=utf-8"\n}',
     customBodyTemplate: '{\n  "prompt": "{{prompt}}"\n}',
@@ -457,6 +500,10 @@ function openEdit(provider) {
       console.warn('Failed to parse customConfig JSON:', e)
     }
   }
+  const openAiHdrs = (provider.protocol !== 'CUSTOM_HTTP' && customCfg.headers)
+    ? JSON.stringify(customCfg.headers, null, 2)
+    : ''
+
   Object.assign(form, {
     id: provider.id,
     vendor: provider.vendor,
@@ -471,6 +518,7 @@ function openEdit(provider) {
     remark: provider.remark || '',
     enabled: provider.enabled,
     configured: provider.configured,
+    openAiHeaders: openAiHdrs,
     customHttpMethod: customCfg.httpMethod || 'POST',
     customHeaders: customCfg.headers ? JSON.stringify(customCfg.headers, null, 2) : '{\n  "Content-Type": "application/json;charset=utf-8"\n}',
     customBodyTemplate: customCfg.bodyTemplate || '{\n  "prompt": "{{prompt}}"\n}',
@@ -488,6 +536,20 @@ function openEdit(provider) {
   }
   fetchedModels.value = provider.modelList || []
   modalOpen.value = true
+}
+
+function loadSampleOpenAiHeaders() {
+  if (form.name === '自定义通道' || !form.name) {
+    form.name = '第三方鱼亮通道'
+  }
+  form.baseUrl = 'http://82.157.197.25:9540/api/modelConfig/modelLlmModel'
+  form.openAiHeaders = JSON.stringify({
+    "app_id": "0JO1CFNCJ3",
+    "device_mac": "66666"
+  }, null, 2)
+  form.defaultModel = 'deepseek-v4-flash'
+  form.apiKey = ''
+  showToast('已载入第三方 (鱼亮) Header 鉴权通道示例', 'info', 2000)
 }
 
 function loadSampleCustomConfig() {
@@ -581,7 +643,23 @@ async function saveProvider() {
     return
   }
 
-  // Standard OpenAI protocol
+  // Standard / Compatible OpenAI protocol
+  let openAiHeadersObj = null
+  if (form.openAiHeaders && form.openAiHeaders.trim()) {
+    try {
+      openAiHeadersObj = JSON.parse(form.openAiHeaders)
+    } catch (e) {
+      showToast('自定义请求头必须是合法的 JSON 对象', 'error')
+      return
+    }
+  }
+
+  const apiKey = outgoingApiKey()
+  if (!apiKey && !openAiHeadersObj && !form.configured) {
+    showToast('请至少填写 API Key 或配置自定义请求头', 'error')
+    return
+  }
+
   saving.value = true
   const payload = {
     vendor: form.vendor,
@@ -589,12 +667,14 @@ async function saveProvider() {
     name: form.name.trim(),
     baseUrl: form.baseUrl.trim(),
     defaultModel: form.defaultModel.trim(),
-    models: fetchedModels.value.length ? fetchedModels.value.join(',') : form.models.trim(),
+    models: fetchedModels.value.length ? fetchedModels.value.join(',') : (form.models.trim() || form.defaultModel.trim()),
     timeoutMs: form.timeoutMs,
     remark: form.remark.trim(),
     enabled: form.enabled
   }
-  const apiKey = outgoingApiKey()
+  if (openAiHeadersObj) {
+    payload.customConfig = JSON.stringify({ headers: openAiHeadersObj }, null, 2)
+  }
   if (apiKey) payload.apiKey = apiKey
   const res = form.id
     ? await http.put(`/api/model-gateway/providers/${form.id}`, payload)
@@ -688,8 +768,18 @@ async function testInModal() {
     showToast('请先填写 Base URL', 'error')
     return
   }
-  if (!outgoingApiKey() && !form.configured) {
-    showToast('请先填写 API Key 再测试', 'error')
+  let openAiHeadersObj = null
+  if (form.openAiHeaders && form.openAiHeaders.trim()) {
+    try {
+      openAiHeadersObj = JSON.parse(form.openAiHeaders)
+    } catch (e) {
+      showToast('自定义请求头必须是合法的 JSON 对象', 'error')
+      return
+    }
+  }
+  const apiKey = outgoingApiKey()
+  if (!apiKey && !form.configured && !openAiHeadersObj) {
+    showToast('请填写 API Key 或配置自定义请求头后再测试', 'error')
     return
   }
   testing.value = true
@@ -698,15 +788,23 @@ async function testInModal() {
     providerId: form.id || null,
     protocol: 'OPENAI',
     baseUrl: form.baseUrl.trim(),
+    defaultModel: form.defaultModel.trim() || null,
     timeoutMs: form.timeoutMs || 15000
   }
-  const apiKey = outgoingApiKey()
+  if (openAiHeadersObj) {
+    payload.customConfig = JSON.stringify({ headers: openAiHeadersObj })
+  }
   if (apiKey) payload.apiKey = apiKey
   const res = await http.post('/api/model-gateway/probe', payload)
   testing.value = false
   if (res.success && res.data) {
     testResult.value = { success: !!res.data.success, message: res.data.message || res.message }
-    if (res.data.success) applyFetchedModels(res.data.models || [])
+    if (res.data.success) {
+      applyFetchedModels(res.data.models || [])
+      if (!form.defaultModel && res.data.models && res.data.models.length) {
+        form.defaultModel = res.data.models[0]
+      }
+    }
     showToast(testResult.value.success ? (testResult.value.message || '连通性测试通过') : (testResult.value.message || '测试失败'), testResult.value.success ? 'success' : 'error')
     if (form.id) await load()
   } else {
