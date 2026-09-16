@@ -280,90 +280,201 @@
           <div v-if="!agents.length" class="empty-state"><i class="fa-solid fa-robot"></i><h4>未找到符合条件的智能体</h4></div>
           <div v-else-if="viewMode === 'card'" class="agent-grid">
             <div v-for="a in agents" :key="a.id" class="agent-card">
-              <div>
+              <div class="agent-card-main">
+                <!-- 顶部 Header: 头像 + 标题行 + 运行状态 -->
                 <div class="agent-card-header">
                   <div class="agent-meta-left">
                     <div class="agent-avatar-badge">{{ a.avatar || '🤖' }}</div>
                     <div class="agent-title-box">
                       <div class="agent-title-row">
-                        <h3>{{ a.name }}</h3>
-                        <span v-if="a.isSystem" class="agent-scope-pill scope-system" title="系统公共预置资产，全员共享"><i class="fa-solid fa-shield-halved"></i> 系统公共</span>
+                        <h3 :title="a.name">{{ a.name }}</h3>
+                        <span v-if="a.isSystem" class="agent-scope-pill scope-system" title="系统公共预置资产，全员共享"><i class="fa-solid fa-shield-halved"></i> 公共</span>
+                        <span v-else class="agent-scope-pill scope-mine" title="专属个人智能体资产"><i class="fa-solid fa-user-check"></i> 专属</span>
                       </div>
-                      <div class="agent-code-tag">
-                        <span class="agent-id-badge" title="点击复制真实智能体 ID (agent_id，开放接口调用必填)" @click.stop="copyText(a.id, '智能体 ID 已复制: ' + a.id)">
-                          <i class="fa-solid fa-fingerprint"></i> ID: <code>{{ a.id }}</code>
-                          <i class="fa-regular fa-copy"></i>
+                      <div class="agent-sub-meta">
+                        <span class="agent-cat-badge"><i class="fa-solid fa-layer-group"></i> {{ a.category || '通用' }}</span>
+                        <span class="agent-owner-inline" :title="'资产归属: ' + (a.isSystem ? '系统公共预置' : accountLabel(a))">
+                          <i class="fa-regular fa-user"></i> {{ a.isSystem ? '系统公共' : accountLabel(a) }}
                         </span>
-                        <span v-if="a.code" class="agent-code-pill">编码: {{ a.code }}</span>
-                        <span class="agent-owner-tag">所属: {{ a.isSystem ? '系统公共' : accountLabel(a) }}</span>
                       </div>
                     </div>
                   </div>
-                  <div class="badge-status" :class="statusClass(a.status)"><span class="status-dot"></span><span>{{ statusLabel(a.status) }}</span></div>
+                  <div class="badge-status" :class="statusClass(a.status)">
+                    <span class="status-dot"></span>
+                    <span>{{ statusLabel(a.status) }}</span>
+                  </div>
                 </div>
-                <div class="agent-desc">{{ a.description || '暂无描述信息' }}</div>
-                <div class="agent-specs">
-                  <span class="spec-badge spec-model"><i class="fa-solid fa-microchip"></i><span>{{ routedModelLabel }}</span></span>
-                  <span class="spec-badge"><i class="fa-solid fa-temperature-half"></i><span>T:{{ a.temperature != null ? a.temperature : 0.7 }}</span></span>
-                  <span class="spec-badge"><i class="fa-solid fa-user"></i><span>{{ a.isSystem ? '系统公共' : accountLabel(a) }}</span></span>
+
+                <!-- 独立全宽专属标识栏 (ID + 业务编码)，横跨卡片全宽，white-space: nowrap，彻底杜绝折行撕裂 -->
+                <div class="agent-card-id-strip">
+                  <div class="agent-id-pill" title="点击一键复制真实智能体 ID (agent_id，开放接口必填)" @click.stop="copyText(a.id, '智能体 ID 已复制: ' + a.id)">
+                    <i class="fa-solid fa-fingerprint id-icon"></i>
+                    <span class="id-label">ID:</span>
+                    <code class="id-code">{{ a.id }}</code>
+                    <i class="fa-regular fa-copy copy-icon"></i>
+                  </div>
+                  <div v-if="a.code" class="agent-code-chip" :title="'业务编码: ' + a.code">
+                    <i class="fa-solid fa-code"></i>
+                    <span>{{ a.code }}</span>
+                  </div>
                 </div>
-                <div class="prompt-preview-box">{{ a.systemPrompt || '暂未设定 System Prompt' }}</div>
-                <div class="agent-tags"><span v-for="t in (a.tags || [])" :key="t" class="tag-item">#{{ t }}</span></div>
+
+                <!-- 描述说明 -->
+                <div class="agent-card-desc" :class="{ 'is-empty': !a.description }" :title="a.description || ''">
+                  {{ a.description || '暂无智能体描述信息，点击编辑可添加职责与场景说明' }}
+                </div>
+
+                <!-- 核心技术规格 -->
+                <div class="agent-card-specs">
+                  <span class="spec-badge spec-model" :title="'调度模型: ' + routedModelLabel">
+                    <i class="fa-solid fa-microchip"></i>
+                    <span>{{ routedModelLabel }}</span>
+                  </span>
+                  <span class="spec-badge" :title="'采样温度: ' + (a.temperature != null ? a.temperature : 0.7)">
+                    <i class="fa-solid fa-temperature-half"></i>
+                    <span>T: {{ a.temperature != null ? a.temperature : 0.7 }}</span>
+                  </span>
+                  <span v-if="a.systemPrompt" class="spec-badge spec-prompt-flag" title="已配置专用 System Prompt">
+                    <i class="fa-solid fa-terminal"></i>
+                    <span>Prompt 设定</span>
+                  </span>
+                </div>
+
+                <!-- System Prompt 预览微窗 -->
+                <div class="agent-prompt-preview" :title="'System Prompt: ' + (a.systemPrompt || '暂未设定')">
+                  <i class="fa-solid fa-terminal prompt-lead-icon"></i>
+                  <span class="prompt-text">{{ a.systemPrompt || '暂未设定 System Prompt' }}</span>
+                </div>
+
+                <!-- 标签 -->
+                <div v-if="a.tags && a.tags.length" class="agent-tags">
+                  <span v-for="t in a.tags" :key="t" class="tag-item">#{{ t }}</span>
+                </div>
               </div>
+
+              <!-- 底部操作与指标栏 -->
               <div class="agent-footer">
                 <div class="agent-stats-metric">
-                  <span><i class="fa-regular fa-comment-dots"></i> {{ Number(a.callCount || 0).toLocaleString() }}</span>
-                  <span><i class="fa-regular fa-clock"></i> {{ a.avgResponseTimeMs || 0 }}ms</span>
+                  <span :title="'累计调用次数: ' + (a.callCount || 0)"><i class="fa-regular fa-comment-dots"></i> {{ Number(a.callCount || 0).toLocaleString() }} 次</span>
+                  <span :title="'平均响应耗时: ' + (a.avgResponseTimeMs || 0) + 'ms'"><i class="fa-regular fa-clock"></i> {{ a.avgResponseTimeMs || 0 }}ms</span>
                 </div>
                 <div class="agent-actions">
-                  <button class="btn-card-action btn-chat-primary" title="进入智能体独立会话调试界面" @click="goDebug(a.id)"><i class="fa-solid fa-sliders"></i><span>调试</span></button>
-                  <button v-if="canManageAgent(a)" class="btn-card-action btn-action-icon" title="编辑智能体配置" @click="openEdit(a)"><i class="fa-regular fa-pen-to-square"></i></button>
-                  <button v-else class="btn-card-action btn-action-icon disabled-locked" title="系统公共预置资产受保护，请先“复制专属”后再修改" @click="copyAgent(a)"><i class="fa-solid fa-lock"></i></button>
-                  <button class="btn-card-action btn-action-icon" :class="{ 'btn-clone-highlight': a.isSystem && !isSuperAdmin }" :title="a.isSystem ? '复制为我的专属智能体（拥有独立配置）' : '复制智能体'" :disabled="copying" @click="copyAgent(a)"><i class="fa-regular fa-copy"></i></button>
-                  <button v-if="canManageAgent(a)" class="btn-card-action btn-action-icon" :title="a.status === 'RUNNING' ? '停用智能体' : '启用智能体'" @click="toggleStatus(a)"><i class="fa-solid fa-power-off"></i></button>
-                  <button v-if="canManageAgent(a)" class="btn-card-action btn-action-icon btn-action-danger" title="删除智能体" @click="openDelete(a)"><i class="fa-regular fa-trash-can"></i></button>
+                  <button class="btn-card-action btn-chat-primary" title="进入智能体独立会话调试界面" @click="goDebug(a.id)">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>调试</span>
+                  </button>
+                  <button v-if="canManageAgent(a)" class="btn-card-action btn-action-icon" title="编辑智能体配置" @click="openEdit(a)">
+                    <i class="fa-regular fa-pen-to-square"></i>
+                  </button>
+                  <button v-else class="btn-card-action btn-action-icon disabled-locked" title="系统公共预置资产受保护，请先“复制专属”后再修改" @click="copyAgent(a)">
+                    <i class="fa-solid fa-lock"></i>
+                  </button>
+                  <button class="btn-card-action btn-action-icon" :class="{ 'btn-clone-highlight': a.isSystem && !isSuperAdmin }" :title="a.isSystem ? '复制为我的专属智能体（拥有独立配置）' : '复制智能体'" :disabled="copying" @click="copyAgent(a)">
+                    <i class="fa-regular fa-copy"></i>
+                  </button>
+                  <button v-if="canManageAgent(a)" class="btn-card-action btn-action-icon" :title="a.status === 'RUNNING' ? '停用智能体' : '启用智能体'" @click="toggleStatus(a)">
+                    <i class="fa-solid fa-power-off"></i>
+                  </button>
+                  <button v-if="canManageAgent(a)" class="btn-card-action btn-action-icon btn-action-danger" title="删除智能体" @click="openDelete(a)">
+                    <i class="fa-regular fa-trash-can"></i>
+                  </button>
                 </div>
               </div>
             </div>
           </div>
           <div v-else class="table-view-card">
-            <table class="agent-table">
-              <thead><tr><th>智能体</th><th>所属账号</th><th>业务分类</th><th>调度模型</th><th>系统提示词</th><th>调用统计</th><th>运行状态</th><th style="text-align:right;">操作管理</th></tr></thead>
-              <tbody>
-                <tr v-for="a in agents" :key="a.id">
-                  <td>
-                    <div class="table-agent-meta">
-                      <div class="table-agent-avatar">{{ a.avatar || '🤖' }}</div>
-                      <div>
-                        <div class="table-agent-title">{{ a.name }}</div>
-                        <div class="table-agent-id-row">
-                          <span class="table-id-pill" title="点击复制 agent_id" @click.stop="copyText(a.id, '智能体 ID 已复制: ' + a.id)">
-                            <i class="fa-solid fa-fingerprint"></i> <code>{{ a.id }}</code> <i class="fa-regular fa-copy"></i>
-                          </span>
-                          <span v-if="a.code" class="agent-code-pill">编码: {{ a.code }}</span>
+            <div class="table-responsive-wrapper">
+              <table class="agent-table">
+                <thead>
+                  <tr>
+                    <th style="min-width: 250px;">智能体信息</th>
+                    <th style="min-width: 120px;">所属账号</th>
+                    <th style="min-width: 110px;">业务分类</th>
+                    <th style="min-width: 130px;">调度模型</th>
+                    <th style="min-width: 220px;">系统提示词</th>
+                    <th style="min-width: 100px;">调用统计</th>
+                    <th style="min-width: 100px;">运行状态</th>
+                    <th style="min-width: 200px; text-align: right;">操作管理</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="a in agents" :key="a.id">
+                    <td>
+                      <div class="table-agent-meta">
+                        <div class="table-agent-avatar">{{ a.avatar || '🤖' }}</div>
+                        <div class="table-agent-info">
+                          <div class="table-agent-title-row">
+                            <span class="table-agent-title" :title="a.name">{{ a.name }}</span>
+                            <span v-if="a.isSystem" class="agent-scope-pill scope-system-sm" title="系统公共预置资产">公共</span>
+                            <span v-else class="agent-scope-pill scope-mine-sm" title="专属资产">专属</span>
+                          </div>
+                          <div class="table-agent-id-row">
+                            <span class="table-id-pill" title="点击一键复制真实 ID (agent_id)" @click.stop="copyText(a.id, '智能体 ID 已复制: ' + a.id)">
+                              <i class="fa-solid fa-fingerprint"></i>
+                              <code>{{ a.id }}</code>
+                              <i class="fa-regular fa-copy"></i>
+                            </span>
+                            <span v-if="a.code" class="table-code-pill" :title="'业务编码: ' + a.code">
+                              <i class="fa-solid fa-code"></i> {{ a.code }}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </td>
-                  <td>{{ a.isSystem ? '系统公共' : accountLabel(a) }}</td>
-                  <td><span class="spec-badge"><i class="fa-solid fa-tag"></i> {{ a.category || '通用' }}</span></td>
-                  <td>{{ routedModelLabel }}</td>
-                  <td><div class="table-prompt-cell">{{ a.systemPrompt || '暂无设定' }}</div></td>
-                  <td>{{ Number(a.callCount || 0).toLocaleString() }} 次</td>
-                  <td><div class="badge-status" :class="statusClass(a.status)"><span class="status-dot"></span><span>{{ statusLabel(a.status) }}</span></div></td>
-                  <td style="text-align:right; white-space: nowrap;">
-                    <div class="agent-actions" style="justify-content:flex-end; flex-wrap: nowrap;">
-                      <button class="btn-card-action btn-chat-primary" title="进入智能体独立会话调试界面" @click="goDebug(a.id)"><i class="fa-solid fa-sliders"></i><span>调试</span></button>
-                      <button v-if="canManageAgent(a)" class="btn-card-action btn-action-icon" title="编辑智能体配置" @click="openEdit(a)"><i class="fa-regular fa-pen-to-square"></i></button>
-                      <button v-else class="btn-card-action btn-action-icon disabled-locked" title="系统公共资产受保护不可直接修改，请点击复制专属" @click="copyAgent(a)"><i class="fa-solid fa-lock"></i></button>
-                      <button class="btn-card-action btn-action-icon" :class="{ 'btn-clone-highlight': a.isSystem && !isSuperAdmin }" :title="a.isSystem ? '复制为我的专属智能体' : '复制智能体'" :disabled="copying" @click="copyAgent(a)"><i class="fa-regular fa-copy"></i></button>
-                      <button v-if="canManageAgent(a)" class="btn-card-action btn-action-icon" :title="a.status === 'RUNNING' ? '停用智能体' : '启用智能体'" @click="toggleStatus(a)"><i class="fa-solid fa-power-off"></i></button>
-                      <button v-if="canManageAgent(a)" class="btn-card-action btn-action-icon btn-action-danger" title="删除智能体" @click="openDelete(a)"><i class="fa-regular fa-trash-can"></i></button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                    </td>
+                    <td>
+                      <div class="table-owner-cell" :title="a.isSystem ? '系统公共预置' : accountLabel(a)">
+                        <i class="fa-regular fa-user"></i>
+                        <span>{{ a.isSystem ? '系统公共' : accountLabel(a) }}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="spec-badge"><i class="fa-solid fa-layer-group"></i> {{ a.category || '通用' }}</span>
+                    </td>
+                    <td>
+                      <span class="spec-badge spec-model"><i class="fa-solid fa-microchip"></i> {{ routedModelLabel }}</span>
+                    </td>
+                    <td>
+                      <div class="table-prompt-cell" :title="a.systemPrompt || '暂无设定'">
+                        <i class="fa-solid fa-terminal prompt-cell-icon"></i>
+                        <span>{{ a.systemPrompt || '暂无设定' }}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="table-call-count"><i class="fa-regular fa-message"></i> {{ Number(a.callCount || 0).toLocaleString() }} 次</span>
+                    </td>
+                    <td>
+                      <div class="badge-status" :class="statusClass(a.status)">
+                        <span class="status-dot"></span>
+                        <span>{{ statusLabel(a.status) }}</span>
+                      </div>
+                    </td>
+                    <td style="text-align: right; white-space: nowrap;">
+                      <div class="agent-actions" style="justify-content: flex-end; flex-wrap: nowrap;">
+                        <button class="btn-card-action btn-chat-primary" title="进入智能体独立会话调试界面" @click="goDebug(a.id)">
+                          <i class="fa-solid fa-sliders"></i>
+                          <span>调试</span>
+                        </button>
+                        <button v-if="canManageAgent(a)" class="btn-card-action btn-action-icon" title="编辑智能体配置" @click="openEdit(a)">
+                          <i class="fa-regular fa-pen-to-square"></i>
+                        </button>
+                        <button v-else class="btn-card-action btn-action-icon disabled-locked" title="系统公共资产受保护不可直接修改，请点击复制专属" @click="copyAgent(a)">
+                          <i class="fa-solid fa-lock"></i>
+                        </button>
+                        <button class="btn-card-action btn-action-icon" :class="{ 'btn-clone-highlight': a.isSystem && !isSuperAdmin }" :title="a.isSystem ? '复制为我的专属智能体' : '复制智能体'" :disabled="copying" @click="copyAgent(a)">
+                          <i class="fa-regular fa-copy"></i>
+                        </button>
+                        <button v-if="canManageAgent(a)" class="btn-card-action btn-action-icon" :title="a.status === 'RUNNING' ? '停用智能体' : '启用智能体'" @click="toggleStatus(a)">
+                          <i class="fa-solid fa-power-off"></i>
+                        </button>
+                        <button v-if="canManageAgent(a)" class="btn-card-action btn-action-icon btn-action-danger" title="删除智能体" @click="openDelete(a)">
+                          <i class="fa-regular fa-trash-can"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
         <section class="pagination-container">
