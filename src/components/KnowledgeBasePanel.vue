@@ -99,6 +99,7 @@
               v-model="searchKeyword"
               class="search-input"
               type="search"
+              autocomplete="off"
               placeholder="搜索知识库名称、描述或账号..."
               @input="debounceSearch"
             >
@@ -155,6 +156,9 @@
         <h3>{{ scopeFilter === 'mine' ? '暂无我创建的私有知识库' : (scopeFilter === 'system' ? '暂无系统公共知识库' : (searchKeyword ? '未找到符合条件的知识库' : '暂无知识库资产')) }}</h3>
         <p>{{ scopeFilter === 'mine' ? '您可以点击上方「新建知识库」创建您的专属企业资料库。' : (searchKeyword ? '尝试更换检索词或清空筛选条件。' : (canSyncDify ? '您可以新建本地知识库并自动同步至 Dify 数据集，或者直接从 Dify 一键同步。' : '您可以点击上方「新建知识库」创建您的专属企业资料库。')) }}</p>
         <div class="empty-actions">
+          <button v-if="searchKeyword || scopeFilter !== 'all'" class="btn-secondary" @click="resetToList(true)">
+            <i class="fa-solid fa-filter-circle-xmark"></i><span>清空筛选条件并查看全部</span>
+          </button>
           <button class="btn-create-agent" @click="openCreateKb">
             <i class="fa-solid fa-plus"></i><span>立即创建知识库</span>
           </button>
@@ -2354,6 +2358,9 @@ const selectedKb = ref(null)
 function resetToList(forceReload = true) {
   currentView.value = 'list'
   selectedKb.value = null
+  searchKeyword.value = ''
+  scopeFilter.value = 'all'
+  kbPage.value = 1
   if (forceReload) {
     loadEngineInfo()
     loadKnowledgeBases()
@@ -3551,6 +3558,9 @@ async function loadViewLayoutPreference() {
 }
 
 onMounted(() => {
+  searchKeyword.value = ''
+  scopeFilter.value = 'all'
+  kbPage.value = 1
   loadEngineInfo()
   loadKnowledgeBases()
   loadViewLayoutPreference()
