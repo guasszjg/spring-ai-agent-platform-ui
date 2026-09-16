@@ -201,7 +201,7 @@
             </div>
           </div>
 
-          <p class="kb-card-desc">
+          <p class="kb-card-desc" :title="kb.description || '暂无业务描述'">
             {{ kb.description || '暂无业务描述，点击进入可上传文档并维护企业问答对。' }}
           </p>
 
@@ -256,57 +256,84 @@
       </div>
 
       <!-- 表格视图 -->
-      <div v-else class="table-view-card">
-        <table class="agent-table">
+      <div v-else class="table-view-card kb-table-wrap">
+        <table class="agent-table kb-agent-table">
           <thead>
             <tr>
-              <th>知识库名称</th>
-              <th>所属账号</th>
-              <th>提供方</th>
-              <th>检索模式 / 向量模型</th>
-              <th>文档数量</th>
-              <th>问答(FAQ)</th>
-              <th>预估字数</th>
-              <th>更新时间</th>
-              <th style="text-align: right;">操作</th>
+              <th class="col-kb-name">知识库名称与描述</th>
+              <th class="col-kb-owner">所属账号</th>
+              <th class="col-kb-provider">引擎提供方</th>
+              <th class="col-kb-retrieval">检索模式与向量模型</th>
+              <th class="col-kb-docs" style="text-align: center;">文档数</th>
+              <th class="col-kb-faqs" style="text-align: center;">问答 FAQ</th>
+              <th class="col-kb-words" style="text-align: center;">预估字符</th>
+              <th class="col-kb-time">更新时间</th>
+              <th class="col-kb-actions" style="text-align: right;">操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="kb in displayKbList" :key="kb.id" class="table-row-hover" @click="openKbDetail(kb)">
-              <td>
+              <td class="col-kb-name">
                 <div class="kb-table-title-cell">
                   <span class="kb-table-avatar">{{ kb.avatar || '📚' }}</span>
-                  <div>
-                    <div class="table-agent-title" style="display: flex; align-items: center; gap: 6px;">
-                      <span>{{ kb.name }}</span>
-                      <span v-if="kb.isSystem" style="font-size: 11px; padding: 1px 6px; border-radius: 4px; background: rgba(99, 102, 241, 0.15); color: #818cf8;">公共</span>
-                      <span v-else style="font-size: 11px; padding: 1px 6px; border-radius: 4px;" :style="isOwnKb(kb) ? 'background: rgba(16, 185, 129, 0.15); color: #34d399;' : 'background: rgba(245, 158, 11, 0.15); color: #fbbf24;'">{{ accountLabel(kb) }}</span>
+                  <div class="kb-table-info">
+                    <div class="kb-table-name-row">
+                      <span class="kb-table-name" :title="kb.name">{{ kb.name }}</span>
+                      <span v-if="kb.isSystem" class="kb-pill-badge system">
+                        <i class="fa-solid fa-earth-americas"></i> 公共
+                      </span>
+                      <span v-else class="kb-pill-badge" :class="isOwnKb(kb) ? 'mine' : 'other'" :title="accountLabel(kb)">
+                        <i class="fa-solid fa-user"></i> {{ accountLabel(kb) }}
+                      </span>
                     </div>
-                    <div class="table-agent-code">{{ kb.description || '暂无描述' }}</div>
+                    <div class="kb-table-desc" :title="kb.description || '暂无业务描述'">
+                      {{ kb.description || '暂无业务描述，点击进入可上传文档与维护问答对。' }}
+                    </div>
                   </div>
                 </div>
               </td>
-              <td>{{ kb.isSystem ? '系统公共' : accountLabel(kb) }}</td>
-              <td>
-                <span v-if="kb.provider === 'SPRING_AI'" class="provider-badge spring-ai"><i class="fa-solid fa-brain"></i> Spring AI 自研</span>
-                <span v-else class="provider-badge dify"><i class="fa-solid fa-link"></i> Dify 外挂</span>
+              <td class="col-kb-owner">
+                <span class="kb-cell-text" :title="kb.isSystem ? '系统公共' : accountLabel(kb)">
+                  <i :class="kb.isSystem ? 'fa-solid fa-earth-americas' : 'fa-solid fa-user'" style="font-size: 11px; opacity: 0.7; margin-right: 4px;"></i>
+                  <span>{{ kb.isSystem ? '系统公共' : accountLabel(kb) }}</span>
+                </span>
               </td>
-              <td>
-                <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+              <td class="col-kb-provider">
+                <span v-if="kb.provider === 'SPRING_AI'" class="provider-badge spring-ai">
+                  <i class="fa-solid fa-brain"></i> Spring AI
+                </span>
+                <span v-else class="provider-badge dify">
+                  <i class="fa-solid fa-link"></i> Dify RAG
+                </span>
+              </td>
+              <td class="col-kb-retrieval">
+                <div class="kb-retrieval-cell">
                   <span class="search-method-badge" :class="kb.searchMethod || 'hybrid_search'">
                     <i :class="getSearchMethodIcon(kb.searchMethod)"></i> {{ getSearchMethodLabel(kb.searchMethod, kb) }}
                   </span>
-                  <span class="model-badge-sub">
-                    <i class="fa-solid fa-cube"></i> {{ getEmbeddingModelLabel(kb) }}
+                  <span class="model-badge-sub" :title="getEmbeddingModelLabel(kb)">
+                    <i class="fa-solid fa-cube"></i>
+                    <span class="kb-model-truncate">{{ getEmbeddingModelLabel(kb) }}</span>
                   </span>
                 </div>
               </td>
-              <td><strong class="text-blue">{{ kb.documentCount || 0 }}</strong> 篇</td>
-              <td><strong class="text-emerald">{{ kb.faqCount || 0 }}</strong> 条</td>
-              <td>{{ formatWordCount(kb.wordCount) }}</td>
-              <td>{{ formatTime(kb.updatedAt) }}</td>
-              <td style="text-align: right; white-space: nowrap;" @click.stop>
-                <div class="agent-actions" style="justify-content: flex-end; flex-wrap: nowrap;">
+              <td class="col-kb-docs" style="text-align: center;">
+                <span class="kb-stat-pill blue">{{ kb.documentCount || 0 }} 篇</span>
+              </td>
+              <td class="col-kb-faqs" style="text-align: center;">
+                <span class="kb-stat-pill emerald">{{ kb.faqCount || 0 }} 条</span>
+              </td>
+              <td class="col-kb-words" style="text-align: center;">
+                <span class="kb-stat-pill purple">{{ formatWordCount(kb.wordCount) }}</span>
+              </td>
+              <td class="col-kb-time">
+                <span class="kb-time-label" :title="kb.updatedAt">
+                  <i class="fa-regular fa-clock" style="font-size: 11px; opacity: 0.65; margin-right: 4px;"></i>
+                  {{ formatTime(kb.updatedAt) }}
+                </span>
+              </td>
+              <td class="col-kb-actions" style="text-align: right; white-space: nowrap;" @click.stop>
+                <div class="agent-actions" style="justify-content: flex-end; flex-wrap: nowrap; gap: 6px;">
                   <button
                     type="button"
                     class="btn-card-action btn-chat-primary"
@@ -2270,6 +2297,10 @@ import { useToast } from '../composables/useToast'
 import { accountLabel } from '../composables/useAccountOptions'
 
 const props = defineProps({
+  active: {
+    type: Boolean,
+    default: false
+  },
   user: {
     type: Object,
     default: () => ({})
@@ -2319,6 +2350,26 @@ watch(viewLayout, async (mode) => {
 })
 const activeSubTab = ref('documents') // 'documents' | 'faqs' | 'retrieval-test' | 'cost-governance'
 const selectedKb = ref(null)
+
+function resetToList(forceReload = true) {
+  currentView.value = 'list'
+  selectedKb.value = null
+  if (forceReload) {
+    loadEngineInfo()
+    loadKnowledgeBases()
+  }
+}
+
+watch(() => props.active, (val) => {
+  if (val) {
+    resetToList(true)
+  }
+})
+
+defineExpose({
+  resetToList,
+  loadKnowledgeBases
+})
 
 // ==================== 召回测试与调试状态 (Phase P1 & P2 & P3) ====================
 const retrievalMode = ref('single') // 'single' | 'shadow'
@@ -2530,16 +2581,23 @@ async function loadEngineInfo() {
 
 async function loadKnowledgeBases() {
   loadingKb.value = true
-  const res = await http.get('/api/knowledge-bases', {
-    keyword: searchKeyword.value,
-    page: kbPage.value,
-    size: kbPageSize.value
-  })
-  loadingKb.value = false
-  if (res.success && res.data) {
-    kbList.value = res.data.records || []
-    totalKbCount.value = res.data.total || 0
-    kbTotalPages.value = Math.max(1, Math.ceil(res.data.total / kbPageSize.value))
+  try {
+    const res = await http.get('/api/knowledge-bases', {
+      keyword: searchKeyword.value,
+      page: kbPage.value,
+      size: kbPageSize.value
+    })
+    if (res && res.success && res.data) {
+      kbList.value = res.data.records || []
+      totalKbCount.value = res.data.total || 0
+      kbTotalPages.value = Math.max(1, Math.ceil((res.data.total || 0) / kbPageSize.value))
+    } else if (res && !res.success) {
+      console.warn('获取知识库列表未返回成功状态:', res.message)
+    }
+  } catch (err) {
+    console.error('loadKnowledgeBases error:', err)
+  } finally {
+    loadingKb.value = false
   }
 }
 
@@ -2786,8 +2844,7 @@ function openKbDetail(kb) {
 }
 
 function backToList() {
-  currentView.value = 'list'
-  loadKnowledgeBases()
+  resetToList(true)
 }
 
 // ==================== 召回测试与调试逻辑 (Phase P1 & P2 & P3) ====================
@@ -5692,5 +5749,242 @@ onMounted(() => {
 [data-theme="light"] .offline-overview-banner {
   background: #ecfdf5 !important;
   border-color: #a7f3d0 !important;
+}
+
+/* ==================== 知识库资产列表精细化排版 ==================== */
+.kb-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: var(--radius-md, 12px);
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+}
+
+.kb-agent-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  min-width: 1100px;
+}
+
+.kb-agent-table th {
+  background: var(--bg-input);
+  padding: 13px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.kb-agent-table td {
+  padding: 14px 16px;
+  font-size: 13px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.kb-agent-table tr:last-child td {
+  border-bottom: none;
+}
+
+.kb-agent-table tr:hover td {
+  background: var(--bg-card-hover);
+}
+
+/* 列宽度配置 */
+.col-kb-name {
+  width: 320px;
+  min-width: 280px;
+}
+.col-kb-owner {
+  width: 120px;
+}
+.col-kb-provider {
+  width: 130px;
+}
+.col-kb-retrieval {
+  width: 190px;
+}
+.col-kb-docs {
+  width: 90px;
+}
+.col-kb-faqs {
+  width: 95px;
+}
+.col-kb-words {
+  width: 100px;
+}
+.col-kb-time {
+  width: 135px;
+}
+.col-kb-actions {
+  width: 175px;
+}
+
+/* 知识库名称与描述单元格 */
+.kb-table-title-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 2px 0;
+}
+
+.kb-table-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 21px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+.kb-table-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+  justify-content: center;
+}
+
+.kb-table-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.kb-table-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.35;
+  letter-spacing: -0.2px;
+}
+
+.kb-pill-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 1.5px 7px;
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.35;
+}
+
+.kb-pill-badge.system {
+  background: rgba(99, 102, 241, 0.12);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.28);
+}
+
+.kb-pill-badge.mine {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.28);
+}
+
+.kb-pill-badge.other {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+}
+
+.kb-table-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  max-width: 255px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+
+/* 所属账号单元格 */
+.kb-cell-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  max-width: 110px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 检索模式与向量模型单元格 */
+.kb-retrieval-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.kb-model-truncate {
+  max-width: 155px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+/* 统计标签胶囊 */
+.kb-stat-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.kb-stat-pill.blue {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.kb-stat-pill.emerald {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.kb-stat-pill.purple {
+  background: rgba(139, 92, 246, 0.1);
+  color: #8b5cf6;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+/* 更新时间 */
+.kb-time-label {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 </style>

@@ -494,7 +494,13 @@
       </section>
 
       <section v-show="currentTab === 'knowledge'" class="app-subview active">
-        <KnowledgeBasePanel :user="user" :current-user="user" :is-super-admin="isSuperAdmin" />
+        <KnowledgeBasePanel
+          ref="kbPanelRef"
+          :active="currentTab === 'knowledge'"
+          :user="user"
+          :current-user="user"
+          :is-super-admin="isSuperAdmin"
+        />
       </section>
 
       <section v-show="currentTab === 'gateway'" class="app-subview active">
@@ -759,6 +765,7 @@ const router = useRouter()
 const route = useRoute()
 const { showToast } = useToast()
 const currentTab = ref('overview')
+const kbPanelRef = ref(null)
 const securityInnerTab = ref('overview')
 const timeRange = ref('7days')
 const stats = ref({})
@@ -959,6 +966,9 @@ function handleNavClick(item) {
   if ((item.id === 'gateway' || item.id === 'users') && !isSuperAdmin.value) {
     showToast('无权限访问该功能，仅超级管理员可用', 'error')
     return
+  }
+  if (item.id === 'knowledge') {
+    kbPanelRef.value?.resetToList?.(true)
   }
   currentTab.value = item.id
 }
@@ -1162,6 +1172,11 @@ watch(currentTab, (tab) => {
   if (tab === 'overview') nextTick(renderCharts)
   if (tab === 'gateway' || tab === 'agents') loadGatewayRoute()
   if (tab === 'templates') loadTemplates()
+  if (tab === 'knowledge') {
+    nextTick(() => {
+      kbPanelRef.value?.resetToList?.(true)
+    })
+  }
 })
 
 async function loadStats() {
@@ -1385,6 +1400,11 @@ onMounted(() => {
       currentTab.value = tab
       if (tab === 'security' && typeof route.query.sec === 'string' && route.query.sec) {
         securityInnerTab.value = route.query.sec
+      }
+      if (tab === 'knowledge') {
+        nextTick(() => {
+          kbPanelRef.value?.resetToList?.(true)
+        })
       }
     }
   }
