@@ -549,7 +549,7 @@
             <div class="form-group">
               <label class="form-label">调度大模型</label>
               <div class="form-control-styled" style="display:flex;align-items:center;min-height:40px;">{{ routedModelLabel }}</div>
-              <p class="section-hint" style="margin-top:6px;">由模型网关的默认通道决定，请到「模型网关路由」中修改</p>
+              <p class="section-hint" style="margin-top:6px;">由模型网关的默认通道决定，请到「AI 引擎与模型网关」中修改</p>
             </div>
           </div>
           <div class="form-group">
@@ -849,7 +849,7 @@ const pageTitle = computed(() => {
   if (currentTab.value === 'agents') return 'Agents 智能体资产管理'
   if (currentTab.value === 'templates') return '行业场景模版中心 (Agent Templates)'
   if (currentTab.value === 'knowledge') return '企业私有知识库 (RAG)'
-  if (currentTab.value === 'gateway') return '模型网关路由 (LLM Gateway)'
+  if (currentTab.value === 'gateway') return 'AI 引擎与模型网关 (LLM / Embedding / Dify)'
   if (currentTab.value === 'users') return '企业租户用户管理 (User Management)'
   if (currentTab.value === 'roles') return '系统固定角色与权限矩阵 (Roles & Permissions)'
   if (currentTab.value === 'security') return '开放与安全 (Open API & Guardrails)'
@@ -916,9 +916,9 @@ const navGroups = computed(() => {
   if (isSuperAdmin.value) {
     govItems.push({
       id: 'gateway',
-      name: '模型网关路由',
-      title: '模型网关路由 (LLM Channels & Models)',
-      icon: 'fa-solid fa-route'
+      name: 'AI 引擎与模型网关',
+      title: 'AI 引擎与模型网关 (LLM / Embedding / Dify)',
+      icon: 'fa-solid fa-server'
     })
     govItems.push({
       id: 'users',
