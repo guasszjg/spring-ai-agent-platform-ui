@@ -289,7 +289,14 @@
                         <h3>{{ a.name }}</h3>
                         <span v-if="a.isSystem" class="agent-scope-pill scope-system" title="系统公共预置资产，全员共享"><i class="fa-solid fa-shield-halved"></i> 系统公共</span>
                       </div>
-                      <div class="agent-code-tag">{{ a.code || a.id }} · 所属账号 {{ a.isSystem ? '系统公共' : accountLabel(a) }}</div>
+                      <div class="agent-code-tag">
+                        <span class="agent-id-badge" title="点击复制真实智能体 ID (agent_id，开放接口调用必填)" @click.stop="copyText(a.id, '智能体 ID 已复制: ' + a.id)">
+                          <i class="fa-solid fa-fingerprint"></i> ID: <code>{{ a.id }}</code>
+                          <i class="fa-regular fa-copy"></i>
+                        </span>
+                        <span v-if="a.code" class="agent-code-pill">编码: {{ a.code }}</span>
+                        <span class="agent-owner-tag">所属: {{ a.isSystem ? '系统公共' : accountLabel(a) }}</span>
+                      </div>
                     </div>
                   </div>
                   <div class="badge-status" :class="statusClass(a.status)"><span class="status-dot"></span><span>{{ statusLabel(a.status) }}</span></div>
@@ -324,7 +331,20 @@
               <thead><tr><th>智能体</th><th>所属账号</th><th>业务分类</th><th>调度模型</th><th>系统提示词</th><th>调用统计</th><th>运行状态</th><th style="text-align:right;">操作管理</th></tr></thead>
               <tbody>
                 <tr v-for="a in agents" :key="a.id">
-                  <td><div class="table-agent-meta"><div class="table-agent-avatar">{{ a.avatar || '🤖' }}</div><div><div class="table-agent-title">{{ a.name }}</div><div class="table-agent-code">{{ a.code || a.id }}</div></div></div></td>
+                  <td>
+                    <div class="table-agent-meta">
+                      <div class="table-agent-avatar">{{ a.avatar || '🤖' }}</div>
+                      <div>
+                        <div class="table-agent-title">{{ a.name }}</div>
+                        <div class="table-agent-id-row">
+                          <span class="table-id-pill" title="点击复制 agent_id" @click.stop="copyText(a.id, '智能体 ID 已复制: ' + a.id)">
+                            <i class="fa-solid fa-fingerprint"></i> <code>{{ a.id }}</code> <i class="fa-regular fa-copy"></i>
+                          </span>
+                          <span v-if="a.code" class="agent-code-pill">编码: {{ a.code }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
                   <td>{{ a.isSystem ? '系统公共' : accountLabel(a) }}</td>
                   <td><span class="spec-badge"><i class="fa-solid fa-tag"></i> {{ a.category || '通用' }}</span></td>
                   <td>{{ routedModelLabel }}</td>
@@ -638,6 +658,15 @@ const scopeFilter = ref('all')
 const statusFilter = ref('')
 const viewMode = ref(localStorage.getItem('agentViewMode') || 'card')
 const sidebarCollapsed = ref(localStorage.getItem('sidebarCollapsed') === 'true')
+
+function copyText(text, msg = '智能体 ID 已复制') {
+  if (!text) return
+  navigator.clipboard.writeText(text).then(() => {
+    showToast(msg, 'success')
+  }).catch(() => {
+    showToast('复制失败', 'error')
+  })
+}
 
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value

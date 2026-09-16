@@ -604,6 +604,21 @@
                   </div>
                 </div>
 
+                <!-- Agent Quick Selector for chat-messages -->
+                <div v-if="currentEndpoint.id === 'chat-messages' && agents.length" class="agent-quick-select-bar">
+                  <div class="quick-agent-left">
+                    <span class="quick-label"><i class="fa-solid fa-robot"></i> 目标智能体 (agent_id):</span>
+                    <select v-model="selectedAgentForChat" class="quick-agent-select" @change="onSelectAgentForChat">
+                      <option v-for="a in agents" :key="a.id" :value="a.id">
+                        {{ a.name }} (ID: {{ a.id }}{{ a.code ? ' · ' + a.code : '' }})
+                      </option>
+                    </select>
+                  </div>
+                  <button type="button" class="btn-quick-copy" title="复制此智能体 ID" @click="copyText(selectedAgentForChat, '智能体 ID 已复制: ' + selectedAgentForChat)">
+                    <i class="fa-regular fa-copy"></i> 复制 ID
+                  </button>
+                </div>
+
                 <!-- Multipart File Upload -->
                 <div v-if="currentEndpoint.isMultipart" class="multipart-upload-box">
                   <div class="upload-file-row">
@@ -972,6 +987,32 @@ function initDebuggerForEndpoint() {
   responseResult.value = null
 }
 
+const selectedAgentForChat = ref('')
+
+watch(() => props.agents, (newAgents) => {
+  if (newAgents && newAgents.length) {
+    if (!selectedAgentForChat.value || !newAgents.some(a => a.id === selectedAgentForChat.value)) {
+      selectedAgentForChat.value = newAgents[0].id
+    }
+    if (currentEndpoint.value?.id === 'chat-messages') {
+      if (!debugBodyJson.value || debugBodyJson.value.includes('agent_sample_01') || debugBodyJson.value.includes('agent-xxxxxx')) {
+        resetBodyToDefault()
+      }
+    }
+  }
+}, { immediate: true })
+
+function onSelectAgentForChat() {
+  if (!selectedAgentForChat.value) return
+  try {
+    const obj = JSON.parse(debugBodyJson.value || '{}')
+    obj.agent_id = selectedAgentForChat.value
+    if (obj.agentId !== undefined) delete obj.agentId
+    debugBodyJson.value = JSON.stringify(obj, null, 2)
+    showToast(`已切换目标智能体: ${selectedAgentForChat.value}`, 'info')
+  } catch {}
+}
+
 function resetBodyToDefault() {
   const ep = currentEndpoint.value
   if (!ep) return
@@ -980,11 +1021,10 @@ function resetBodyToDefault() {
     try {
       bodyObj = JSON.parse(ep.exampleBody)
       if (ep.id === 'chat-messages') {
-        if (props.agents && props.agents.length) {
-          bodyObj.agent_id = props.agents[0].id
-          if (bodyObj.agentId !== undefined) {
-            delete bodyObj.agentId
-          }
+        const targetId = selectedAgentForChat.value || (props.agents && props.agents.length ? props.agents[0].id : 'agent_sample_01')
+        bodyObj.agent_id = targetId
+        if (bodyObj.agentId !== undefined) {
+          delete bodyObj.agentId
         }
         if (!bodyObj.message && bodyObj.query) {
           bodyObj.message = bodyObj.query
@@ -2544,6 +2584,83 @@ initDebuggerForEndpoint()
   line-height: 1.6;
   overflow-x: auto;
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Quick Agent Selector Bar */
+.agent-quick-select-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--bg-input, rgba(0, 0, 0, 0.2));
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.quick-agent-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 240px;
+}
+
+.quick-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.quick-label i {
+  color: var(--accent-cyan, #06b6d4);
+}
+
+.quick-agent-select {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  padding: 5px 10px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quick-agent-select:focus {
+  border-color: var(--accent-cyan, #06b6d4);
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.15);
+}
+
+.btn-quick-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(6, 182, 212, 0.25);
+  color: var(--accent-cyan, #06b6d4);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.btn-quick-copy:hover {
+  background: rgba(6, 182, 212, 0.22);
+  border-color: var(--accent-cyan, #06b6d4);
+  color: #38bdf8;
 }
 
 /* Responsive */

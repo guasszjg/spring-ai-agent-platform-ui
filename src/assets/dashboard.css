@@ -1477,9 +1477,77 @@
 }
 
 .agent-code-tag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.agent-id-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-input, rgba(0, 0, 0, 0.2));
+  padding: 2px 7px;
+  border-radius: 5px;
+  color: var(--accent-cyan, #06b6d4);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+}
+
+.agent-id-badge:hover {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: var(--accent-cyan, #06b6d4);
+  color: #38bdf8;
+  transform: translateY(-1px);
+}
+
+.agent-id-badge code {
+  color: inherit;
+  font-weight: 600;
+}
+
+.agent-code-pill {
   font-size: 11px;
   color: var(--text-muted);
-  font-family: monospace;
+  background: rgba(148, 163, 184, 0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.agent-owner-tag {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.table-agent-id-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.table-id-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-input, rgba(0, 0, 0, 0.15));
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--accent-cyan, #06b6d4);
+  font-size: 11px;
+  cursor: pointer;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  transition: all 0.2s;
+}
+
+.table-id-pill:hover {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: var(--accent-cyan, #06b6d4);
 }
 
 .badge-status {
