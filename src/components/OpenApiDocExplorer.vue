@@ -36,8 +36,8 @@
               v-model="customKeySecret"
               type="password"
               class="env-input key-secret-input"
-              :placeholder="selectedKeyMode === 'custom' ? 'sk-agt-xxxxxxxx' : '已选择凭证，可输入完整明文测试'"
-              title="请输入您签发时保存的完整 API Key 明文 (sk-agt-...)"
+              :placeholder="customKeySecret ? '已自动载入密钥明文 (可直接测试)' : (selectedKeyMode === 'custom' ? 'sk-live-xxxxxxxx' : '请粘贴此凭证完整明文 sk-live-...')"
+              title="请输入您签发或轮换时保存的完整 API Key 明文 (sk-live-...)"
             >
           </div>
         </div>
@@ -818,20 +818,59 @@ const apiBaseUrl = computed(() => {
 })
 
 const selectedKeyMode = ref(props.keys.length ? props.keys[0].id : 'custom')
-const customKeySecret = ref(sessionStorage.getItem('open_api_debug_key') || '')
+const customKeySecret = ref('')
 
 const activeClientType = ref('SN')
 const activeClientId = ref(props.clients.length ? props.clients[0].clientId : 'DEV-SN-001')
 const activeEndUser = ref('user_terminal_01')
 const activeIdempotencyKey = ref('')
 
+function syncKeyFromCache(keyId) {
+  if (!keyId || keyId === 'custom') {
+    const last = sessionStorage.getItem('open_api_debug_key') || localStorage.getItem('open_key_plaintext_last') || ''
+    if (last) customKeySecret.value = last
+    return
+  }
+  const cached = localStorage.getItem('open_key_plaintext_' + keyId)
+  if (cached) {
+    customKeySecret.value = cached
+  } else {
+    // Check if the last cached key matches this key's prefix
+    const targetKey = props.keys.find(k => k.id === keyId)
+    const lastPlaintext = localStorage.getItem('open_key_plaintext_last') || sessionStorage.getItem('open_api_debug_key') || ''
+    if (targetKey && lastPlaintext && lastPlaintext.startsWith(targetKey.keyPrefix)) {
+      customKeySecret.value = lastPlaintext
+      try {
+        localStorage.setItem('open_key_plaintext_' + keyId, lastPlaintext)
+      } catch {}
+    } else {
+      customKeySecret.value = ''
+    }
+  }
+}
+
+watch(selectedKeyMode, (newKeyId) => {
+  syncKeyFromCache(newKeyId)
+})
+
 watch(customKeySecret, (v) => {
-  if (v) sessionStorage.setItem('open_api_debug_key', v)
+  if (v) {
+    sessionStorage.setItem('open_api_debug_key', v)
+    if (selectedKeyMode.value && selectedKeyMode.value !== 'custom') {
+      try {
+        localStorage.setItem('open_key_plaintext_' + selectedKeyMode.value, v)
+        localStorage.setItem('open_key_plaintext_last', v)
+      } catch {}
+    }
+  }
 })
 
 watch(() => props.keys, (n) => {
-  if (n && n.length && selectedKeyMode.value === 'custom' && !customKeySecret.value) {
-    selectedKeyMode.value = n[0].id
+  if (n && n.length) {
+    if (selectedKeyMode.value === 'custom' || !n.some(k => k.id === selectedKeyMode.value)) {
+      selectedKeyMode.value = n[0].id
+    }
+    syncKeyFromCache(selectedKeyMode.value)
   }
 }, { immediate: true })
 
@@ -843,16 +882,12 @@ watch(() => props.clients, (n) => {
 }, { immediate: true })
 
 const effectiveKeySecret = computed(() => {
-  if (customKeySecret.value.trim()) return customKeySecret.value.trim()
-  if (selectedKeyMode.value !== 'custom') {
-    const k = props.keys.find(item => item.id === selectedKeyMode.value)
-    if (k) return `sk-agt-test-${k.keyPrefix}`
-  }
-  return 'sk-agt-your-api-key'
+  return customKeySecret.value.trim()
 })
 
 const effectiveKeyDisplay = computed(() => {
   const secret = effectiveKeySecret.value
+  if (!secret) return '未填入明文 (请在上方粘贴)'
   if (secret.length > 18) {
     return secret.slice(0, 10) + '...' + secret.slice(-4)
   }
@@ -860,7 +895,7 @@ const effectiveKeyDisplay = computed(() => {
 })
 
 const hasKeyInput = computed(() => {
-  return Boolean(customKeySecret.value.trim() || selectedKeyMode.value !== 'custom')
+  return Boolean(customKeySecret.value.trim())
 })
 
 // Navigation & Search State
@@ -944,8 +979,17 @@ function resetBodyToDefault() {
     let bodyObj
     try {
       bodyObj = JSON.parse(ep.exampleBody)
-      if (ep.id === 'chat-messages' && props.agents.length) {
-        bodyObj.agentId = props.agents[0].id
+      if (ep.id === 'chat-messages') {
+        if (props.agents && props.agents.length) {
+          bodyObj.agent_id = props.agents[0].id
+          if (bodyObj.agentId !== undefined) {
+            delete bodyObj.agentId
+          }
+        }
+        if (!bodyObj.message && bodyObj.query) {
+          bodyObj.message = bodyObj.query
+          delete bodyObj.query
+        }
       }
       debugBodyJson.value = JSON.stringify(bodyObj, null, 2)
     } catch {
@@ -979,6 +1023,14 @@ function onFileSelected(event) {
 async function executeRequest() {
   const ep = currentEndpoint.value
   if (!ep) return
+
+  const keyToUse = effectiveKeySecret.value.trim()
+  if (!keyToUse) {
+    const selectedKey = props.keys.find(k => k.id === selectedKeyMode.value)
+    const keyName = selectedKey ? `「${selectedKey.name}」` : ''
+    showToast(`当前选中的凭证${keyName}缺少密钥明文（数据库仅保存安全哈希）。请在顶部输入框填入此前签发时保存的完整密钥（如 sk-live-...），或重新签发新凭证`, 'warning')
+    return
+  }
 
   isExecuting.value = true
   responseResult.value = null

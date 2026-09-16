@@ -1692,8 +1692,16 @@ async function createKey() {
     })
     if (res.success) {
       keyModalOpen.value = false
-      plaintextModal.value = res.data?.plaintext || ''
+      const plaintext = res.data?.plaintext || ''
+      plaintextModal.value = plaintext
       plaintextModal.open = true
+      if (res.data?.key?.id && plaintext) {
+        try {
+          localStorage.setItem('open_key_plaintext_' + res.data.key.id, plaintext)
+          localStorage.setItem('open_key_plaintext_last', plaintext)
+          sessionStorage.setItem('open_api_debug_key', plaintext)
+        } catch {}
+      }
       await loadAll()
     } else showToast(res.message || '签发失败', 'error')
   } finally {
@@ -2157,9 +2165,17 @@ async function confirmRotateKey() {
     })
     if (res.success) {
       rotateModal.open = false
-      plaintextModal.value = res.data?.newPlaintext || ''
+      const newPlaintext = res.data?.newPlaintext || ''
+      plaintextModal.value = newPlaintext
       plaintextModal.open = true
-      showToast('凭证已平滑轮换，新密钥已生效，旧密钥进入 24h 宽限期', 'success')
+      if (res.data?.newKey?.id && newPlaintext) {
+        try {
+          localStorage.setItem('open_key_plaintext_' + res.data.newKey.id, newPlaintext)
+          localStorage.setItem('open_key_plaintext_last', newPlaintext)
+          sessionStorage.setItem('open_api_debug_key', newPlaintext)
+        } catch {}
+      }
+      showToast('凭证已平滑轮换，新密钥已生效并已自动记入本地调试器', 'success')
       await loadAll()
     } else {
       showToast(res.message || '轮换失败', 'error')

@@ -15,20 +15,18 @@ export const OPEN_API_GROUPS = [
         scope: 'chat',
         description: '向指定智能体发送问答提示词，支持单次同步 JSON 响应与 SSE 流式实时打字机输出，自动注入绑定的私有知识库切片上下文及护栏过滤。',
         bodyFields: [
-          { name: 'agentId', type: 'string', required: true, default: 'agent_sample_01', description: '目标调用的智能体 ID (必填)' },
-          { name: 'query', type: 'string', required: true, default: '你好，请介绍一下平台功能和你可以做什么？', description: '用户发送给智能体的问题或指令提示词 (必填)' },
-          { name: 'conversationId', type: 'string', required: false, default: '', description: '关联的历史会话 ID，留空则服务端自动新建会话' },
-          { name: 'stream', type: 'boolean', required: false, default: 'false', description: '是否使用 SSE 流式输出 (text/event-stream)' },
-          { name: 'knowledgeBaseIds', type: 'array[string]', required: false, default: '[]', description: '本次对话临时指定增强引用的知识库 ID 数组' },
-          { name: 'temperature', type: 'number', required: false, default: '0.7', description: '采样温度 (0.0~2.0)，数值越大越具创造力' }
+          { name: 'agent_id', type: 'string', required: true, default: 'agent_sample_01', description: '目标调用的智能体 ID (必填，同时兼容 agentId)' },
+          { name: 'message', type: 'string', required: true, default: '你好，请介绍一下企业私有知识库与多智能体协同能力？', description: '用户输入的问题、指令或对话内容文本 (必填，同时兼容 query)' },
+          { name: 'response_mode', type: 'string', required: false, default: 'blocking', description: '响应返回模式: blocking (阻塞返回完整JSON) 或 streaming (SSE流式实时输出)' },
+          { name: 'conversation_id', type: 'string', required: false, default: '', description: '会话 ID。需要多轮连续对话时传入上一轮返回的 conversation_id' },
+          { name: 'user', type: 'string', required: false, default: 'developer_guass', description: '终端用户唯一标识，用于调用链路与安全审计溯源' }
         ],
         exampleBody: JSON.stringify({
-          agentId: "agent_sample_01",
-          query: "你好，请介绍一下企业私有知识库与多智能体协同能力？",
-          conversationId: "",
-          stream: false,
-          knowledgeBaseIds: [],
-          temperature: 0.7
+          agent_id: "agent_sample_01",
+          message: "你好，请介绍一下企业私有知识库与多智能体协同能力？",
+          response_mode: "blocking",
+          conversation_id: "",
+          user: "developer_guass"
         }, null, 2),
         exampleResponse: JSON.stringify({
           code: 200,
