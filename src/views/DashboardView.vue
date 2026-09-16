@@ -387,13 +387,13 @@
               <table class="agent-table">
                 <thead>
                   <tr>
-                    <th style="min-width: 250px;">智能体信息</th>
-                    <th style="min-width: 120px;">所属账号</th>
-                    <th style="min-width: 110px;">业务分类</th>
-                    <th style="min-width: 130px;">调度模型</th>
-                    <th style="min-width: 220px;">系统提示词</th>
-                    <th style="min-width: 100px;">调用统计</th>
-                    <th style="min-width: 100px;">运行状态</th>
+                    <th style="min-width: 280px;">智能体资产信息</th>
+                    <th style="min-width: 110px;">所属账号</th>
+                    <th style="min-width: 100px;">业务分类</th>
+                    <th style="min-width: 120px;">调度模型</th>
+                    <th style="width: 130px; min-width: 110px; max-width: 140px;">系统提示词</th>
+                    <th style="min-width: 95px;">调用统计</th>
+                    <th style="min-width: 95px;">运行状态</th>
                     <th style="min-width: 200px; text-align: right;">操作管理</th>
                   </tr>
                 </thead>
@@ -405,18 +405,20 @@
                         <div class="table-agent-info">
                           <div class="table-agent-title-row">
                             <span class="table-agent-title" :title="a.name">{{ a.name }}</span>
-                            <span v-if="a.isSystem" class="agent-scope-pill scope-system-sm" title="系统公共预置资产">公共</span>
-                            <span v-else class="agent-scope-pill scope-mine-sm" title="专属资产">专属</span>
+                            <span v-if="a.isSystem" class="agent-scope-pill scope-system-sm" title="系统公共预置资产，全员共享"><i class="fa-solid fa-shield-halved"></i> 公共</span>
+                            <span v-else class="agent-scope-pill scope-mine-sm" title="专属智能体资产"><i class="fa-solid fa-user-check"></i> 专属</span>
                           </div>
                           <div class="table-agent-id-row">
-                            <span class="table-id-pill" title="点击一键复制真实 ID (agent_id)" @click.stop="copyText(a.id, '智能体 ID 已复制: ' + a.id)">
-                              <i class="fa-solid fa-fingerprint"></i>
-                              <code>{{ a.id }}</code>
-                              <i class="fa-regular fa-copy"></i>
-                            </span>
-                            <span v-if="a.code" class="table-code-pill" :title="'业务编码: ' + a.code">
-                              <i class="fa-solid fa-code"></i> {{ a.code }}
-                            </span>
+                            <div class="table-id-pill" title="点击一键复制真实智能体 ID (agent_id)" @click.stop="copyText(a.id, '智能体 ID 已复制: ' + a.id)">
+                              <i class="fa-solid fa-fingerprint id-lead-icon"></i>
+                              <span class="id-tag-label">ID:</span>
+                              <code class="id-val">{{ a.id }}</code>
+                              <i class="fa-regular fa-copy copy-hint-icon"></i>
+                            </div>
+                            <div v-if="a.code" class="table-code-pill" :title="'业务编码: ' + a.code">
+                              <i class="fa-solid fa-code"></i>
+                              <span class="code-val">{{ a.code }}</span>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -434,9 +436,9 @@
                       <span class="spec-badge spec-model"><i class="fa-solid fa-microchip"></i> {{ routedModelLabel }}</span>
                     </td>
                     <td>
-                      <div class="table-prompt-cell" :title="a.systemPrompt || '暂无设定'">
+                      <div class="table-prompt-cell" :title="'System Prompt 完整内容 (鼠标悬停查看):\n' + (a.systemPrompt || '暂无设定')">
                         <i class="fa-solid fa-terminal prompt-cell-icon"></i>
-                        <span>{{ a.systemPrompt || '暂无设定' }}</span>
+                        <span class="prompt-cell-text">{{ a.systemPrompt || '未设定' }}</span>
                       </div>
                     </td>
                     <td>
