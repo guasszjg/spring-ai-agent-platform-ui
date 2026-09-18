@@ -2485,7 +2485,14 @@ function isOwnKb(kb) {
 
 const displayKbList = computed(() => {
   if (scopeFilter.value === 'mine') {
-    return kbList.value.filter(k => !k.isSystem && (k.ownerId === effectiveUser.value?.id || k.ownerUsername === effectiveUser.value?.username))
+    const curId = effectiveUser.value?.id ? String(effectiveUser.value.id) : ''
+    const curName = effectiveUser.value?.username ? String(effectiveUser.value.username).toLowerCase() : ''
+    return kbList.value.filter(k => {
+      if (k.isSystem) return false
+      if (curId && k.ownerId && String(k.ownerId) === curId) return true
+      if (curName && k.ownerUsername && String(k.ownerUsername).toLowerCase() === curName) return true
+      return false
+    })
   }
   if (scopeFilter.value === 'system') {
     return kbList.value.filter(k => k.isSystem)
@@ -2590,14 +2597,28 @@ async function loadKnowledgeBases() {
   loadingKb.value = true
   try {
     const res = await http.get('/api/knowledge-bases', {
-      keyword: searchKeyword.value,
+      keyword: searchKeyword.value ? searchKeyword.value.trim() : undefined,
       page: kbPage.value,
       size: kbPageSize.value
     })
     if (res && res.success && res.data) {
-      kbList.value = res.data.records || []
-      totalKbCount.value = res.data.total || 0
-      kbTotalPages.value = Math.max(1, Math.ceil((res.data.total || 0) / kbPageSize.value))
+      if (Array.isArray(res.data)) {
+        kbList.value = res.data
+        totalKbCount.value = res.data.length
+        kbTotalPages.value = 1
+      } else if (res.data.records !== undefined) {
+        kbList.value = res.data.records || []
+        totalKbCount.value = res.data.total != null ? res.data.total : (res.data.records || []).length
+        kbTotalPages.value = Math.max(1, Math.ceil(totalKbCount.value / kbPageSize.value))
+      } else if (res.data.content !== undefined) {
+        kbList.value = res.data.content || []
+        totalKbCount.value = res.data.totalElements != null ? res.data.totalElements : (res.data.content || []).length
+        kbTotalPages.value = Math.max(1, res.data.totalPages || 1)
+      } else {
+        kbList.value = []
+        totalKbCount.value = 0
+        kbTotalPages.value = 1
+      }
     } else if (res && !res.success) {
       console.warn('获取知识库列表未返回成功状态:', res.message)
     }

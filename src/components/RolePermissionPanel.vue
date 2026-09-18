@@ -199,6 +199,10 @@ async function loadRoles() {
   }
 }
 
+defineExpose({
+  loadRoles
+})
+
 onMounted(() => {
   loadRoles()
 })

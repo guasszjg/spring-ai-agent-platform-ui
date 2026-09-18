@@ -100,7 +100,7 @@
       <div class="users-toolbar">
         <div class="users-search-box">
           <i class="fa-solid fa-magnifying-glass search-icon"></i>
-          <input v-model="keyQuery" class="users-search-input" placeholder="搜索名称、前缀或账号...">
+          <input v-model="keyQuery" type="search" autocomplete="off" class="users-search-input" placeholder="搜索名称、前缀或账号...">
         </div>
         <button v-if="!isViewer" class="btn-create-user" @click="openCreateKey">
           <i class="fa-solid fa-plus"></i><span>签发凭证</span>
@@ -115,6 +115,12 @@
           <div class="empty-icon-wrap"><i class="fa-solid fa-key"></i></div>
           <h4>{{ keys.length ? '没有匹配的开放凭证' : '还没有开放凭证' }}</h4>
           <p>{{ keys.length ? '可尝试更换名称、前缀或账号关键词' : '签发后第三方即可调用 /open/v1，明文仅显示一次' }}</p>
+          <div v-if="keyQuery" class="empty-actions" style="margin-top: 12px;">
+            <button type="button" class="btn-secondary" @click="keyQuery = ''; keyPage = 1">
+              <i class="fa-solid fa-filter-circle-xmark"></i>
+              <span>清空搜索条件并查看全部</span>
+            </button>
+          </div>
         </div>
         <table v-else class="agent-table">
           <thead>
@@ -177,7 +183,7 @@
       <div class="users-toolbar">
         <div class="users-search-box">
           <i class="fa-solid fa-magnifying-glass search-icon"></i>
-          <input v-model="clientQuery" class="users-search-input" placeholder="搜索标识、标签、类型或账号...">
+          <input v-model="clientQuery" type="search" autocomplete="off" class="users-search-input" placeholder="搜索标识、标签、类型或账号...">
         </div>
         <div class="users-filter-group">
           <select v-model="clientFilter" class="users-select-filter">
@@ -259,6 +265,12 @@
           <div class="empty-icon-wrap"><i class="fa-solid fa-mobile-screen"></i></div>
           <h4>{{ clients.length ? '没有匹配的接入终端' : '尚未登记接入终端' }}</h4>
           <p>{{ clients.length ? '可尝试更换关键词或状态筛选' : '护栏策略可设为强制校验 SN / MAC，未知设备将按策略拦截或待审批' }}</p>
+          <div v-if="clientQuery || clientFilter" class="empty-actions" style="margin-top: 12px;">
+            <button type="button" class="btn-secondary" @click="clientQuery = ''; clientFilter = ''; clientPage = 1">
+              <i class="fa-solid fa-filter-circle-xmark"></i>
+              <span>清空筛选条件并查看全部</span>
+            </button>
+          </div>
         </div>
         <table v-else class="agent-table">
           <thead>
@@ -2186,7 +2198,29 @@ async function confirmRotateKey() {
 }
 
 watch(innerTab, (tab) => { if (tab === 'alerts') loadAlertRules() })
-onMounted(loadAll)
+
+function resetAndReload(forceReload = true) {
+  keyQuery.value = ''
+  clientQuery.value = ''
+  clientFilter.value = ''
+  keyPage.value = 1
+  clientPage.value = 1
+  auditPage.value = 1
+  auditFilterRisk.value = ''
+  auditFilterResult.value = ''
+  if (forceReload) {
+    loadAll()
+  }
+}
+
+defineExpose({
+  resetAndReload,
+  loadAll
+})
+
+onMounted(() => {
+  resetAndReload(true)
+})
 </script>
 
 <style scoped>

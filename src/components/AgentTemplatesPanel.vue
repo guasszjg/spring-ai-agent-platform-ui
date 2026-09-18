@@ -41,7 +41,8 @@
           <i class="fa-solid fa-magnifying-glass search-icon"></i>
           <input
             v-model="searchKeyword"
-            type="text"
+            type="search"
+            autocomplete="off"
             class="template-search-input"
             placeholder="搜索模板名称、账号、场景描述或标签..."
             @input="debounceSearch"
@@ -75,8 +76,8 @@
             <i class="fa-solid fa-list-ul"></i>
           </button>
         </div>
-        <button type="button" class="btn-refresh" title="刷新模板列表" @click="loadTemplates">
-          <i class="fa-solid fa-rotate"></i>
+        <button type="button" class="btn-refresh" :disabled="loading" title="刷新模板列表" @click="loadTemplates">
+          <i class="fa-solid fa-rotate" :class="{ 'fa-spin': loading }"></i>
         </button>
       </div>
     </div>
@@ -89,12 +90,18 @@
 
     <div v-else-if="!templates.length" class="templates-empty">
       <div class="empty-icon"><i class="fa-solid fa-shapes"></i></div>
-      <h3>暂无匹配的场景模板</h3>
-      <p>没有找到符合当前分类或搜索关键词的模板，您可以新建一个自定义专属场景模板</p>
-      <button type="button" class="btn-primary-create" @click="openCreateModal">
-        <i class="fa-solid fa-plus"></i>
-        <span>新建场景模板</span>
-      </button>
+      <h3>{{ searchKeyword || currentCategory !== '全部' ? '未找到符合条件的场景模板' : '暂无行业场景模板' }}</h3>
+      <p>{{ searchKeyword || currentCategory !== '全部' ? '没有找到符合当前分类或搜索关键词的模板，您可以清空筛选或新建专属场景模板' : '没有找到模板，您可以新建一个自定义专属场景模板' }}</p>
+      <div class="empty-actions" style="display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap;">
+        <button v-if="searchKeyword || currentCategory !== '全部'" type="button" class="btn-secondary" @click="resetTemplates(true)">
+          <i class="fa-solid fa-filter-circle-xmark"></i>
+          <span>清空筛选条件并查看全部</span>
+        </button>
+        <button type="button" class="btn-primary-create" @click="openCreateModal">
+          <i class="fa-solid fa-plus"></i>
+          <span>新建场景模板</span>
+        </button>
+      </div>
     </div>
 
     <div v-else-if="viewMode === 'card'" class="templates-grid">
@@ -814,7 +821,23 @@ function useTemplateToCreate(tpl) {
   emit('use-template', tpl)
 }
 
-onMounted(loadTemplates)
+function resetTemplates(forceReload = true) {
+  searchKeyword.value = ''
+  currentCategory.value = '全部'
+  page.value = 1
+  if (forceReload) {
+    loadTemplates()
+  }
+}
+
+defineExpose({
+  resetTemplates,
+  loadTemplates
+})
+
+onMounted(() => {
+  resetTemplates(true)
+})
 </script>
 
 <style scoped>

@@ -63,9 +63,11 @@
         <i class="fa-solid fa-magnifying-glass search-icon"></i>
         <input
           v-model="searchKeyword"
-          type="text"
+          type="search"
+          autocomplete="off"
           placeholder="搜索用户名、姓名昵称..."
           class="users-search-input"
+          @input="debounceSearch"
           @keyup.enter="fetchUsers"
         >
         <button v-if="searchKeyword" class="btn-clear-search" title="清空搜索" @click="searchKeyword = ''; fetchUsers()">
@@ -105,8 +107,14 @@
         <div class="empty-icon-wrap">
           <i class="fa-solid fa-user-slash"></i>
         </div>
-        <h4>未找到匹配的用户账号</h4>
-        <p>可尝试清除筛选关键词，或点击右上角创建新账号</p>
+        <h4>{{ searchKeyword || selectedRole || selectedStatus ? '未找到匹配的用户账号' : '暂无用户账号' }}</h4>
+        <p>{{ searchKeyword || selectedRole || selectedStatus ? '可尝试清除筛选关键词或重置筛选条件' : '暂无数据，可点击右上角创建新账号' }}</p>
+        <div v-if="searchKeyword || selectedRole || selectedStatus" class="empty-actions" style="margin-top: 12px;">
+          <button type="button" class="btn-secondary" @click="resetUsers(true)">
+            <i class="fa-solid fa-filter-circle-xmark"></i>
+            <span>清空筛选条件并查看全部</span>
+          </button>
+        </div>
       </div>
 
       <table v-else class="agent-table">
@@ -1091,8 +1099,30 @@ function copyPassword() {
   }
 }
 
+let searchDebounceTimer = null
+function debounceSearch() {
+  clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => {
+    fetchUsers()
+  }, 300)
+}
+
+function resetUsers(forceReload = true) {
+  searchKeyword.value = ''
+  selectedRole.value = ''
+  selectedStatus.value = ''
+  if (forceReload) {
+    fetchUsers()
+  }
+}
+
+defineExpose({
+  resetUsers,
+  fetchUsers
+})
+
 onMounted(() => {
-  fetchUsers()
+  resetUsers(true)
 })
 </script>
 

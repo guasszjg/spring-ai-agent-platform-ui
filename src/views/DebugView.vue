@@ -2,7 +2,7 @@
   <div class="debug-page">
     <header class="debug-header">
       <div class="debug-header-left">
-        <router-link to="/dashboard?tab=agents" class="btn-back-nav">
+        <router-link :to="{ name: 'dashboard', query: { tab: 'agents' } }" class="btn-back-nav">
           <i class="fa-solid fa-arrow-left"></i>
           <span>返回智能体列表</span>
         </router-link>
@@ -745,7 +745,7 @@ const tools = reactive([
     iconClass: 'icon-bocha-badge',
     help: '博查 AI 搜索引擎，提供全网实时网页、新闻与知识检索',
     enabled: true,
-    description: '联网检索博查搜索引擎，获取最新互联网信息与知识。'
+    description: '博查 AI 联网搜索引擎。当用户询问最新时事、实时天气、新闻事件、实时数据或任何需要获取最新互联网真实信息的场景时调用（注：系统时钟及今天几号等问题已有系统时间基准保障，无需调用本工具）。'
   }
 ])
 
@@ -1018,7 +1018,7 @@ const standardToolCatalog = ref([
     iconClass: 'icon-bocha-badge',
     help: '博查 AI 搜索引擎，提供全网实时网页、新闻与知识检索',
     enabled: true,
-    description: '联网检索博查搜索引擎，获取最新互联网信息与知识。',
+    description: '博查 AI 联网搜索引擎。当用户询问最新时事、实时天气、新闻事件、实时数据或任何需要获取最新互联网真实信息的场景时调用（注：系统时钟及今天几号等问题已有系统时间基准保障，无需调用本工具）。',
     config: { count: 5, freshness: 'noLimit', summary: true }
   }
 ])
@@ -1437,6 +1437,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
   document.removeEventListener('mousemove', onMove)
   document.removeEventListener('mouseup', onUp)
   document.removeEventListener('mousedown', onDocClick)

@@ -219,15 +219,22 @@
           <button v-if="user.role !== 'VIEWER'" class="btn-create-agent" @click="openCreate"><i class="fa-solid fa-plus"></i><span>注册新智能体</span></button>
         </div>
         <section class="stats-grid">
-          <div class="stat-card"><div class="stat-info"><span class="stat-label">智能体资产总数</span><span class="stat-value">{{ stats.totalAgents || 0 }}</span></div><div class="stat-icon-wrapper icon-blue"><i class="fa-solid fa-layer-group"></i></div></div>
-          <div class="stat-card"><div class="stat-info"><span class="stat-label">在线运行智能体</span><span class="stat-value">{{ stats.runningAgents || 0 }}</span></div><div class="stat-icon-wrapper icon-emerald"><i class="fa-solid fa-bolt-lightning"></i></div></div>
+          <div class="stat-card"><div class="stat-info"><span class="stat-label">智能体资产总数</span><span class="stat-value">{{ agentAssetTotal }}</span></div><div class="stat-icon-wrapper icon-blue"><i class="fa-solid fa-layer-group"></i></div></div>
+          <div class="stat-card"><div class="stat-info"><span class="stat-label">在线运行智能体</span><span class="stat-value">{{ runningAgentTotal }}</span></div><div class="stat-icon-wrapper icon-emerald"><i class="fa-solid fa-bolt-lightning"></i></div></div>
           <div class="stat-card"><div class="stat-info"><span class="stat-label">累计调度调用量</span><span class="stat-value">{{ Number(stats.totalCalls || 0).toLocaleString() }}</span></div><div class="stat-icon-wrapper icon-purple"><i class="fa-solid fa-comments"></i></div></div>
           <div class="stat-card"><div class="stat-info"><span class="stat-label">平均响应耗时</span><span class="stat-value">{{ stats.avgResponseTimeMs || 0 }}ms</span></div><div class="stat-icon-wrapper icon-amber"><i class="fa-solid fa-stopwatch"></i></div></div>
         </section>
         <section class="toolbar-section">
           <div class="search-box-wrapper">
             <i class="fa-solid fa-magnifying-glass search-icon"></i>
-            <input v-model="keyword" class="search-input" placeholder="搜索名称、账号、Prompt、业务编码或标签..." @input="debounceSearch">
+            <input
+              v-model="keyword"
+              class="search-input"
+              type="search"
+              autocomplete="off"
+              placeholder="搜索名称、账号、Prompt、业务编码或标签..."
+              @input="debounceSearch"
+            >
           </div>
           <!-- Scope Filter: 全部 / 我的资产 / 系统预置 -->
           <div class="scope-filter-group">
@@ -273,11 +280,41 @@
               <option value="IDLE">空闲中</option>
               <option value="DISABLED">已停用</option>
             </select>
-            <button class="btn-refresh" @click="refresh"><i class="fa-solid fa-rotate"></i></button>
+            <button class="btn-refresh" title="强制刷新智能体列表" @click="resetAgentList(true)"><i class="fa-solid fa-rotate" :class="{ 'fa-spin': agentsLoading }"></i></button>
           </div>
         </section>
         <section>
-          <div v-if="!agents.length" class="empty-state"><i class="fa-solid fa-robot"></i><h4>未找到符合条件的智能体</h4></div>
+          <div v-if="agentsLoading" class="empty-state">
+            <i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent-blue); font-size: 32px;"></i>
+            <h4>正在加载智能体资产列表...</h4>
+            <p class="empty-sub-hint" style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">正在从服务端获取最新状态，请稍候</p>
+          </div>
+          <div v-else-if="!agents.length" class="empty-state">
+            <i class="fa-solid fa-robot"></i>
+            <h4>未找到符合条件的智能体</h4>
+            <p v-if="keyword || category !== '全部' || scopeFilter !== 'all' || statusFilter" class="empty-sub-hint" style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+              当前筛选条件未匹配到任何资产（{{ scopeFilter !== 'all' ? (scopeFilter === 'mine' ? '专属资产' : '系统公共') : '' }} {{ category !== '全部' ? category : '' }} {{ keyword ? `关键词: "${keyword}"` : '' }} {{ statusFilter ? statusLabel(statusFilter) : '' }}）
+            </p>
+            <p v-else class="empty-sub-hint" style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+              当前暂无可见的智能体资产，您可以点击新建智能体快速创建
+            </p>
+            <div class="empty-actions" style="margin-top: 14px; display: flex; gap: 10px; justify-content: center;">
+              <button
+                v-if="keyword || category !== '全部' || scopeFilter !== 'all' || statusFilter"
+                type="button"
+                class="btn-secondary"
+                style="padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-card); cursor: pointer; color: var(--text-primary); font-size: 13px;"
+                @click="resetAgentList(true)"
+              >
+                <i class="fa-solid fa-filter-circle-xmark"></i>
+                <span style="margin-left: 6px;">清空筛选条件并查看全部</span>
+              </button>
+              <button type="button" class="btn-create-agent" @click="openCreate">
+                <i class="fa-solid fa-plus"></i>
+                <span style="margin-left: 6px;">新建智能体</span>
+              </button>
+            </div>
+          </div>
           <div v-else-if="viewMode === 'card'" class="agent-grid">
             <div v-for="a in agents" :key="a.id" class="agent-card">
               <div class="agent-card-main">
@@ -490,7 +527,12 @@
       </section>
 
       <section v-show="currentTab === 'templates'" class="app-subview active">
-        <AgentTemplatesPanel :is-super-admin="isSuperAdmin" @use-template="onUseTemplateFromPanel" @templates-updated="loadTemplates" />
+        <AgentTemplatesPanel
+          ref="templatesPanelRef"
+          :is-super-admin="isSuperAdmin"
+          @use-template="onUseTemplateFromPanel"
+          @templates-updated="loadTemplates"
+        />
       </section>
 
       <section v-show="currentTab === 'knowledge'" class="app-subview active">
@@ -504,19 +546,20 @@
       </section>
 
       <section v-show="currentTab === 'gateway'" class="app-subview active">
-        <GatewayPanel />
+        <GatewayPanel ref="gatewayPanelRef" />
       </section>
 
       <section v-show="currentTab === 'users'" class="app-subview active">
-        <UserManagementPanel :currentUser="user" />
+        <UserManagementPanel ref="usersPanelRef" :currentUser="user" />
       </section>
 
       <section v-show="currentTab === 'roles'" class="app-subview active">
-        <RolePermissionPanel />
+        <RolePermissionPanel ref="rolesPanelRef" />
       </section>
 
       <section v-show="currentTab === 'security'" class="app-subview active">
         <SecurityOpenPanel
+          ref="securityPanelRef"
           :user="user"
           :is-super-admin="isSuperAdmin"
           :initial-tab="securityInnerTab"
@@ -745,7 +788,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Chart from 'chart.js/auto'
 import { http } from '../api/http'
@@ -761,21 +804,55 @@ import AgentLogo from '../components/AgentLogo.vue'
 import defaultAdminAvatar from '../assets/avatar-admin.jpg'
 import defaultDevAvatar from '../assets/avatar-dev.jpg'
 
+defineOptions({ name: 'DashboardView' })
+
 const router = useRouter()
 const route = useRoute()
 const { showToast } = useToast()
-const currentTab = ref('overview')
+
+const validTabs = ['overview', 'agents', 'templates', 'knowledge', 'gateway', 'users', 'roles', 'security', 'open-platform']
+
+function parseInitialTab() {
+  const raw = route.query.tab
+  const t = Array.isArray(raw) ? raw[0] : raw
+  if (t === 'open-platform') return 'security'
+  if (t && validTabs.includes(t)) {
+    return t
+  }
+  return 'overview'
+}
+
+const currentTab = ref(parseInitialTab())
 const kbPanelRef = ref(null)
-const securityInnerTab = ref('overview')
+const templatesPanelRef = ref(null)
+const gatewayPanelRef = ref(null)
+const usersPanelRef = ref(null)
+const rolesPanelRef = ref(null)
+const securityPanelRef = ref(null)
+const securityInnerTab = ref(route.query.tab === 'open-platform' ? 'keys' : (typeof route.query.sec === 'string' && route.query.sec ? route.query.sec : 'overview'))
 const timeRange = ref('7days')
 const stats = ref({})
 const agents = ref([])
+const agentsLoading = ref(false)
 const pageResult = ref({})
 const page = ref(1)
 const keyword = ref('')
 const category = ref('全部')
 const scopeFilter = ref('all')
 const statusFilter = ref('')
+
+function resetAgentList(forceReload = true) {
+  keyword.value = ''
+  category.value = '全部'
+  scopeFilter.value = 'all'
+  statusFilter.value = ''
+  page.value = 1
+  if (forceReload) {
+    loadGatewayRoute()
+    loadAgents()
+    loadStats()
+  }
+}
 const viewMode = ref(localStorage.getItem('agentViewMode') || 'card')
 const sidebarCollapsed = ref(localStorage.getItem('sidebarCollapsed') === 'true')
 
@@ -962,15 +1039,38 @@ const navGroups = computed(() => {
   return groups
 })
 
+function triggerTabRefresh(tabId) {
+  if (tabId === 'overview') {
+    loadStats()
+  } else if (tabId === 'agents') {
+    resetAgentList(true)
+  } else if (tabId === 'templates') {
+    templatesPanelRef.value?.resetTemplates?.(true)
+  } else if (tabId === 'knowledge') {
+    kbPanelRef.value?.resetToList?.(true)
+  } else if (tabId === 'gateway') {
+    gatewayPanelRef.value?.refreshAll?.()
+  } else if (tabId === 'users') {
+    usersPanelRef.value?.resetUsers?.(true)
+  } else if (tabId === 'roles') {
+    rolesPanelRef.value?.loadRoles?.()
+  } else if (tabId === 'security') {
+    securityPanelRef.value?.resetAndReload?.(true)
+  }
+}
+
 function handleNavClick(item) {
   if ((item.id === 'gateway' || item.id === 'users') && !isSuperAdmin.value) {
     showToast('无权限访问该功能，仅超级管理员可用', 'error')
     return
   }
-  if (item.id === 'knowledge') {
-    kbPanelRef.value?.resetToList?.(true)
+  if (currentTab.value === item.id) {
+    nextTick(() => {
+      triggerTabRefresh(item.id)
+    })
+  } else {
+    currentTab.value = item.id
   }
-  currentTab.value = item.id
 }
 
 // Profile & Security Modal
@@ -1071,6 +1171,8 @@ async function handleForcedPasswordChange() {
     forcingPassword.value = false
   }
 }
+const agentAssetTotal = computed(() => Number(stats.value.totalAgents || pageResult.value.total || agents.value.length || 0))
+const runningAgentTotal = computed(() => Number(stats.value.runningAgents || 0))
 const totalTokens = computed(() => Number(stats.value.promptTokens || 0) + Number(stats.value.completionTokens || 0))
 const promptShare = computed(() => totalTokens.value ? Math.round(Number(stats.value.promptTokens || 0) * 1000 / totalTokens.value) / 10 : 0)
 const completionShare = computed(() => totalTokens.value ? Math.round((100 - promptShare.value) * 10) / 10 : 0)
@@ -1162,21 +1264,28 @@ function goDebug(id) {
 }
 
 watch(viewMode, (mode) => localStorage.setItem('agentViewMode', mode))
+
+watch(() => route.query.tab, (newTab) => {
+  const tabValue = Array.isArray(newTab) ? newTab[0] : newTab
+  if (!tabValue) return
+  const target = tabValue === 'open-platform' ? 'security' : tabValue
+  if (validTabs.includes(target) && target !== currentTab.value) {
+    currentTab.value = target
+  }
+})
+
 watch(currentTab, (tab) => {
   if ((tab === 'gateway' || tab === 'users') && !isSuperAdmin.value) {
     showToast('无权限访问该模块，已自动返回概览', 'error')
     currentTab.value = 'overview'
     return
   }
-  router.replace({ query: { ...route.query, tab } }).catch(() => {})
-  if (tab === 'overview') nextTick(renderCharts)
-  if (tab === 'gateway' || tab === 'agents') loadGatewayRoute()
-  if (tab === 'templates') loadTemplates()
-  if (tab === 'knowledge') {
-    nextTick(() => {
-      kbPanelRef.value?.resetToList?.(true)
-    })
+  if (route.query.tab !== tab) {
+    router.replace({ query: { ...route.query, tab } }).catch(() => {})
   }
+  nextTick(() => {
+    triggerTabRefresh(tab)
+  })
 })
 
 async function loadStats() {
@@ -1188,18 +1297,56 @@ async function loadStats() {
   }
 }
 
+let agentReqSeq = 0
 async function loadAgents() {
-  const res = await http.get('/api/agents', {
-    keyword: keyword.value,
-    category: category.value,
-    status: statusFilter.value,
-    scope: scopeFilter.value,
-    page: page.value,
-    size: 6
-  })
-  if (res.success && res.data) {
-    agents.value = res.data.records || []
-    pageResult.value = res.data
+  const seq = ++agentReqSeq
+  agentsLoading.value = true
+  try {
+    const res = await http.get('/api/agents', {
+      keyword: keyword.value ? keyword.value.trim() : undefined,
+      category: category.value !== '全部' ? category.value : undefined,
+      status: statusFilter.value || undefined,
+      scope: scopeFilter.value || 'all',
+      page: page.value || 1,
+      size: 6
+    })
+    if (seq !== agentReqSeq) return
+
+    const data = res && res.data
+    const list = Array.isArray(data)
+      ? data
+      : (data?.records || data?.content || data?.items || [])
+    const ok = res && (res.success === true || list.length > 0 || data?.total != null)
+
+    if (ok && data) {
+      agents.value = list
+      pageResult.value = Array.isArray(data)
+        ? { total: list.length, page: 1, totalPages: 1, records: list }
+        : data
+
+      if (pageResult.value.totalPages && page.value > pageResult.value.totalPages) {
+        page.value = pageResult.value.totalPages
+        loadAgents()
+        return
+      }
+    } else {
+      console.warn('获取智能体列表未返回成功状态:', res?.message)
+      if (!agents.value.length) {
+        agents.value = []
+        pageResult.value = {}
+      }
+    }
+  } catch (err) {
+    if (seq !== agentReqSeq) return
+    console.error('loadAgents error:', err)
+    if (!agents.value.length) {
+      agents.value = []
+      pageResult.value = {}
+    }
+  } finally {
+    if (seq === agentReqSeq) {
+      agentsLoading.value = false
+    }
   }
 }
 
@@ -1387,28 +1534,19 @@ function renderCharts() {
   })
 }
 
-onMounted(() => {
-  const tab = route.query.tab
-  const validTabs = ['overview', 'agents', 'templates', 'knowledge', 'gateway', 'users', 'roles', 'security', 'open-platform']
-  if (validTabs.includes(tab)) {
-    if ((tab === 'gateway' || tab === 'users') && !isSuperAdmin.value) {
-      currentTab.value = 'overview'
-    } else if (tab === 'open-platform') {
-      currentTab.value = 'security'
-      securityInnerTab.value = 'keys'
-    } else {
-      currentTab.value = tab
-      if (tab === 'security' && typeof route.query.sec === 'string' && route.query.sec) {
-        securityInnerTab.value = route.query.sec
-      }
-      if (tab === 'knowledge') {
-        nextTick(() => {
-          kbPanelRef.value?.resetToList?.(true)
-        })
-      }
-    }
+function enterDashboard() {
+  if (currentTab.value === 'agents') {
+    loadStats()
+    loadGatewayRoute()
+    loadAgents()
+    return
   }
+  nextTick(() => {
+    triggerTabRefresh(currentTab.value)
+  })
+}
 
+onMounted(() => {
   http.get('/api/auth/me').then(res => {
     if (res.success && res.data) {
       user.value = res.data
@@ -1419,9 +1557,18 @@ onMounted(() => {
     }
   }).catch(() => {})
 
-  loadStats()
-  loadAgents()
-  loadTemplates()
-  loadGatewayRoute()
+  enterDashboard()
+})
+
+const skipNextActivate = ref(true)
+onActivated(() => {
+  if (skipNextActivate.value) {
+    skipNextActivate.value = false
+    return
+  }
+  if (currentTab.value === 'agents') {
+    loadStats()
+    loadAgents()
+  }
 })
 </script>

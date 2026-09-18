@@ -55,9 +55,14 @@
           <h3>LLM 模型通道调度</h3>
           <p>{{ overview.readyCount || 0 }} 个已就绪 · 默认通道：<strong>{{ defaultName }}</strong></p>
         </div>
-        <button class="btn-create-agent" @click="openCreate">
-          <i class="fa-solid fa-plus"></i><span>添加模型通道</span>
-        </button>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button type="button" class="btn-refresh" :disabled="loading" title="刷新网关配置" @click="refreshAll">
+            <i class="fa-solid fa-rotate" :class="{ 'fa-spin': loading }"></i>
+          </button>
+          <button class="btn-create-agent" @click="openCreate">
+            <i class="fa-solid fa-plus"></i><span>添加模型通道</span>
+          </button>
+        </div>
       </div>
 
       <div class="gateway-policy-bar">
@@ -192,7 +197,10 @@
             </p>
           </div>
         </div>
-        <div class="hero-metric-right">
+        <div class="hero-metric-right" style="display: flex; align-items: center; gap: 10px;">
+          <button type="button" class="btn-refresh" :disabled="loading" title="刷新网关配置" @click="refreshAll">
+            <i class="fa-solid fa-rotate" :class="{ 'fa-spin': loading }"></i>
+          </button>
           <button class="btn-create-agent" @click="openCreateEmbedding">
             <i class="fa-solid fa-plus"></i><span>添加向量模型</span>
           </button>
@@ -301,7 +309,10 @@
             </p>
           </div>
         </div>
-        <div class="hero-metric-right">
+        <div class="hero-metric-right" style="display: flex; align-items: center; gap: 10px;">
+          <button type="button" class="btn-refresh" :disabled="loading" title="刷新网关配置" @click="refreshAll">
+            <i class="fa-solid fa-rotate" :class="{ 'fa-spin': loading }"></i>
+          </button>
           <button class="btn-create-agent" @click="openCreateDify">
             <i class="fa-solid fa-plus"></i><span>接入 Dify 实例</span>
           </button>
@@ -1498,9 +1509,27 @@ async function savePolicy() {
   }
 }
 
-onMounted(async () => {
-  await Promise.all([load(), loadEmbeddings(), loadDifys()])
+const loading = ref(false)
+
+async function refreshAll() {
+  loading.value = true
+  try {
+    await Promise.all([load(), loadEmbeddings(), loadDifys()])
+  } catch (err) {
+    console.error('刷新网关失败:', err)
+  } finally {
+    loading.value = false
+  }
+}
+
+defineExpose({
+  refreshAll,
+  load,
+  loadEmbeddings,
+  loadDifys
 })
+
+onMounted(refreshAll)
 </script>
 
 <style scoped>
