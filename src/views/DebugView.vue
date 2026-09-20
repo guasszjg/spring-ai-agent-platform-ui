@@ -207,7 +207,7 @@
           <div class="section-header-row">
             <div class="section-title">
               <span>工具</span>
-              <i class="fa-regular fa-circle-question section-title-help" title="智能体可调用的扩展工具与插件，支持大模型自主决策调用"></i>
+              <i class="fa-regular fa-circle-question section-title-help" title="从平台工具管理中选择，配置一次即可被全部智能体使用"></i>
             </div>
             <div class="section-tools-header-right">
               <span class="tools-count-badge">{{ enabledToolsCount }}/{{ tools.length }} 启用</span>
@@ -221,7 +221,7 @@
           <div class="tools-grid">
             <div
               v-for="tool in tools"
-              :key="tool.name"
+              :key="tool.id || tool.code || tool.name"
               class="tool-item-card"
               :class="{ 'tool-disabled': !tool.enabled }"
             >
@@ -519,7 +519,7 @@
         <div class="tool-modal-header">
           <div class="tool-modal-title">
             <i class="fa-solid fa-puzzle-piece" style="color: var(--accent-blue);"></i>
-            <span>添加智能体扩展工具</span>
+            <span>从工具管理选择</span>
           </div>
           <button type="button" class="btn-modal-close" @click="addToolModalOpen = false">
             <i class="fa-solid fa-xmark"></i>
@@ -527,43 +527,40 @@
         </div>
         <div class="tool-modal-body">
           <div class="tool-catalog-section">
-            <h4 class="catalog-section-title">平台内置扩展工具库 (共 {{ standardToolCatalog.length }} 项)</h4>
+            <div class="tool-catalog-search">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input v-model="toolCatalogKeyword" type="search" placeholder="搜索工具名称、前缀或能力…">
+            </div>
+            <h4 class="catalog-section-title">平台工具目录 ({{ filteredToolCatalog.length }}/{{ standardToolCatalog.length }})</h4>
+            <p v-if="!standardToolCatalog.length" class="section-hint">暂无可用工具，请先在左侧「工具管理」中启用。</p>
+            <p v-else-if="!filteredToolCatalog.length" class="section-hint">没有匹配的工具，试试其他关键词。</p>
             <div class="tool-catalog-list">
-              <div v-for="catTool in standardToolCatalog" :key="catTool.name" class="catalog-item-card">
+              <div v-for="catTool in filteredToolCatalog" :key="catTool.id || catTool.name" class="catalog-item-card">
                 <div class="catalog-item-left">
-                  <div class="tool-icon" :class="catTool.iconClass">
-                    <template v-if="catTool.customIcon === 'bocha'">
-                      <svg class="bocha-icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M6.98 2c2.351.265 3.905 1.955 3.987 4.31a.035.035 0 00.019.031.036.036 0 00.036-.001c5.432-3.05 12.168.3 12.921 6.48.31 2.535-.668 5.04-2.33 6.946-1.41 1.619-3.653 2.561-5.763 2.738h-.996c-3.945-.28-7.106-2.99-7.99-6.805a.302.302 0 00-.078-.145l.013-.027a.114.114 0 00.01-.055l-.162-2.05.014-8.569L6.666 2h.314zm14.102 17.852c-.32-.386-.527-.643-.62-.773-.74-1.011-1.058-2.195-.952-3.552.044-.57.296-1.117.263-1.744-.146-2.74-2.503-4.64-5.21-4.232-1.772.268-3.215 1.678-3.61 3.4a4.44 4.44 0 001.574 4.488c1.119.879 2.37 1.166 3.753.86.675-.15 1.04-.226 1.096-.23 1.126-.083 2.098.273 2.918 1.069.486.472.74.718.763.738a.017.017 0 00.024 0 .017.017 0 000-.024z" fill="#006EFF"/>
-                        <path d="M6.661 4.854l-.014 8.568-2.921-5.847-1.488-3.048a.106.106 0 01.022-.124.11.11 0 01.037-.024c1.57-.602 3.025-.444 4.364.475z" fill="#A5CCFF"/>
-                        <path d="M3.726 7.575l2.921 5.847.161 2.05a.114.114 0 01-.01.055l-.012.027L.02 8.821a.07.07 0 01.001-.1C1.064 7.747 2.3 7.365 3.726 7.576z" fill="#A5CCFF" fill-opacity=".647"/>
-                      </svg>
-                    </template>
-                    <i v-else :class="catTool.icon"></i>
-                  </div>
+                  <ToolGlyph :icon="catTool.icon" :icon-class="catTool.iconClass" :custom-icon="catTool.customIcon" />
                   <div>
                     <div class="tool-info-text">
                       <span class="tool-prefix">{{ catTool.prefix }}</span>
                       <span class="tool-title">{{ catTool.title }}</span>
                     </div>
-                    <div class="catalog-item-desc">{{ catTool.description }}</div>
+                    <div class="catalog-item-desc">{{ catTool.help || catTool.description }}</div>
                   </div>
                 </div>
                 <button
                   type="button"
                   class="btn-catalog-add"
-                  :disabled="tools.some(t => t.name === catTool.name)"
+                  :disabled="isToolAttached(catTool)"
                   @click="addToolFromCatalog(catTool)"
                 >
-                  <i :class="tools.some(t => t.name === catTool.name) ? 'fa-solid fa-check' : 'fa-solid fa-plus'"></i>
-                  {{ tools.some(t => t.name === catTool.name) ? '已添加' : '添加' }}
+                  <i :class="isToolAttached(catTool) ? 'fa-solid fa-check' : 'fa-solid fa-plus'"></i>
+                  {{ isToolAttached(catTool) ? '已添加' : '添加' }}
                 </button>
               </div>
             </div>
           </div>
         </div>
         <div class="tool-modal-footer">
-          <span></span>
+          <span class="label-sub">后续新工具会自动出现在此列表</span>
           <button type="button" class="btn-modal-cancel" @click="addToolModalOpen = false">完成</button>
         </div>
       </div>
@@ -627,6 +624,8 @@ import { useToast } from '../composables/useToast'
 import AgentLogsPanel from '../components/AgentLogsPanel.vue'
 import AgentMonitorPanel from '../components/AgentMonitorPanel.vue'
 import AgentApiPanel from '../components/AgentApiPanel.vue'
+import ToolGlyph from '../components/ToolGlyph.vue'
+import { FALLBACK_PLATFORM_TOOLS, matchSavedTool, toDebugTool } from '../composables/platformTools'
 
 const route = useRoute()
 const { showToast } = useToast()
@@ -686,68 +685,7 @@ const settings = reactive(createDefaultSettings())
 const appliedSettings = reactive(createDefaultSettings())
 const drag = reactive({ active: false, startX: 0, startWidth: 0 })
 
-const tools = reactive([
-  {
-    name: '时区转换',
-    prefix: 'time',
-    title: '时区转换',
-    icon: 'fa-solid fa-clock',
-    iconClass: 'icon-orange',
-    help: '将指定时间在不同时区（如北京、纽约、伦敦等）之间进行转换计算',
-    enabled: true,
-    description: '将指定时间在不同时区之间进行换算转换。例如将北京时间转换为纽约时间、东京时间或伦敦时间。'
-  },
-  {
-    name: '时间戳转换',
-    prefix: 'time',
-    title: '时间戳转换',
-    icon: 'fa-solid fa-clock',
-    iconClass: 'icon-orange',
-    help: '毫秒级/秒级 Unix 时间戳与标准日期时间字符串相互转换',
-    enabled: true,
-    description: 'Unix时间戳与格式化时间字符串之间的相互转换。可将秒级/毫秒级时间戳转为日期时间，或将日期时间转为时间戳。'
-  },
-  {
-    name: '获取当前时间',
-    prefix: 'time',
-    title: '获取当前时间',
-    icon: 'fa-solid fa-clock',
-    iconClass: 'icon-orange',
-    help: '获取当前系统的精确年月日、时分秒与时区时间',
-    enabled: true,
-    description: '获取指定时区的当前精确日期和时间（包含年月日、时分秒以及星期几）。当用户询问当前时间、现在几点、今天几号等问题时调用。'
-  },
-  {
-    name: '获取时间戳',
-    prefix: 'time',
-    title: '获取时间戳',
-    icon: 'fa-solid fa-clock',
-    iconClass: 'icon-orange',
-    help: '计算日期偏移与两个日期相隔天数',
-    enabled: true,
-    description: '计算两个日期之间相隔的天数，或者计算基准日期增加/减少若干天后的新日期。'
-  },
-  {
-    name: '星期几计算器',
-    prefix: 'time',
-    title: '星期几计算器',
-    icon: 'fa-solid fa-calendar-days',
-    iconClass: 'icon-orange',
-    help: '计算历史上或未来的任意特定日期属于星期几',
-    enabled: true,
-    description: '计算历史上或未来的某个具体日期是星期几。当用户询问某一天是周几或星期几时调用。'
-  },
-  {
-    name: '联网检索',
-    prefix: 'bocha',
-    title: 'Bocha Web Search',
-    customIcon: 'bocha',
-    iconClass: 'icon-bocha-badge',
-    help: '博查 AI 搜索引擎，提供全网实时网页、新闻与知识检索',
-    enabled: true,
-    description: '博查 AI 联网搜索引擎。当用户询问最新时事、实时天气、新闻事件、实时数据或任何需要获取最新互联网真实信息的场景时调用（注：系统时钟及今天几号等问题已有系统时间基准保障，无需调用本工具）。'
-  }
-])
+const tools = reactive([])
 
 const enabledToolsCount = computed(() => tools.filter(t => t.enabled).length)
 const removedTools = ref([])
@@ -953,75 +891,35 @@ function deleteTool(tool) {
 }
 
 const addToolModalOpen = ref(false)
+const toolCatalogKeyword = ref('')
+const standardToolCatalog = ref([])
 
-const standardToolCatalog = ref([
-  {
-    name: '时区转换',
-    prefix: 'time',
-    title: '时区转换',
-    icon: 'fa-solid fa-clock',
-    iconClass: 'icon-orange',
-    help: '将指定时间在不同时区（如北京、纽约、伦敦等）之间进行转换计算',
-    enabled: true,
-    description: '将指定时间在不同时区之间进行换算转换。例如将北京时间转换为纽约时间、东京时间或伦敦时间。',
-    config: { timezone: 'Asia/Shanghai', format: 'yyyy-MM-dd HH:mm:ss' }
-  },
-  {
-    name: '时间戳转换',
-    prefix: 'time',
-    title: '时间戳转换',
-    icon: 'fa-solid fa-clock',
-    iconClass: 'icon-orange',
-    help: '毫秒级/秒级 Unix 时间戳与标准日期时间字符串相互转换',
-    enabled: true,
-    description: 'Unix时间戳与格式化时间字符串之间的相互转换。可将秒级/毫秒级时间戳转为日期时间，或将日期时间转为时间戳。',
-    config: { timezone: 'Asia/Shanghai', format: 'yyyy-MM-dd HH:mm:ss' }
-  },
-  {
-    name: '获取当前时间',
-    prefix: 'time',
-    title: '获取当前时间',
-    icon: 'fa-solid fa-clock',
-    iconClass: 'icon-orange',
-    help: '获取当前系统的精确年月日、时分秒与时区时间',
-    enabled: true,
-    description: '获取指定时区的当前精确日期和时间（包含年月日、时分秒以及星期几）。当用户询问当前时间、现在几点、今天几号等问题时调用。',
-    config: { timezone: 'Asia/Shanghai', format: 'yyyy-MM-dd HH:mm:ss' }
-  },
-  {
-    name: '获取时间戳',
-    prefix: 'time',
-    title: '获取时间戳',
-    icon: 'fa-solid fa-clock',
-    iconClass: 'icon-orange',
-    help: '计算日期偏移与两个日期相隔天数',
-    enabled: true,
-    description: '计算两个日期之间相隔的天数，或者计算基准日期增加/减少若干天后的新日期。',
-    config: { timezone: 'Asia/Shanghai', format: 'yyyy-MM-dd HH:mm:ss' }
-  },
-  {
-    name: '星期几计算器',
-    prefix: 'time',
-    title: '星期几计算器',
-    icon: 'fa-solid fa-calendar-days',
-    iconClass: 'icon-orange',
-    help: '计算历史上或未来的任意特定日期属于星期几',
-    enabled: true,
-    description: '计算历史上或未来的某个具体日期是星期几。当用户询问某一天是周几或星期几时调用。',
-    config: { timezone: 'Asia/Shanghai', format: 'yyyy-MM-dd HH:mm:ss' }
-  },
-  {
-    name: '联网检索',
-    prefix: 'bocha',
-    title: 'Bocha Web Search',
-    customIcon: 'bocha',
-    iconClass: 'icon-bocha-badge',
-    help: '博查 AI 搜索引擎，提供全网实时网页、新闻与知识检索',
-    enabled: true,
-    description: '博查 AI 联网搜索引擎。当用户询问最新时事、实时天气、新闻事件、实时数据或任何需要获取最新互联网真实信息的场景时调用（注：系统时钟及今天几号等问题已有系统时间基准保障，无需调用本工具）。',
-    config: { count: 5, freshness: 'noLimit', summary: true }
-  }
-])
+const filteredToolCatalog = computed(() => {
+  const q = toolCatalogKeyword.value.trim().toLowerCase()
+  if (!q) return standardToolCatalog.value
+  return standardToolCatalog.value.filter(t =>
+    [t.name, t.title, t.prefix, t.code, t.help, t.description]
+      .filter(Boolean)
+      .some(v => String(v).toLowerCase().includes(q))
+  )
+})
+
+function isToolAttached(catTool) {
+  return tools.some(t =>
+    (catTool.id && t.id === catTool.id)
+    || (catTool.code && t.code === catTool.code)
+    || t.name === catTool.name
+  )
+}
+
+async function loadPlatformCatalog() {
+  const res = await http.get('/api/platform-tools')
+  const rows = Array.isArray(res?.data) ? res.data : (res?.data?.records || [])
+  const catalog = (res.success && rows.length) ? rows : FALLBACK_PLATFORM_TOOLS
+  standardToolCatalog.value = catalog
+    .filter(t => t.enabled !== false)
+    .map(toDebugTool)
+}
 
 function knowledgeBadge(kb) {
   const quality = kb?.indexingTechnique === 'economy' ? '经济' : '高质量'
@@ -1086,12 +984,14 @@ async function unbindKnowledgeBase(kb) {
   showToast(`已取消关联 [${kb.name}]`, 'info', 2000)
 }
 
-function openAddToolModal() {
+async function openAddToolModal() {
+  toolCatalogKeyword.value = ''
+  await loadPlatformCatalog()
   addToolModalOpen.value = true
 }
 
 function addToolFromCatalog(toolItem) {
-  if (tools.some(t => t.name === toolItem.name)) {
+  if (isToolAttached(toolItem)) {
     showToast(`工具 [${toolItem.title}] 已经存在`, 'warning', 2000)
     return
   }
@@ -1373,18 +1273,22 @@ function loadPersistedTools(agentData) {
     if (Array.isArray(saved) && saved.length) {
       const loadedList = []
       saved.forEach(st => {
-        const standard = standardToolCatalog.value.find(t => t.name === st.name)
+        const standard = matchSavedTool(st, standardToolCatalog.value)
         if (standard) {
           loadedList.push({
             ...standard,
             ...st,
             config: { ...standard.config, ...(st.config || {}) }
           })
+        } else {
+          loadedList.push(st)
         }
       })
       if (loadedList.length > 0) {
         tools.splice(0, tools.length, ...loadedList)
       }
+    } else if (standardToolCatalog.value.length) {
+      tools.splice(0, tools.length, ...standardToolCatalog.value.map(t => ({ ...t, config: { ...(t.config || {}) } })))
     }
     const bocha = tools.find(t => t.customIcon === 'bocha')
     if (bocha) {
@@ -1419,6 +1323,7 @@ onMounted(async () => {
     publishedPrompt.value = prompt.value
     applyAgentSettings(res.data)
     loadPersistedSettings(res.data.id)
+    await loadPlatformCatalog()
     loadPersistedTools(res.data)
     boundKbIds.value = Array.isArray(res.data.knowledgeBaseIds) ? [...res.data.knowledgeBaseIds] : []
     await loadKnowledgeCatalog()

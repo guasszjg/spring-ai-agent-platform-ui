@@ -133,7 +133,8 @@
         <div class="overview-hero-row">
           <div class="overview-heading">
             <h2>大模型 Token 消耗与调度分析</h2>
-            <p>实时监控集群 Token 使用量、多模型吞吐率、调用频次趋势及运行成本分摊</p>
+            <p v-if="isSuperAdmin">实时监控全站 Token 使用量、多模型吞吐率、调用频次趋势及运行成本分摊</p>
+            <p v-else>仅统计你名下智能体的 Token、调用与成本，不含平台公共智能体</p>
           </div>
           <div class="overview-date-filter">
             <button class="btn-time-range" :class="{ active: timeRange === 'today' }" @click="changeRange('today')">今日</button>
@@ -549,6 +550,10 @@
         <GatewayPanel ref="gatewayPanelRef" />
       </section>
 
+      <section v-show="currentTab === 'tools'" class="app-subview active">
+        <ToolManagementPanel ref="toolsPanelRef" :can-manage="!isViewer" />
+      </section>
+
       <section v-show="currentTab === 'users'" class="app-subview active">
         <UserManagementPanel ref="usersPanelRef" :currentUser="user" />
       </section>
@@ -795,6 +800,7 @@ import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { accountLabel } from '../composables/useAccountOptions'
 import GatewayPanel from '../components/GatewayPanel.vue'
+import ToolManagementPanel from '../components/ToolManagementPanel.vue'
 import AgentTemplatesPanel from '../components/AgentTemplatesPanel.vue'
 import KnowledgeBasePanel from '../components/KnowledgeBasePanel.vue'
 import UserManagementPanel from '../components/UserManagementPanel.vue'
@@ -810,7 +816,7 @@ const router = useRouter()
 const route = useRoute()
 const { showToast } = useToast()
 
-const validTabs = ['overview', 'agents', 'templates', 'knowledge', 'gateway', 'users', 'roles', 'security', 'open-platform']
+const validTabs = ['overview', 'agents', 'templates', 'tools', 'knowledge', 'gateway', 'users', 'roles', 'security', 'open-platform']
 
 function parseInitialTab() {
   const raw = route.query.tab
@@ -826,6 +832,7 @@ const currentTab = ref(parseInitialTab())
 const kbPanelRef = ref(null)
 const templatesPanelRef = ref(null)
 const gatewayPanelRef = ref(null)
+const toolsPanelRef = ref(null)
 const usersPanelRef = ref(null)
 const rolesPanelRef = ref(null)
 const securityPanelRef = ref(null)
@@ -915,6 +922,7 @@ const isSuperAdmin = computed(() => {
   const r = user.value?.role
   return r === 'SUPER_ADMIN' || r === 'System Admin' || user.value?.username === 'admin'
 })
+const isViewer = computed(() => user.value?.role === 'VIEWER')
 
 const userAvatar = computed(() => {
   const name = user.value?.username
@@ -932,6 +940,7 @@ const pageTitle = computed(() => {
   if (currentTab.value === 'overview') return '概览仪表盘 (Overview & Analytics)'
   if (currentTab.value === 'agents') return 'Agents 智能体资产管理'
   if (currentTab.value === 'templates') return '行业场景模版中心 (Agent Templates)'
+  if (currentTab.value === 'tools') return '平台工具管理 (Shared Tools)'
   if (currentTab.value === 'knowledge') return '企业私有知识库 (RAG)'
   if (currentTab.value === 'gateway') return 'AI 引擎与模型网关 (LLM / Embedding / Dify)'
   if (currentTab.value === 'users') return '企业租户用户管理 (User Management)'
@@ -975,6 +984,12 @@ const navGroups = computed(() => {
           name: '场景模版中心',
           title: '场景模版中心 (预置行业智能体)',
           icon: 'fa-solid fa-layer-group'
+        },
+        {
+          id: 'tools',
+          name: '工具管理',
+          title: '平台工具管理 (全智能体共用)',
+          icon: 'fa-solid fa-screwdriver-wrench'
         }
       ]
     },
@@ -1046,6 +1061,8 @@ function triggerTabRefresh(tabId) {
     resetAgentList(true)
   } else if (tabId === 'templates') {
     templatesPanelRef.value?.resetTemplates?.(true)
+  } else if (tabId === 'tools') {
+    toolsPanelRef.value?.loadTools?.()
   } else if (tabId === 'knowledge') {
     kbPanelRef.value?.resetToList?.(true)
   } else if (tabId === 'gateway') {
@@ -1569,6 +1586,8 @@ onActivated(() => {
   if (currentTab.value === 'agents') {
     loadStats()
     loadAgents()
+  } else if (currentTab.value === 'tools') {
+    toolsPanelRef.value?.loadTools?.()
   }
 })
 </script>

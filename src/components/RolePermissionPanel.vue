@@ -154,6 +154,7 @@ const permissionGroups = [
       { name: '调试运行智能体', desc: '超管与所有者，或被明确授予 RUN 权限的成员', admin: true, dev: true, viewer: false },
       { name: '查看提示词与核心人设', desc: '超管全权，开发者仅限本人；观察员与RUN受限用户隐藏', admin: true, dev: true, viewer: false },
       { name: '管理专属工具密钥', desc: '配置 Bocha 搜索等工具专属密钥（加密隔离存储）', admin: true, dev: true, viewer: false },
+      { name: '配置平台共享工具', desc: '在工具管理页维护默认参数与联网检索密钥，供全部智能体选用', admin: true, dev: true, viewer: false },
       { name: '签发与注销 API Key', desc: '生成对外集成 Key 并支持随时撤销', admin: true, dev: true, viewer: false }
     ]
   },

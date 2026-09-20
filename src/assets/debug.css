@@ -1696,10 +1696,30 @@ input:checked + .slider-toggle:before {
 }
 
 /* Tool Catalog Section */
-.tool-catalog-section {
+.tool-catalog-search {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  margin-bottom: 8px;
+}
+
+.tool-catalog-search i {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.tool-catalog-search input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
 }
 
 .catalog-section-title {
