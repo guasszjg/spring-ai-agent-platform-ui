@@ -3,8 +3,8 @@
     <!-- 顶部主导航 Tab 切换 -->
     <div class="gateway-header-bar">
       <div class="gateway-header-info">
-        <h2>AI 引擎与模型网关</h2>
-        <p class="gateway-header-sub">集中管理大语言模型、Embedding 向量模型、OCR 识图引擎及外部 Dify 知识引擎，配置密文持久化至数据库。</p>
+        <h2>模型网关</h2>
+        <p class="gateway-header-sub">管理大语言模型、向量模型、OCR 与 Dify 知识引擎，密钥加密存储。</p>
       </div>
       <div class="gateway-nav-tabs">
         <button
@@ -13,8 +13,7 @@
           :class="{ active: activeSection === 'llm' }"
           @click="activeSection = 'llm'"
         >
-          <i class="fa-solid fa-comments"></i>
-          <span>LLM 大语言模型</span>
+          <span>大语言模型</span>
           <span class="tab-badge">{{ overview.readyCount || 0 }} 就绪</span>
         </button>
 
@@ -24,8 +23,7 @@
           :class="{ active: activeSection === 'embedding' }"
           @click="activeSection = 'embedding'"
         >
-          <i class="fa-solid fa-dna"></i>
-          <span>Embedding 向量模型</span>
+          <span>向量模型</span>
           <span v-if="activeEmbedding" class="tab-badge badge-active" :title="'当前生效: ' + activeEmbedding.name">
             {{ activeEmbedding.modelName || activeEmbedding.name }}
           </span>
@@ -37,8 +35,7 @@
           :class="{ active: activeSection === 'ocr' }"
           @click="activeSection = 'ocr'"
         >
-          <i class="fa-solid fa-eye"></i>
-          <span>OCR 识图引擎</span>
+          <span>OCR 识别</span>
           <span v-if="activeOcr" class="tab-badge badge-active" :title="'当前生效: ' + activeOcr.name">
             {{ ocrProviderLabel(activeOcr.provider) }}
           </span>
@@ -50,7 +47,6 @@
           :class="{ active: activeSection === 'dify' }"
           @click="activeSection = 'dify'"
         >
-          <i class="fa-solid fa-book-atlas"></i>
           <span>Dify 知识引擎</span>
           <span v-if="activeDify" class="tab-badge badge-active" :title="'当前生效: ' + activeDify.name">
             {{ activeDify.name }}

@@ -1,653 +1,328 @@
-/* ==========================================================================
-   AgentMatrix Sci-Fi Minimalist Login Stylesheet
-   Ultra-Clean, High-Aesthetic, Zero-Scrollbar Design
-   ========================================================================== */
+/* ==========================================================
+   登录页：左侧品牌陈述 + 右侧表单，大留白、雾蓝主调、无装饰动效
+   ========================================================== */
 
-/* Lock body to 100vh without any scrollbars */
-body.login-page-wrapper {
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden !important;
-  margin: 0;
-  padding: 0;
+.lg-page {
+  display: grid;
+  grid-template-columns: minmax(420px, 1fr) minmax(420px, 1fr);
+  min-height: 100vh;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
-.login-wrapper {
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
+/* ---------- 左侧品牌区 ---------- */
+.lg-brand {
   position: relative;
   display: flex;
   flex-direction: column;
-  background-color: #070b16;
-  color: #f8fafc;
-  user-select: none;
+  justify-content: space-between;
+  padding: 40px 56px;
+  background:
+    radial-gradient(ellipse 80% 60% at 0% 100%, var(--brand-soft-2) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 100% 0%, var(--brand-soft) 0%, transparent 60%),
+    var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  overflow: hidden;
 }
 
-/* --------------------------------------------------------------------------
-   Sci-Fi AI Agent Background & Cinematic Overlays
-   -------------------------------------------------------------------------- */
-.scifi-bg-layer {
-  position: absolute;
-  inset: 0;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+.lg-logo {
+  position: relative;
   z-index: 1;
-  transform: scale(1.01);
-  animation: bgSubtleFloat 24s ease-in-out infinite alternate;
-}
-
-@keyframes bgSubtleFloat {
-  0% { transform: scale(1) translate(0, 0); }
-  100% { transform: scale(1.04) translate(-10px, -6px); }
-}
-
-.scifi-vignette {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  background: 
-    radial-gradient(circle at 65% 50%, rgba(7, 11, 22, 0.4) 0%, rgba(7, 11, 22, 0.75) 60%, rgba(5, 8, 16, 0.95) 100%),
-    linear-gradient(180deg, rgba(7, 11, 22, 0.7) 0%, transparent 40%, rgba(7, 11, 22, 0.85) 100%);
-}
-
-[data-theme="light"] .scifi-vignette {
-  background: 
-    radial-gradient(circle at 50% 50%, rgba(241, 245, 249, 0.75) 0%, rgba(241, 245, 249, 0.9) 70%, rgba(226, 232, 240, 0.98) 100%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, transparent 40%, rgba(255, 255, 255, 0.9) 100%);
-}
-
-.scifi-grid-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-  background-image: 
-    linear-gradient(rgba(56, 189, 248, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(56, 189, 248, 0.035) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: radial-gradient(ellipse at 50% 50%, black 40%, transparent 85%);
-  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, black 40%, transparent 85%);
-}
-
-[data-theme="light"] .scifi-grid-overlay {
-  background-image: 
-    linear-gradient(rgba(2, 132, 199, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(2, 132, 199, 0.04) 1px, transparent 1px);
-}
-
-/* --------------------------------------------------------------------------
-   Minimalist Sci-Fi Top Navigation
-   -------------------------------------------------------------------------- */
-.minimal-nav {
-  height: 62px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 44px;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.lg-statement {
   position: relative;
-  z-index: 20;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(7, 11, 22, 0.45);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  z-index: 1;
+  max-width: 480px;
 }
 
-[data-theme="light"] .minimal-nav {
-  background: rgba(255, 255, 255, 0.65);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+.lg-statement h1 {
+  font-size: 44px;
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  margin-bottom: 16px;
 }
 
-.brand-badge {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.brand-glow-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #0284c7 0%, #38bdf8 50%, #6366f1 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffffff;
+.lg-statement p {
   font-size: 16px;
-  box-shadow: 0 0 20px rgba(56, 189, 248, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-.brand-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.brand-title {
-  font-size: 17px;
-  font-weight: 800;
-  color: var(--text-primary);
-  letter-spacing: -0.3px;
-}
-
-.brand-tag {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 12px;
-  background: rgba(56, 189, 248, 0.15);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.3);
-}
-
-[data-theme="light"] .brand-tag {
-  color: #0284c7;
-  border-color: rgba(2, 132, 199, 0.3);
-}
-
-.nav-actions {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 12px;
+  line-height: 1.6;
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.06);
-  padding: 5px 12px;
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 36px;
 }
 
-[data-theme="light"] .status-indicator {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.08);
+.lg-capabilities {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: 12px 40px;
 }
 
-.pulse-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #10b981;
-  box-shadow: 0 0 10px #10b981;
-  animation: pulseDot 2s infinite;
+.lg-capabilities li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text-secondary);
 }
 
-@keyframes pulseDot {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(0.85); }
+.lg-capabilities li::before {
+  content: "";
+  width: 14px;
+  height: 1px;
+  background: var(--brand);
 }
 
-.theme-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+.lg-foot {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* 极淡的网格底纹，向右下渐隐 */
+.lg-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--brand-soft-2) 1px, transparent 1px),
+    linear-gradient(90deg, var(--brand-soft-2) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 100% 100%, #000 0%, transparent 70%);
+  mask-image: radial-gradient(ellipse 70% 60% at 100% 100%, #000 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* ---------- 右侧表单区 ---------- */
+.lg-main {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+}
+
+.lg-theme {
+  position: absolute;
+  top: 24px;
+  right: 24px;
   width: 34px;
   height: 34px;
-  border-radius: 9px;
-  color: var(--text-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 13px;
-  transition: all 0.2s ease;
-}
-
-.theme-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  transform: translateY(-1px);
-}
-
-/* --------------------------------------------------------------------------
-   Main Viewport Layout (Strict Zero-Scrollbar)
-   -------------------------------------------------------------------------- */
-.login-main {
-  flex: 1;
-  height: calc(100vh - 62px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  z-index: 10;
-  padding: 0 40px;
-}
-
-.login-layout-inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  max-width: 1060px;
-  gap: 64px;
-}
-
-/* --------------------------------------------------------------------------
-   Left Pane: Ultra-Clean Concise Slogan
-   -------------------------------------------------------------------------- */
-.hero-left-pane {
-  flex: 1;
-  max-width: 520px;
-}
-
-.hero-chip {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 4px 12px;
-  border-radius: 20px;
-  background: rgba(56, 189, 248, 0.1);
-  border: 1px solid rgba(56, 189, 248, 0.28);
-  color: #38bdf8;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  margin-bottom: 20px;
-}
-
-[data-theme="light"] .hero-chip {
-  color: #0284c7;
-  border-color: rgba(2, 132, 199, 0.3);
-}
-
-.chip-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #38bdf8;
-  box-shadow: 0 0 8px #38bdf8;
-}
-
-.hero-heading {
-  font-size: 46px;
-  font-weight: 900;
-  line-height: 1.15;
-  letter-spacing: -1.2px;
-  margin-bottom: 16px;
-  background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-[data-theme="light"] .hero-heading {
-  background: linear-gradient(135deg, #0f172a 30%, #334155 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.hero-subtext {
-  font-size: 16px;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: transparent;
   color: var(--text-secondary);
-  line-height: 1.6;
+  cursor: pointer;
+}
+
+.lg-theme:hover {
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+
+.lg-form-wrap {
+  width: 100%;
+  max-width: 360px;
+}
+
+.lg-mobile-logo {
+  display: none;
   margin-bottom: 28px;
 }
 
-.hero-meta-pills {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+.lg-form-wrap h2 {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
 }
 
-.meta-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 14px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--text-secondary);
-  font-size: 12.5px;
-  font-weight: 500;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  transition: all 0.25s ease;
+.lg-sub {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 28px;
 }
 
-[data-theme="light"] .meta-pill {
-  background: rgba(255, 255, 255, 0.7);
-  border-color: rgba(0, 0, 0, 0.08);
+.lg-segment {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-color);
+  margin-bottom: 24px;
 }
 
-.meta-pill i {
-  color: #38bdf8;
-  font-size: 12px;
-}
-
-[data-theme="light"] .meta-pill i {
-  color: #0284c7;
-}
-
-.meta-pill:hover {
-  border-color: rgba(56, 189, 248, 0.4);
-  color: var(--text-primary);
-  transform: translateY(-1px);
-}
-
-/* --------------------------------------------------------------------------
-   Right Pane: Frosted Glass Sci-Fi Login Card
-   -------------------------------------------------------------------------- */
-.login-card-glass {
-  width: 100%;
-  max-width: 380px;
-  background: rgba(12, 18, 34, 0.68);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 22px;
-  padding: 32px 30px 26px;
-  box-shadow: 
-    0 25px 60px -15px rgba(0, 0, 0, 0.75),
-    0 0 35px rgba(56, 189, 248, 0.12);
-  position: relative;
-  transition: border-color 0.3s ease;
-}
-
-[data-theme="light"] .login-card-glass {
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  box-shadow: 
-    0 20px 45px -10px rgba(0, 0, 0, 0.1),
-    0 0 25px rgba(2, 132, 199, 0.06);
-}
-
-.login-card-glass:hover {
-  border-color: rgba(56, 189, 248, 0.35);
-}
-
-.card-header {
-  margin-bottom: 20px;
-}
-
-.card-heading {
-  font-size: 21px;
-  font-weight: 800;
-  color: var(--text-primary);
-  letter-spacing: -0.4px;
-  margin-bottom: 4px;
-}
-
-.card-hint {
-  font-size: 12.5px;
-  color: var(--text-secondary);
-}
-
-/* Role Selector Pills */
-.quick-role-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 4px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-[data-theme="light"] .quick-role-row {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.06);
-}
-
-.role-pill {
-  flex: 1;
-  padding: 7px 10px;
-  border-radius: 9px;
+.lg-segment button {
+  height: 30px;
   border: none;
+  border-radius: 6px;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 12.5px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-.role-pill i {
-  font-size: 12px;
+.lg-segment button.active {
+  background: var(--bg-card);
+  color: var(--brand-text);
+  box-shadow: 0 0 0 1px var(--border-hover);
 }
 
-.role-pill:hover {
-  color: var(--text-primary);
-}
-
-.role-pill.active {
-  background: rgba(56, 189, 248, 0.18);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.35);
-}
-
-[data-theme="light"] .role-pill.active {
-  background: #ffffff;
-  color: #0284c7;
-  border-color: rgba(2, 132, 199, 0.3);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
-}
-
-/* Input Fields */
-.login-form {
+.lg-form {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 18px;
 }
 
-.input-field {
-  position: relative;
+.lg-field {
   display: flex;
-  align-items: center;
-  background: rgba(15, 23, 42, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  transition: all 0.25s ease;
+  flex-direction: column;
+  gap: 8px;
 }
 
-[data-theme="light"] .input-field {
-  background: #ffffff;
-  border-color: rgba(0, 0, 0, 0.12);
-}
-
-.input-field:focus-within {
-  border-color: #38bdf8;
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
-}
-
-[data-theme="light"] .input-field:focus-within {
-  border-color: #0284c7;
-  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
-}
-
-.field-icon {
-  position: absolute;
-  left: 14px;
-  color: var(--text-muted);
-  font-size: 13.5px;
-  pointer-events: none;
-}
-
-.text-input {
-  width: 100%;
-  padding: 12px 14px 12px 40px;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: var(--text-primary);
-  font-size: 13.5px;
-  font-family: var(--font-family);
-}
-
-.text-input::placeholder {
-  color: var(--text-muted);
+.lg-field > span {
   font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
-.btn-eye {
+.lg-field input {
+  width: 100%;
+  height: 42px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.lg-field input:hover {
+  border-color: var(--border-hover);
+}
+
+.lg-field input:focus {
+  border-color: var(--border-glow);
+  box-shadow: 0 0 0 3px var(--brand-soft-2);
+}
+
+.lg-input-wrap {
+  position: relative;
+}
+
+.lg-input-wrap input {
+  padding-right: 42px;
+}
+
+.lg-eye {
   position: absolute;
-  right: 12px;
-  background: transparent;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
+  border-radius: 6px;
+  background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 13px;
-  padding: 4px;
-  display: flex;
-  align-items: center;
 }
 
-.btn-eye:hover {
+.lg-eye:hover {
   color: var(--text-primary);
 }
 
-.form-sub-row {
+.lg-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-top: -2px;
+  font-size: 13px;
 }
 
-.check-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-}
-
-.check-box {
-  accent-color: #38bdf8;
-  width: 14px;
-  height: 14px;
-  cursor: pointer;
-}
-
-.link-muted {
+.lg-row a {
   color: var(--text-secondary);
   text-decoration: none;
-  transition: color 0.2s;
 }
 
-.link-muted:hover {
-  color: #38bdf8;
-  text-decoration: underline;
+.lg-row a:hover {
+  color: var(--brand-text);
 }
 
-/* Submit Action Button */
-.btn-login-submit {
-  position: relative;
-  width: 100%;
-  padding: 12px;
-  border-radius: 12px;
-  border: none;
-  background: linear-gradient(135deg, #0284c7 0%, #2563eb 50%, #4f46e5 100%);
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 700;
+.lg-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
   cursor: pointer;
-  display: flex;
+}
+
+.lg-check input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--brand-strong);
+}
+
+.lg-submit {
+  height: 42px;
+  margin-top: 6px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  box-shadow: 0 4px 16px rgba(2, 132, 199, 0.4);
-  overflow: hidden;
-  transition: all 0.25s ease;
-  margin-top: 4px;
+  border: none;
+  border-radius: 8px;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
 }
 
-.btn-shimmer {
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(
-    60deg,
-    transparent,
-    rgba(255, 255, 255, 0.25),
-    transparent
-  );
-  transform: rotate(30deg);
-  animation: shimmerMove 4s infinite;
-  pointer-events: none;
+.lg-submit:hover:not(:disabled) {
+  background: var(--btn-primary-hover);
 }
 
-@keyframes shimmerMove {
-  0% { transform: translateX(-100%) rotate(30deg); }
-  25%, 100% { transform: translateX(100%) rotate(30deg); }
-}
-
-.btn-login-submit:hover {
-  background: linear-gradient(135deg, #0369a1 0%, #1d4ed8 50%, #4338ca 100%);
-  box-shadow: 0 6px 22px rgba(2, 132, 199, 0.55);
-  transform: translateY(-1px);
-}
-
-.btn-login-submit:disabled {
-  opacity: 0.65;
+.lg-submit:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
-  transform: none;
 }
 
-.btn-arrow {
-  font-size: 12px;
-  transition: transform 0.2s ease;
+.lg-spin {
+  animation: lg-rotate 0.8s linear infinite;
 }
 
-.btn-login-submit:hover .btn-arrow {
-  transform: translateX(3px);
+@keyframes lg-rotate {
+  to { transform: rotate(360deg); }
 }
 
-.card-foot-notice {
-  text-align: center;
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 11px;
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
-[data-theme="light"] .card-foot-notice {
-  border-color: rgba(0, 0, 0, 0.06);
-}
-
-.card-foot-notice i {
-  color: #10b981;
-}
-
-/* --------------------------------------------------------------------------
-   Responsive Media Queries (Strictly Keep No Scrollbars on Desktop)
-   -------------------------------------------------------------------------- */
+/* ---------- 窄屏：只保留表单 ---------- */
 @media (max-width: 900px) {
-  .login-layout-inner {
-    flex-direction: column;
-    gap: 28px;
-    text-align: center;
+  .lg-page {
+    grid-template-columns: 1fr;
   }
-  .hero-left-pane {
-    max-width: 100%;
+
+  .lg-brand {
+    display: none;
   }
-  .hero-heading {
-    font-size: 32px;
-  }
-  .hero-meta-pills {
-    justify-content: center;
-  }
-  .minimal-nav {
-    padding: 0 20px;
-  }
-  .login-main {
-    padding: 0 20px;
+
+  .lg-mobile-logo {
+    display: block;
   }
 }

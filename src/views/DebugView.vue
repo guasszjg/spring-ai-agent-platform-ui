@@ -8,7 +8,8 @@
         </router-link>
         <div class="header-agent-badge">
           <h2 class="header-agent-title">
-            <span>{{ agent ? `${agent.avatar || '🤖'} ${agent.name}` : '智能体加载中...' }}</span>
+            <Monogram v-if="agent" :name="agent.name" :size="26" />
+            <span>{{ agent ? agent.name : '智能体加载中...' }}</span>
             <span v-if="pageTab === 'orchestrate'" class="header-tag-pill" :class="promptDirty ? 'draft' : 'published'">
               {{ promptDirty ? '未发布' : '已发布' }}
             </span>
@@ -23,7 +24,7 @@
       </div>
       <div class="debug-header-right">
         <button class="btn-theme-toggle" @click="toggleTheme">
-          <i :class="theme === 'light' ? 'fa-solid fa-sun' : 'fa-solid fa-moon'" :style="{ color: theme === 'light' ? '#f59e0b' : '#9ca3af' }"></i>
+          <i :class="theme === 'light' ? 'fa-solid fa-sun' : 'fa-solid fa-moon'"></i>
         </button>
         <router-link
           to="/dashboard?tab=gateway"
@@ -289,8 +290,8 @@
           <div v-if="!messages.length && !sending" class="chat-empty">在下方输入内容开始调试</div>
           <div v-for="(msg, i) in messages" :key="i" class="chat-msg-row" :class="msg.role === 'user' ? 'chat-msg-user' : 'chat-msg-bot'">
             <div class="msg-avatar" :class="msg.role === 'user' ? 'msg-avatar-user' : 'msg-avatar-bot'">
-              <i v-if="msg.role === 'user'" class="fa-regular fa-user"></i>
-              <template v-else>{{ agent?.avatar || '🤖' }}</template>
+              <User v-if="msg.role === 'user'" :size="15" :stroke-width="1.75" />
+              <template v-else>{{ (agent?.name || 'A').trim().charAt(0).toUpperCase() }}</template>
             </div>
             <div class="msg-content-wrapper">
               <div v-if="msg.tool" class="msg-tool-chip"><i class="fa-solid fa-circle-check" style="color: var(--accent-emerald);"></i> 工具调用: {{ msg.tool }}</div>
@@ -303,7 +304,7 @@
             </div>
           </div>
           <div v-if="sending" class="chat-msg-row chat-msg-bot">
-            <div class="msg-avatar msg-avatar-bot">{{ agent?.avatar || '🤖' }}</div>
+            <div class="msg-avatar msg-avatar-bot">{{ (agent?.name || 'A').trim().charAt(0).toUpperCase() }}</div>
             <div class="msg-content-wrapper">
               <div class="msg-bubble"><i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent-blue);"></i> {{ appliedSettings.thinking.enabled ? '思考中...' : '生成中...' }}</div>
             </div>
@@ -319,10 +320,6 @@
             <input v-model="inputText" class="main-chat-input" placeholder="和 Bot 聊天" autocomplete="off">
             <button type="submit" class="btn-input-send" :disabled="sending"><i class="fa-solid fa-paper-plane"></i></button>
           </form>
-          <div class="bottom-statusbar">
-            <div class="status-left-tag"><i class="fa-solid fa-quote-left"></i><span style="color: var(--text-secondary);">功能已开启</span></div>
-            <div class="speed-meter-pill"><span>{{ speedText }}</span></div>
-          </div>
         </div>
       </section>
     </main>
@@ -625,6 +622,8 @@ import AgentLogsPanel from '../components/AgentLogsPanel.vue'
 import AgentMonitorPanel from '../components/AgentMonitorPanel.vue'
 import AgentApiPanel from '../components/AgentApiPanel.vue'
 import ToolGlyph from '../components/ToolGlyph.vue'
+import Monogram from '../components/Monogram.vue'
+import { User } from 'lucide-vue-next'
 import { FALLBACK_PLATFORM_TOOLS, matchSavedTool, toDebugTool } from '../composables/platformTools'
 
 const route = useRoute()

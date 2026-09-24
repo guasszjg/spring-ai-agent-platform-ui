@@ -1,101 +1,78 @@
 <template>
-  <div class="login-wrapper">
-    <!-- Sci-Fi AI Agent Background Image Layer -->
-    <div class="scifi-bg-layer" :style="{ backgroundImage: `url(${bgImage})` }"></div>
-    <div class="scifi-vignette"></div>
-    <div class="scifi-grid-overlay"></div>
-
-    <!-- Minimalist Sci-Fi Top Bar -->
-    <header class="minimal-nav">
-      <div class="brand-badge">
-        <AgentLogo :size="38" />
-        <div class="brand-info">
-          <span class="brand-title">AgentMatrix</span>
-          <span class="brand-tag">v2.6</span>
-        </div>
+  <div class="lg-page">
+    <!-- 左侧：品牌陈述 -->
+    <aside class="lg-brand">
+      <div class="lg-logo">
+        <AgentLogo :size="28" />
+        <span>AgentMatrix</span>
       </div>
-      <div class="nav-actions">
-        <div class="status-indicator">
-          <span class="pulse-dot"></span>
-          <span>系统在线</span>
-        </div>
-        <button class="theme-btn" :title="theme === 'light' ? '切换为暗黑模式' : '切换为明亮模式'" @click="toggleTheme">
-          <i :class="theme === 'light' ? 'fa-solid fa-sun' : 'fa-solid fa-moon'" :style="{ color: theme === 'light' ? '#f59e0b' : '#9ca3af' }"></i>
-        </button>
+
+      <div class="lg-statement">
+        <h1>企业级智能体平台</h1>
+        <p>统一编排、调度与治理组织内的每一个智能体。</p>
+        <ul class="lg-capabilities">
+          <li>智能体编排</li>
+          <li>模型网关</li>
+          <li>知识库检索</li>
+          <li>安全治理</li>
+        </ul>
       </div>
-    </header>
 
-    <!-- Main Viewport (Zero Scrollbar) -->
-    <main class="login-main">
-      <div class="login-layout-inner">
-        <!-- Left: Ultra-Clean Concise Slogan -->
-        <div class="hero-left-pane">
-          <div class="hero-chip">
-            <span class="chip-dot"></span>
-            <span>AI AGENT PLATFORM</span>
-          </div>
-          <h1 class="hero-heading">智能体协同中枢</h1>
-          <p class="hero-subtext">连接自主多步推理与企业业务执行</p>
-          <div class="hero-meta-pills">
-            <span class="meta-pill"><i class="fa-solid fa-robot"></i> 智能体编排</span>
-            <span class="meta-pill"><i class="fa-solid fa-microchip"></i> 多模型网关</span>
-            <span class="meta-pill"><i class="fa-solid fa-bolt"></i> 工具链调用</span>
-          </div>
+      <div class="lg-foot">© {{ year }} AgentMatrix</div>
+      <div class="lg-grid" aria-hidden="true"></div>
+    </aside>
+
+    <!-- 右侧：登录表单 -->
+    <main class="lg-main">
+      <button
+        class="lg-theme"
+        type="button"
+        :title="theme === 'light' ? '切换为暗色' : '切换为浅色'"
+        @click="toggleTheme"
+      >
+        <component :is="theme === 'light' ? Moon : Sun" :size="16" :stroke-width="1.75" />
+      </button>
+
+      <div class="lg-form-wrap">
+        <div class="lg-mobile-logo">
+          <AgentLogo :size="28" />
+        </div>
+        <h2>登录</h2>
+        <p class="lg-sub">使用企业账号登录控制台</p>
+
+        <div class="lg-segment" role="tablist">
+          <button
+            type="button"
+            :class="{ active: currentRole === 'admin' }"
+            @click="selectRole('admin', 'Amx#Admin2026')"
+          >管理员</button>
+          <button
+            type="button"
+            :class="{ active: currentRole === 'dev' }"
+            @click="selectRole('developer', 'Amx#Dev2026')"
+          >开发者</button>
         </div>
 
-        <!-- Right: Modern Frosted Glass Login Console -->
-        <div class="login-card-glass">
-          <div class="card-header">
-            <h2 class="card-heading">控制台登录</h2>
-            <p class="card-hint">请输入企业访问凭据</p>
-          </div>
-
-          <!-- Quick Role Selector Pills -->
-          <div class="quick-role-row">
-            <button
-              type="button"
-              class="role-pill"
-              :class="{ active: currentRole === 'admin' }"
-              @click="selectRole('admin', 'Amx#Admin2026')"
+        <form class="lg-form" autocomplete="off" @submit.prevent="handleLogin">
+          <label class="lg-field">
+            <span>账号</span>
+            <input
+              v-model="username"
+              type="text"
+              required
+              autocomplete="off"
+              data-1p-ignore
+              data-lpignore="true"
+              data-form-type="other"
             >
-              <i class="fa-solid fa-shield-halved"></i>
-              <span>管理员</span>
-            </button>
-            <button
-              type="button"
-              class="role-pill"
-              :class="{ active: currentRole === 'dev' }"
-              @click="selectRole('developer', 'Amx#Dev2026')"
-            >
-              <i class="fa-solid fa-code"></i>
-              <span>开发者</span>
-            </button>
-          </div>
+          </label>
 
-          <!-- Form -->
-          <form class="login-form" autocomplete="off" @submit.prevent="handleLogin">
-            <div class="input-field">
-              <i class="fa-regular fa-user field-icon"></i>
-              <input
-                v-model="username"
-                type="text"
-                class="text-input"
-                placeholder="账号"
-                required
-                autocomplete="off"
-                data-1p-ignore
-                data-lpignore="true"
-                data-form-type="other"
-              >
-            </div>
-
-            <div class="input-field">
-              <i class="fa-solid fa-lock field-icon"></i>
+          <label class="lg-field">
+            <span>密码</span>
+            <div class="lg-input-wrap">
               <input
                 v-model="password"
                 :type="showPassword ? 'text' : 'password'"
-                class="text-input"
-                placeholder="密码"
                 required
                 autocomplete="new-password"
                 data-1p-ignore
@@ -104,37 +81,28 @@
               >
               <button
                 type="button"
-                class="btn-eye"
+                class="lg-eye"
                 :title="showPassword ? '隐藏密码' : '显示密码'"
                 @click="showPassword = !showPassword"
               >
-                <i :class="showPassword ? 'fa-regular fa-eye-slash' : 'fa-regular fa-eye'"></i>
+                <component :is="showPassword ? EyeOff : Eye" :size="16" :stroke-width="1.75" />
               </button>
             </div>
+          </label>
 
-            <div class="form-sub-row">
-              <label class="check-wrap">
-                <input v-model="rememberMe" type="checkbox" class="check-box">
-                <span>记住凭据</span>
-              </label>
-              <a href="javascript:void(0)" class="link-muted" @click="showToast('如需重置密码，请联系管理员', 'info')">
-                忘记密码?
-              </a>
-            </div>
-
-            <button type="submit" class="btn-login-submit" :disabled="submitting">
-              <span class="btn-shimmer"></span>
-              <i v-if="submitting" class="fa-solid fa-spinner fa-spin"></i>
-              <span>{{ submitting ? '验证中...' : '进入工作台' }}</span>
-              <i v-if="!submitting" class="fa-solid fa-arrow-right btn-arrow"></i>
-            </button>
-          </form>
-
-          <div class="card-foot-notice">
-            <i class="fa-solid fa-shield-check"></i>
-            <span>零信任架构安全保护</span>
+          <div class="lg-row">
+            <label class="lg-check">
+              <input v-model="rememberMe" type="checkbox">
+              <span>记住我</span>
+            </label>
+            <a href="javascript:void(0)" @click="showToast('如需重置密码，请联系管理员', 'info')">忘记密码？</a>
           </div>
-        </div>
+
+          <button type="submit" class="lg-submit" :disabled="submitting">
+            <Loader2 v-if="submitting" class="lg-spin" :size="16" :stroke-width="2" />
+            <span>{{ submitting ? '正在登录' : '登录' }}</span>
+          </button>
+        </form>
       </div>
     </main>
   </div>
@@ -145,8 +113,8 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
-import bgImage from '../assets/login-bg.jpg'
 import AgentLogo from '../components/AgentLogo.vue'
+import { Sun, Moon, Eye, EyeOff, Loader2 } from 'lucide-vue-next'
 
 const router = useRouter()
 const { showToast } = useToast()
@@ -158,19 +126,18 @@ const rememberMe = ref(true)
 const showPassword = ref(false)
 const submitting = ref(false)
 const theme = ref(localStorage.getItem('theme') || 'dark')
+const year = new Date().getFullYear()
 
 function toggleTheme() {
   theme.value = theme.value === 'dark' ? 'light' : 'dark'
   document.documentElement.setAttribute('data-theme', theme.value)
   localStorage.setItem('theme', theme.value)
-  showToast(`已切换至 ${theme.value === 'dark' ? '暗黑模式' : '明亮模式'}`, 'info', 1200)
 }
 
 function selectRole(user, pass) {
   username.value = user
   password.value = pass
   currentRole.value = user === 'admin' ? 'admin' : 'dev'
-  showToast(`已选择【${user === 'admin' ? '管理员' : '开发者'}】身份`, 'info', 1200)
 }
 
 async function handleLogin() {

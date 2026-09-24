@@ -111,9 +111,7 @@
         class="template-card"
       >
         <div class="tpl-card-header">
-          <div class="tpl-avatar-box">
-            <span>{{ tpl.avatar || '🤖' }}</span>
-          </div>
+          <Monogram :name="tpl.name" :size="40" />
           <div class="tpl-header-meta">
             <div class="tpl-title-row">
               <h3 class="tpl-name" :title="tpl.name">{{ tpl.name }}</h3>
@@ -236,7 +234,7 @@
           <tr v-for="tpl in templates" :key="tpl.id">
             <td>
               <div class="table-agent-meta">
-                <div class="table-agent-avatar">{{ tpl.avatar || '🤖' }}</div>
+                <Monogram :name="tpl.name" :size="30" />
                 <div>
                   <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                     <span class="table-agent-title">{{ tpl.name }}</span>
@@ -540,6 +538,7 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { accountLabel } from '../composables/useAccountOptions'
+import Monogram from './Monogram.vue'
 
 const props = defineProps({
   isSuperAdmin: { type: Boolean, default: false }

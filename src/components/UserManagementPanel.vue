@@ -134,7 +134,7 @@
             <!-- User Identity -->
             <td>
               <div class="user-cell-meta">
-                <img :src="u.avatar || (u.role === 'SUPER_ADMIN' ? '/avatar-admin.jpg' : '/avatar-dev.jpg')" class="user-table-avatar" alt="avatar">
+                <Monogram :name="u.nickname || u.username" :size="32" shape="circle" />
                 <div class="user-text-wrap">
                   <div class="user-nickname-row">
                     <span class="user-nickname-text">{{ u.nickname || u.username }}</span>
@@ -426,7 +426,7 @@
         <form class="modal-body user-modal-body" @submit.prevent="handleSavePassword">
           <!-- Target User Profile Summary -->
           <div class="target-user-summary-card">
-            <img :src="passwordTargetUser?.avatar || (passwordTargetUser?.role === 'SUPER_ADMIN' ? '/avatar-admin.jpg' : '/avatar-dev.jpg')" class="target-avatar" alt="avatar">
+            <Monogram :name="passwordTargetUser?.nickname || passwordTargetUser?.username" :size="40" shape="circle" />
             <div class="target-user-info">
               <div class="target-name-row">
                 <span class="target-nickname">{{ passwordTargetUser?.nickname || passwordTargetUser?.username }}</span>
@@ -740,6 +740,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
+import Monogram from './Monogram.vue'
 
 const props = defineProps({
   currentUser: {

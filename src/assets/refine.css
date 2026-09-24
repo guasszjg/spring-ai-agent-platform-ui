@@ -1,0 +1,1697 @@
+/* ==========================================================
+   Refine layer — 陶土橙主调的克制视觉系统
+   最后加载，覆盖 common / dashboard 中的装饰性样式。
+   原则：单一品牌色（--brand）+ 语义色；带品牌色调的灰承载层级；去渐变、去发光、去位移。
+   换主色只需改 :root 与 [data-theme="light"] 中的 --brand* 变量。
+   ========================================================== */
+
+:root {
+  /* 暗色：暖炭灰基底 + 陶土橙品牌色 */
+  --brand: #e08a6d;
+  --brand-strong: #c96442;
+  --brand-strong-hover: #d4714f;
+  --brand-text: #eba084;
+  --brand-soft: rgba(224, 138, 109, 0.10);
+  --brand-soft-2: rgba(224, 138, 109, 0.16);
+  --brand-line: rgba(224, 138, 109, 0.40);
+
+  --bg-primary: #1f1e1d;
+  --bg-secondary: #1a1918;
+  --bg-card: #262624;
+  --bg-card-hover: #2b2a28;
+  --bg-input: #1a1918;
+  --bg-panel: #262624;
+  --border-color: rgba(240, 230, 215, 0.09);
+  --border-hover: rgba(240, 230, 215, 0.17);
+  --border-glow: var(--brand-line);
+  --text-primary: #ece9e2;
+  --text-secondary: #b5b0a6;
+  --text-muted: #8a857c;
+  --accent-blue: var(--brand);
+  --accent-blue-hover: var(--brand-strong-hover);
+  --accent-cyan: var(--brand);
+  --accent-purple: var(--brand);
+  --accent-emerald: #5fb38a;
+  --accent-amber: #e0a93b;
+  --accent-rose: #e5645e;
+  --glass-bg: rgba(31, 30, 29, 0.88);
+  --glass-border: rgba(240, 230, 215, 0.09);
+  --shadow-glow: none;
+  --shadow-card: none;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+
+  --btn-primary-bg: var(--brand-strong);
+  --btn-primary-fg: #ffffff;
+  --btn-primary-hover: var(--brand-strong-hover);
+  --surface-subtle: rgba(240, 230, 215, 0.04);
+  --surface-active: var(--brand-soft-2);
+  --active-fg: var(--brand-text);
+  --topbar-bg: rgba(31, 30, 29, 0.88);
+}
+
+[data-theme="light"] {
+  /* 浅色：奶油白基底 */
+  --brand: #d97757;
+  --brand-strong: #c15f3c;
+  --brand-strong-hover: #ad5232;
+  --brand-text: #b5542f;
+  --brand-soft: rgba(217, 119, 87, 0.07);
+  --brand-soft-2: rgba(217, 119, 87, 0.13);
+  --brand-line: rgba(217, 119, 87, 0.42);
+
+  --bg-primary: #faf9f5;
+  --bg-secondary: #f4f2eb;
+  --bg-card: #ffffff;
+  --bg-card-hover: #fdfcf9;
+  --bg-input: #ffffff;
+  --bg-panel: #ffffff;
+  --border-color: #e8e4da;
+  --border-hover: #d8d1c3;
+  --border-glow: var(--brand-line);
+  --text-primary: #1f1e1d;
+  --text-secondary: #5e5a53;
+  --text-muted: #8e897f;
+  --accent-blue: var(--brand);
+  --accent-blue-hover: var(--brand-strong-hover);
+  --accent-emerald: #2f8a63;
+  --accent-amber: #b7791f;
+  --accent-rose: #c8453e;
+  --glass-bg: rgba(250, 249, 245, 0.88);
+  --glass-border: #e8e4da;
+  --btn-primary-bg: var(--brand-strong);
+  --btn-primary-fg: #ffffff;
+  --btn-primary-hover: var(--brand-strong-hover);
+  --surface-subtle: rgba(120, 100, 70, 0.04);
+  --surface-active: var(--brand-soft-2);
+  --active-fg: var(--brand-text);
+  --topbar-bg: rgba(250, 249, 245, 0.88);
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv11", "ss01";
+}
+
+/* ---------- 按钮：实心、无渐变、无位移 ---------- */
+.btn-primary,
+.btn-create-agent,
+.btn-create-agent-top,
+.btn-chat-primary,
+.btn-submit-password,
+.btn-profile-primary {
+  background: var(--btn-primary-bg) !important;
+  color: var(--btn-primary-fg) !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
+  border-radius: 8px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.btn-primary:hover:not(:disabled),
+.btn-create-agent:hover,
+.btn-create-agent-top:hover,
+.btn-chat-primary:hover:not(:disabled),
+.btn-submit-password:hover:not(:disabled),
+.btn-profile-primary:hover:not(:disabled) {
+  background: var(--btn-primary-hover) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.btn-secondary {
+  background: transparent;
+  border-color: var(--border-color);
+}
+
+.btn-secondary:hover {
+  background: var(--surface-subtle);
+  border-color: var(--border-hover);
+}
+
+.form-control-styled:focus,
+.search-input:focus {
+  border-color: var(--border-glow) !important;
+  box-shadow: 0 0 0 3px var(--brand-soft-2) !important;
+}
+
+/* ---------- 侧边栏 ---------- */
+.app-sidebar {
+  width: 240px;
+  background: var(--bg-secondary);
+}
+
+.brand-edition {
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.nav-section-title {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  opacity: 1;
+}
+
+.nav-section-title i {
+  display: none;
+}
+
+.sidebar-nav {
+  gap: 18px;
+}
+
+.nav-group-wrapper {
+  gap: 1px;
+}
+
+.sidebar-nav-item {
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 450;
+  gap: 10px;
+  border: none;
+}
+
+.sidebar-nav-item i {
+  font-size: 13.5px;
+}
+
+.sidebar-nav-item:hover {
+  background: var(--surface-subtle);
+  border: none;
+}
+
+.sidebar-nav-item:hover i {
+  color: var(--text-secondary);
+  transform: none;
+}
+
+.sidebar-nav-item::before {
+  display: none;
+}
+
+.sidebar-nav-item.active {
+  background: var(--surface-active);
+  border: none;
+  box-shadow: none;
+  color: var(--active-fg);
+  font-weight: 500;
+}
+
+.sidebar-nav-item.active i {
+  color: var(--active-fg);
+}
+
+.nav-badge-pill,
+.nav-count-pill {
+  background: transparent !important;
+  border: none !important;
+  color: var(--text-muted) !important;
+  font-weight: 500 !important;
+  font-size: 11px !important;
+  letter-spacing: 0 !important;
+  padding: 0 !important;
+}
+
+/* ---------- 顶栏 ---------- */
+.app-topbar {
+  height: 52px;
+  padding: 0 28px;
+  backdrop-filter: saturate(140%) blur(12px);
+}
+
+.topbar-page-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.topbar-user-menu {
+  background: transparent;
+  border-color: transparent;
+}
+
+.topbar-user-tag,
+.topbar-user-tag.role-super_admin,
+.topbar-user-tag.role-admin,
+.topbar-user-tag.role-developer,
+.topbar-user-tag.role-viewer {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* ---------- 页面标题 ---------- */
+.app-subview {
+  padding: 32px 40px 40px;
+  max-width: 1520px;
+}
+
+.overview-heading h2,
+.header-bar-title,
+.kb-page-title {
+  font-size: 22px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.overview-heading p {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.overview-hero-row,
+.dashboard-header-bar {
+  margin-bottom: 24px;
+}
+
+.cluster-live-status {
+  display: none;
+}
+
+/* ---------- 时间范围 / 筛选胶囊 ---------- */
+.overview-date-filter {
+  background: var(--surface-subtle);
+  border-color: var(--border-color);
+}
+
+.btn-time-range {
+  font-weight: 500;
+}
+
+.btn-time-range.active {
+  background: var(--surface-active);
+  color: var(--active-fg);
+  box-shadow: inset 0 0 0 1px var(--border-hover);
+}
+
+.btn-filter-pill {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+  font-weight: 450;
+}
+
+.btn-filter-pill:hover {
+  background: var(--surface-subtle);
+  color: var(--text-primary);
+}
+
+.btn-filter-pill.active {
+  background: var(--surface-active) !important;
+  border-color: var(--border-hover) !important;
+  color: var(--active-fg) !important;
+  box-shadow: none !important;
+}
+
+.btn-scope-pill {
+  font-weight: 450;
+}
+
+.btn-scope-pill.active {
+  background: var(--surface-active) !important;
+  color: var(--active-fg) !important;
+  border-color: var(--border-hover) !important;
+  box-shadow: none !important;
+}
+
+/* ---------- 通用卡片：去模糊、去阴影、去悬浮位移 ---------- */
+.stat-card,
+.token-stat-card,
+.chart-card-box,
+.toolbar-section,
+.agent-card {
+  background: var(--bg-card);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  border-radius: var(--radius-lg);
+}
+
+.stat-card:hover,
+.agent-card:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--border-hover);
+}
+
+.token-stat-card::before,
+.agent-card::before {
+  display: none;
+}
+
+/* ---------- 指标卡：图标单色，数字比例字体 ---------- */
+.stats-grid,
+.token-stats-grid {
+  gap: 12px;
+}
+
+.stat-card,
+.token-stat-card {
+  padding: 18px 20px;
+}
+
+.stat-label,
+.token-card-title {
+  font-size: 12.5px;
+  font-weight: 450;
+  color: var(--text-muted);
+}
+
+.stat-value,
+.token-card-val {
+  font-family: var(--font-family);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  margin-top: 4px;
+}
+
+.stat-icon-wrapper,
+.token-card-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.icon-blue,
+.icon-emerald,
+.icon-purple,
+.icon-amber {
+  background: var(--surface-subtle);
+  color: var(--text-muted);
+}
+
+.token-card-footer {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ---------- 图表卡 ---------- */
+.chart-card-box {
+  padding: 20px 22px;
+}
+
+.chart-title-group h3 {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.chart-title-group h3 i {
+  display: none;
+}
+
+.chart-title-group p {
+  color: var(--text-muted);
+}
+
+.charts-grid-row,
+.charts-grid-row-equal {
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.token-stats-grid {
+  margin-bottom: 12px;
+}
+
+.ranking-badge-idx,
+.ranking-badge-idx.top-1,
+.ranking-badge-idx.top-2,
+.ranking-badge-idx.top-3 {
+  background: transparent !important;
+  color: var(--text-muted) !important;
+  border: none !important;
+  box-shadow: none !important;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.ranking-badge-idx.top-1 {
+  color: var(--text-primary) !important;
+}
+
+/* ---------- 工具栏 ---------- */
+.toolbar-section {
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+
+/* ---------- 智能体卡片：去胶囊化 ---------- */
+.agent-grid {
+  gap: 12px;
+}
+
+.agent-card {
+  padding: 18px 18px 14px;
+}
+
+.agent-avatar-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  font-size: 18px;
+  background: var(--surface-subtle);
+  box-shadow: none;
+}
+
+.agent-title-box h3,
+.agent-title-row h3 {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.agent-sub-meta {
+  font-size: 12px;
+  gap: 6px;
+}
+
+.agent-cat-badge {
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 0;
+  font-weight: 400;
+}
+
+.agent-cat-badge i,
+.agent-owner-inline i {
+  display: none;
+}
+
+.agent-cat-badge + .agent-owner-inline::before {
+  content: "·";
+  margin-right: 6px;
+  color: var(--text-muted);
+}
+
+.agent-owner-inline {
+  color: var(--text-muted);
+}
+
+.agent-scope-pill,
+.agent-scope-pill.scope-system,
+.agent-scope-pill.scope-mine,
+.agent-scope-pill.scope-other,
+.agent-scope-pill.scope-system-sm,
+.agent-scope-pill.scope-mine-sm {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 10.5px;
+  padding: 0 6px;
+  border-radius: 4px;
+  line-height: 18px;
+}
+
+.agent-scope-pill i {
+  display: none;
+}
+
+.agent-card-id-strip {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin-bottom: 12px;
+  gap: 10px;
+}
+
+.agent-id-pill,
+.table-id-pill {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 11.5px;
+}
+
+.agent-id-pill:hover,
+.table-id-pill:hover {
+  background: transparent;
+  color: var(--text-primary);
+  transform: none;
+}
+
+.agent-code-chip,
+.table-code-pill {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.agent-id-pill .id-icon,
+.agent-code-chip i {
+  display: none;
+}
+
+.agent-card-desc {
+  font-size: 13px;
+  line-height: 1.6;
+  height: 42px;
+  color: var(--text-secondary);
+}
+
+.spec-badge,
+.spec-model,
+.spec-prompt-flag {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.agent-card-specs {
+  gap: 0;
+  margin-bottom: 10px;
+}
+
+.agent-card-specs .spec-badge i {
+  display: none;
+}
+
+.agent-card-specs .spec-badge + .spec-badge::before {
+  content: "·";
+  margin: 0 7px;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.prompt-preview-box,
+.agent-prompt-preview {
+  background: var(--surface-subtle);
+  border: none;
+  border-radius: 6px;
+  font-family: var(--font-family);
+  font-size: 12px;
+  padding: 7px 10px;
+  margin-bottom: 12px;
+}
+
+.prompt-lead-icon {
+  color: var(--text-muted);
+}
+
+.agent-tags {
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.tag-item {
+  background: transparent;
+  padding: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.agent-footer {
+  padding-top: 12px;
+}
+
+.agent-stats-metric {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn-chat-primary {
+  padding: 6px 12px;
+  font-size: 12.5px;
+}
+
+.btn-action-icon {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--text-muted) !important;
+}
+
+.btn-action-icon:hover:not(:disabled) {
+  background: var(--surface-subtle) !important;
+  color: var(--text-primary) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.btn-action-danger:hover:not(:disabled) {
+  color: var(--accent-rose) !important;
+}
+
+/* ---------- 状态徽标：只保留语义色的点 ---------- */
+.badge-status,
+.badge-success,
+.badge-warning,
+.badge-danger {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.status-dot,
+.badge-success .status-dot {
+  box-shadow: none;
+}
+
+/* ---------- 弹窗 ---------- */
+.modal-backdrop {
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.modal-dialog {
+  border-radius: 14px;
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header h3 {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* ---------- 分页 / 视图切换 / 侧栏用户 ---------- */
+.btn-page.active {
+  background: var(--surface-active) !important;
+  color: var(--active-fg) !important;
+  border-color: var(--border-hover) !important;
+  box-shadow: none !important;
+}
+
+.btn-view-mode.active {
+  background: var(--surface-active) !important;
+  color: var(--active-fg) !important;
+  box-shadow: none !important;
+}
+
+.user-role-text,
+.user-role-text[class*="role-"] {
+  color: var(--text-muted) !important;
+  background: transparent !important;
+  border: none !important;
+  font-weight: 400 !important;
+}
+
+.user-role-text i {
+  display: none;
+}
+
+.sidebar-user-card {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.sidebar-user-card:hover {
+  background: var(--surface-subtle) !important;
+}
+
+/* ---------- 知识库面板（scoped 样式，需 !important） ---------- */
+.btn-kb-scope-pill.active {
+  background: var(--surface-active) !important;
+  color: var(--active-fg) !important;
+  border-color: var(--border-hover) !important;
+  box-shadow: none !important;
+}
+
+.kb-scope-count {
+  background: transparent !important;
+  color: var(--text-muted) !important;
+  border: none !important;
+}
+
+.kb-stat-pill,
+.kb-stat-pill.blue,
+.kb-stat-pill.emerald,
+.kb-stat-pill.purple {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  color: var(--text-secondary) !important;
+  font-weight: 400 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.provider-badge,
+.provider-badge.spring-ai,
+.provider-badge.dify,
+.search-method-badge,
+.search-method-badge[class] {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  color: var(--text-secondary) !important;
+  font-weight: 400 !important;
+}
+
+.provider-badge i,
+.search-method-badge i,
+.model-badge-sub i,
+.kb-cell-text i,
+.kb-time-label i {
+  display: none !important;
+}
+
+.model-badge-sub {
+  color: var(--text-muted) !important;
+  font-family: var(--font-family) !important;
+}
+
+.kb-pill-badge,
+.kb-pill-badge.system,
+.kb-pill-badge.mine,
+.kb-pill-badge.other {
+  background: transparent !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-muted) !important;
+  font-weight: 500 !important;
+  font-size: 10.5px !important;
+  padding: 0 6px !important;
+  border-radius: 4px !important;
+}
+
+.kb-pill-badge i {
+  display: none !important;
+}
+
+.kb-table-avatar {
+  background: var(--surface-subtle) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.kb-engine-status {
+  font-size: 18px !important;
+  font-weight: 500 !important;
+  color: var(--text-secondary) !important;
+}
+
+.kb-model-truncate {
+  font-family: var(--font-family) !important;
+}
+
+table th {
+  font-weight: 500 !important;
+  color: var(--text-muted) !important;
+  font-size: 12px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+/* ---------- 浅色主题：抵消 dashboard.css 中的 light 专属装饰 ---------- */
+[data-theme="light"] .agent-card {
+  border-color: var(--border-color);
+  box-shadow: none;
+}
+
+[data-theme="light"] .agent-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: none;
+}
+
+[data-theme="light"] .agent-avatar-badge {
+  background: var(--surface-subtle);
+  border-color: transparent;
+}
+
+[data-theme="light"] .agent-card-id-strip,
+[data-theme="light"] .agent-id-pill,
+[data-theme="light"] .agent-code-chip,
+[data-theme="light"] .spec-badge {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-muted);
+}
+
+[data-theme="light"] .agent-id-pill:hover {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .agent-prompt-preview {
+  background: var(--surface-subtle);
+  border-color: transparent;
+  color: var(--text-muted);
+}
+
+[data-theme="light"] .stat-card,
+[data-theme="light"] .token-stat-card,
+[data-theme="light"] .chart-card-box,
+[data-theme="light"] .toolbar-section {
+  box-shadow: none;
+}
+
+/* ---------- 指标卡：去掉装饰图标，让数字成为主角 ---------- */
+.stat-icon-wrapper,
+.token-card-icon {
+  display: none !important;
+}
+
+/* ---------- 品牌字标 ---------- */
+.brand-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.sidebar-header {
+  padding: 16px 16px 14px 18px;
+}
+
+.btn-sidebar-header-toggle {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--text-muted) !important;
+}
+
+.btn-sidebar-header-toggle:hover {
+  background: var(--surface-subtle) !important;
+  color: var(--text-primary) !important;
+}
+
+.btn-theme-toggle {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-theme-toggle:hover {
+  background: var(--surface-subtle);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+
+.nav-item-icon-wrap svg {
+  color: var(--text-muted);
+}
+
+.sidebar-nav-item:hover .nav-item-icon-wrap svg,
+.sidebar-nav-item.active .nav-item-icon-wrap svg {
+  color: var(--active-fg);
+}
+
+.user-avatar-wrap {
+  display: flex;
+}
+
+/* ---------- 调试台 ---------- */
+.config-card-section {
+  box-shadow: none;
+  border-radius: var(--radius-lg);
+}
+
+.prompt-editor-card {
+  border: 1px solid var(--border-color) !important;
+  box-shadow: none !important;
+}
+
+.prompt-editor-card:focus-within {
+  border-color: var(--border-hover) !important;
+}
+
+.prompt-textarea {
+  font-family: var(--font-family) !important;
+  font-size: 13.5px !important;
+  line-height: 1.75 !important;
+  letter-spacing: 0 !important;
+}
+
+.btn-section-action,
+.btn-tools-add {
+  background: transparent !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-secondary) !important;
+  font-weight: 500 !important;
+}
+
+.btn-section-action:hover,
+.btn-tools-add:hover {
+  background: var(--surface-subtle) !important;
+  color: var(--text-primary) !important;
+}
+
+.btn-section-action i,
+.btn-tools-add i {
+  color: inherit !important;
+}
+
+.var-chip {
+  background: var(--surface-subtle) !important;
+  border-color: transparent !important;
+  color: var(--text-secondary) !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.var-chip i {
+  display: none !important;
+}
+
+.tool-icon,
+.icon-orange,
+.icon-blue-tool,
+.icon-purple-tool,
+.icon-emerald-tool,
+.icon-bocha-badge {
+  background: var(--surface-active) !important;
+  color: var(--text-secondary) !important;
+  border: none !important;
+}
+
+.tool-prefix {
+  color: var(--text-muted) !important;
+  font-weight: 400 !important;
+}
+
+.slider-toggle,
+[data-theme="dark"] .slider-toggle {
+  background-color: var(--border-hover);
+}
+
+input:checked + .slider-toggle {
+  background-color: var(--brand-strong) !important;
+}
+
+input:checked + .slider-toggle:before {
+  background-color: #ffffff;
+}
+
+.model-selector-pill {
+  background: transparent;
+}
+
+.model-selector-pill i,
+.model-selector-pill svg {
+  color: var(--text-muted) !important;
+}
+
+.model-type-badge {
+  background: transparent !important;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted) !important;
+}
+
+.btn-publish {
+  background: var(--btn-primary-bg) !important;
+  color: var(--btn-primary-fg) !important;
+  box-shadow: none !important;
+  font-weight: 500 !important;
+}
+
+.btn-publish:hover:not(:disabled) {
+  background: var(--btn-primary-hover) !important;
+  transform: none !important;
+}
+
+.btn-publish:disabled {
+  opacity: 0.4 !important;
+}
+
+.header-tag-pill,
+.header-tag-pill.published,
+.header-tag-pill.draft {
+  background: transparent !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-muted) !important;
+  font-weight: 500 !important;
+}
+
+.header-tag-pill.draft {
+  color: var(--accent-amber) !important;
+}
+
+.debug-tabs {
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+.debug-tab {
+  color: var(--text-muted) !important;
+  font-weight: 500 !important;
+}
+
+.debug-tab.active {
+  background: var(--surface-active) !important;
+  color: var(--active-fg) !important;
+  box-shadow: none !important;
+}
+
+.btn-input-send {
+  background: var(--btn-primary-bg) !important;
+  color: var(--btn-primary-fg) !important;
+  box-shadow: none !important;
+}
+
+.btn-input-send:hover:not(:disabled) {
+  background: var(--btn-primary-hover) !important;
+  transform: none !important;
+}
+
+.msg-avatar,
+.msg-avatar-bot,
+.msg-avatar-user {
+  background: var(--surface-active) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+}
+
+.header-agent-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600 !important;
+}
+
+/* ==========================================================
+   各业务面板（scoped 样式）统一收敛 —— 需 !important
+   ========================================================== */
+
+/* A. 主操作按钮：实心单色 */
+.btn-primary-create,
+.btn-create-user,
+.btn-use-tpl,
+.btn-execute-test,
+.btn-execute-test.btn-shadow-mode,
+.btn-send-play,
+.btn-regen-key,
+.btn-success {
+  background: var(--btn-primary-bg) !important;
+  color: var(--btn-primary-fg) !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
+  font-weight: 500 !important;
+}
+
+.btn-primary-create:hover,
+.btn-create-user:hover,
+.btn-use-tpl:hover,
+.btn-execute-test:hover:not(:disabled),
+.btn-send-play:hover,
+.btn-regen-key:hover,
+.btn-success:hover {
+  background: var(--btn-primary-hover) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.btn-primary-create i,
+.btn-create-user i,
+.btn-use-tpl i,
+.btn-execute-test i,
+.btn-send-play i {
+  color: inherit !important;
+}
+
+/* B. 激活态标签页 / 分段按钮 / 选中卡片：中性高亮 */
+.cat-filter-pill.active,
+.gateway-nav-tab.active,
+[data-theme="light"] .gateway-nav-tab.active,
+.protocol-tab-btn.active,
+.seg-btn.active,
+.sec-tab.active,
+.btn-scenario.active,
+.btn-lang.active,
+.btn-sub-tab.active,
+.method-pill.active,
+.mode-switch-btn.active,
+.format-chip.active,
+.endpoint-nav-item.active,
+.subtab-btn.active,
+.code-tab-pill.active,
+.mode-pill.active,
+.btn-console-tool.active {
+  background: var(--surface-active) !important;
+  color: var(--active-fg) !important;
+  border-color: var(--border-hover) !important;
+  box-shadow: none !important;
+}
+
+.cat-filter-pill.active i,
+.gateway-nav-tab.active i,
+.sec-tab.active i,
+.endpoint-nav-item.active i {
+  color: inherit !important;
+}
+
+.role-radio-card.selected,
+.sec-scope-card.selected,
+.sec-agent-row.selected {
+  background: var(--brand-soft) !important;
+  border-color: var(--brand-line) !important;
+  box-shadow: none !important;
+}
+
+.toggle-switch-btn.active,
+.toggle-switch-btn.active.switch-purple,
+.toggle-switch-btn.active.switch-blue,
+.switch-green.active {
+  background: var(--text-primary) !important;
+  border-color: var(--active-fg) !important;
+  color: var(--bg-primary) !important;
+}
+
+/* C. 装饰性徽标：细描边 + 灰字 */
+.builtin-badge,
+.custom-badge,
+.tpl-category-tag,
+.users-title-pill,
+.roles-title-pill,
+.user-self-pill,
+.role-badge-pill,
+.role-badge-pill.role-super_admin,
+.role-badge-pill.role-developer,
+.target-role-pill,
+.target-role-pill.role-super_admin,
+.target-role-pill.role-developer,
+.tag-super_admin,
+.tag-developer,
+.radio-tag,
+.radio-tag.tag-blue,
+.radio-tag.tag-purple,
+.sec-chip,
+.sec-doc-pill,
+.scope-tag,
+.sec-chip-quota,
+.api-version-tag,
+.badge-blue,
+.tab-badge,
+.tab-badge.badge-active,
+.active-badge-tag,
+.hero-state-pill,
+.badge-recall-test,
+.param-val-badge,
+.badge-subtab-p3,
+.shadow-badge-main,
+.col-count-tag,
+.engine-indicator-pill,
+.engine-indicator-pill.spring-ai,
+.engine-indicator-pill.dify,
+.result-stat-chip,
+.result-stat-chip.hit-count,
+.result-stat-chip.engine,
+.chunk-score-tag,
+.ocr-status-badge.enabled,
+.btn-offline-badge,
+.table-tag-item,
+.method-badge,
+.method-badge.post,
+.method-post,
+.method-get,
+.method-badge-lg {
+  background: transparent !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-secondary) !important;
+  box-shadow: none !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+}
+
+.users-title-pill,
+.roles-title-pill {
+  display: none !important;
+}
+
+.tpl-category-tag,
+.table-tag-item {
+  border: none !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  color: var(--text-muted) !important;
+}
+
+/* D. 彩色图标方块：中性化 */
+.hero-icon-box,
+.hero-icon-box.icon-emb,
+.hero-icon-box.icon-dify,
+.metric-icon-box,
+.metric-icon-total,
+.metric-icon-admin,
+.metric-icon-dev,
+.role-avatar-icon,
+.card-super_admin .role-avatar-icon,
+.card-developer .role-avatar-icon,
+.modal-icon-badge,
+.cost-card-icon,
+.card-blue .cost-card-icon,
+.card-emerald .cost-card-icon,
+.card-purple .cost-card-icon,
+.placeholder-icon,
+.api-stat-icon,
+.icon-blue,
+.icon-emerald,
+.icon-purple {
+  background: var(--surface-active) !important;
+  color: var(--text-secondary) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.hero-icon-box i,
+.metric-icon-box i,
+.role-avatar-icon i,
+.modal-icon-badge i,
+.cost-card-icon i {
+  color: inherit !important;
+}
+
+/* E. Hero 横幅：去渐变 */
+.templates-hero-header,
+.gateway-hero-banner,
+.sec-doc-hero {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: none !important;
+}
+
+.templates-hero-header::before,
+.templates-hero-header::after,
+.gateway-hero-banner::before,
+.gateway-hero-banner::after {
+  display: none !important;
+}
+
+/* F. 彩色底卡片 / 提示框：中性化 */
+.role-overview-card.card-super_admin,
+.role-overview-card.card-developer,
+.cost-card.card-blue,
+.cost-card.card-emerald,
+.shadow-col.col-primary,
+.sec-selection-banner,
+.auto-pwd-desc-box,
+.gov-card-tip,
+.status-notice-box.success-box,
+.group-header-content {
+  background: var(--bg-card) !important;
+  border-color: var(--border-color) !important;
+  box-shadow: none !important;
+}
+
+.perm-check-icon.check-admin,
+.perm-check-icon.check-dev {
+  color: var(--brand) !important;
+  background: transparent !important;
+}
+
+/* G. 统计卡片（用户 / 开放与安全） */
+.user-metric-card {
+  box-shadow: none !important;
+}
+
+.metric-value {
+  font-weight: 600 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* H. 输入框聚焦统一 */
+.template-search-input:focus,
+.users-search-input:focus,
+.modal-input:focus,
+.pg-text-input:focus,
+.pg-textarea:focus,
+.query-input-wrap:focus-within {
+  border-color: var(--border-glow) !important;
+  box-shadow: 0 0 0 3px var(--brand-soft-2) !important;
+}
+
+/* I. 链接式文字按钮 */
+.btn-text-action,
+.tpl-prompt-toggle,
+.btn-expand-chunk {
+  color: var(--text-secondary) !important;
+}
+
+.btn-text-action:hover,
+.tpl-prompt-toggle:hover,
+.btn-expand-chunk:hover {
+  color: var(--text-primary) !important;
+}
+
+/* ---------- 表格行内操作按钮（用户管理等）：描边次要按钮 ---------- */
+.agent-actions .btn-card-action:not(.btn-chat-primary) {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  padding: 5px 10px;
+}
+
+.agent-actions .btn-card-action:not(.btn-chat-primary):hover:not(:disabled) {
+  background: var(--surface-subtle);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+
+.agent-actions .btn-card-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 模板卡片中重复出现的操作：降为次要按钮 */
+.btn-use-tpl {
+  background: transparent !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-hover) !important;
+}
+
+.btn-use-tpl:hover {
+  background: var(--surface-subtle) !important;
+}
+
+/* 权限矩阵分组标题 */
+.group-header-content,
+.group-header-content i {
+  color: var(--text-primary) !important;
+}
+
+/* ---------- 列表 / 卡片中重复出现的主操作（调试、配置）：描边按钮 ---------- */
+.btn-chat-primary {
+  background: transparent !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-hover) !important;
+}
+
+.btn-chat-primary:hover:not(:disabled) {
+  background: var(--surface-subtle) !important;
+}
+
+.tools-cat-tag {
+  background: transparent !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-secondary) !important;
+  font-weight: 500 !important;
+}
+
+.tools-cat-tag.muted {
+  color: var(--text-muted) !important;
+}
+
+.tools-cat-tag.warn {
+  color: var(--accent-amber) !important;
+}
+
+.tools-cat-tag.ok {
+  color: var(--accent-emerald) !important;
+}
+
+
+/* ==========================================================
+   雾蓝主调：让品牌色在关键位置"淡淡地"出现
+   ========================================================== */
+.sidebar-nav-item.active .nav-item-icon-wrap svg {
+  color: var(--active-fg);
+}
+
+.sidebar-nav-item.active .nav-count-pill {
+  color: var(--active-fg) !important;
+}
+
+/* 选中卡片 / 行悬停带一点品牌色 */
+.agent-card:hover,
+[data-theme="light"] .agent-card:hover,
+.stat-card:hover {
+  border-color: var(--brand-line);
+}
+
+/* 状态：运行中的点保持语义绿；品牌蓝用于链接与强调数字 */
+.btn-text-action:hover,
+.tpl-prompt-toggle:hover,
+.btn-expand-chunk:hover,
+.link-muted:hover {
+  color: var(--brand-text) !important;
+}
+
+.stat-trend-up {
+  color: var(--accent-emerald);
+}
+
+/* 描边按钮悬停：淡品牌色 */
+.btn-chat-primary:hover:not(:disabled),
+.btn-use-tpl:hover,
+.agent-actions .btn-card-action:not(.btn-chat-primary):hover:not(:disabled),
+.btn-section-action:hover,
+.btn-tools-add:hover {
+  background: var(--brand-soft) !important;
+  border-color: var(--brand-line) !important;
+  color: var(--brand-text) !important;
+}
+
+/* 顶栏：浅色下与侧栏一致的雾白 */
+.app-topbar,
+[data-theme="light"] .app-topbar {
+  background: var(--topbar-bg);
+}
+
+/* 表头带极淡的底色，增加层次 */
+table thead th,
+table thead tr {
+  background: var(--surface-subtle) !important;
+}
+
+/* ---------- 模型网关：页头与其他页面统一（标题 + 说明 + 下划线标签页） ---------- */
+.gateway-header-bar {
+  display: block !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin-bottom: 8px;
+}
+
+.gateway-header-info h2 {
+  font-size: 22px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px !important;
+}
+
+.gateway-header-sub {
+  font-size: 13px !important;
+  max-width: none !important;
+  margin-bottom: 20px !important;
+}
+
+.gateway-nav-tabs {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid var(--border-color) !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  gap: 24px !important;
+}
+
+.gateway-nav-tab,
+.gateway-nav-tab.active,
+[data-theme="light"] .gateway-nav-tab.active {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  padding: 10px 2px !important;
+  margin-bottom: -1px;
+  box-shadow: none !important;
+  font-weight: 500 !important;
+  color: var(--text-muted) !important;
+}
+
+.gateway-nav-tab:hover {
+  color: var(--text-primary) !important;
+}
+
+.gateway-nav-tab.active,
+[data-theme="light"] .gateway-nav-tab.active {
+  color: var(--text-primary) !important;
+  border-bottom-color: var(--brand) !important;
+}
+
+.gateway-nav-tab .tab-badge {
+  border: none !important;
+  padding: 0 !important;
+  color: var(--text-muted) !important;
+  font-size: 12px !important;
+}
+
+/* ==========================================================
+   弹窗与表单控件
+   ========================================================== */
+.modal-dialog {
+  border: 1px solid var(--border-color);
+}
+
+.modal-header {
+  border-bottom-color: var(--border-color);
+}
+
+.modal-footer {
+  border-top-color: var(--border-color);
+}
+
+.form-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* 原生控件（复选、单选、滑块）统一品牌色 */
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"] {
+  accent-color: var(--brand-strong);
+}
+
+.range-slider {
+  accent-color: var(--brand-strong) !important;
+}
+
+.range-slider::-webkit-slider-thumb {
+  background: var(--brand-strong) !important;
+  border-color: var(--brand-strong) !important;
+  box-shadow: none !important;
+}
+
+.range-slider::-moz-range-thumb {
+  background: var(--brand-strong) !important;
+  border-color: var(--brand-strong) !important;
+}
+
+.slider-value-pill {
+  background: var(--brand-soft) !important;
+  border: none !important;
+  color: var(--brand-text) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 选项卡片（知识库服务 / 检索方式 / 向量模型） */
+.provider-radio-card,
+.retrieval-card,
+.embedding-model-box {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: none !important;
+}
+
+.provider-radio-card:hover:not(.disabled),
+.retrieval-card:hover {
+  border-color: var(--border-hover) !important;
+}
+
+.provider-radio-card.active,
+.retrieval-card.active {
+  background: var(--brand-soft) !important;
+  border-color: var(--brand-line) !important;
+  box-shadow: none !important;
+}
+
+.provider-radio-card i,
+.retrieval-card i,
+.embedding-model-box i {
+  color: var(--text-muted) !important;
+}
+
+.provider-radio-card.active i,
+.retrieval-card.active i {
+  color: var(--brand) !important;
+}
+
+.provider-radio-desc,
+.retrieval-card-desc {
+  color: var(--text-muted) !important;
+}
+
+.tag-recommend,
+.badge-mode-p3 {
+  background: transparent !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-muted) !important;
+  font-weight: 500 !important;
+}
+
+.emoji-selector-list {
+  display: none !important;
+}
+
+.mode-tab-btn.active {
+  background: var(--bg-card) !important;
+  color: var(--active-fg) !important;
+  box-shadow: 0 0 0 1px var(--border-hover) !important;
+}
+
+/* 模板卡片里的提示词预览：浅色主题下不要黑底 */
+.tpl-prompt-box {
+  background: var(--surface-subtle) !important;
+  border-color: var(--border-color) !important;
+}
+
+.tpl-prompt-box,
+.tpl-prompt-box * {
+  color: var(--text-secondary) !important;
+}
+
+.tpl-prompt-bar i {
+  color: var(--text-muted) !important;
+}
+
+/* 弹窗标题前的装饰图标 */
+.modal-header h3 > i {
+  color: var(--brand) !important;
+}
+
+/* ---------- 知识库详情 ---------- */
+.step-badge,
+.step-badge.active,
+.indexing-badge,
+.model-badge {
+  background: transparent !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-secondary) !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+}
+
+.step-badge i,
+.indexing-badge i,
+.model-badge i {
+  color: var(--brand) !important;
+}
+
+.step-arrow {
+  color: var(--text-muted) !important;
+}
+
+.param-val-badge {
+  background: var(--brand-soft) !important;
+  border: none !important;
+  color: var(--brand-text) !important;
+}
+
+.form-range-styled {
+  accent-color: var(--brand-strong) !important;
+}
+
+.form-range-styled::-webkit-slider-thumb {
+  background: var(--brand-strong) !important;
+  border-color: var(--brand-strong) !important;
+  box-shadow: none !important;
+}
+
+.hybrid-rerank-container {
+  background: var(--surface-subtle) !important;
+  border-color: var(--border-color) !important;
+  box-shadow: none !important;
+}

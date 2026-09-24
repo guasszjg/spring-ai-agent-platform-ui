@@ -8,10 +8,9 @@
             :title="sidebarCollapsed ? '点击展开侧边栏' : 'AgentMatrix Enterprise'"
             @click.prevent="sidebarCollapsed ? toggleSidebar() : (currentTab = 'overview')"
           >
-            <AgentLogo :size="sidebarCollapsed ? 30 : 34" />
+            <AgentLogo :size="26" />
             <div v-show="!sidebarCollapsed" class="brand-text">
               <span class="brand-title">AgentMatrix</span>
-              <span class="brand-edition">Enterprise v2.6</span>
             </div>
           </a>
           <button
@@ -21,7 +20,7 @@
             title="收起侧边栏"
             @click.stop="toggleSidebar"
           >
-            <i class="fa-solid fa-chevron-left"></i>
+            <PanelLeftClose :size="16" :stroke-width="1.75" />
           </button>
         </div>
       </div>
@@ -35,7 +34,6 @@
           <!-- Category Section Header (Expanded) -->
           <div v-show="!sidebarCollapsed" class="nav-section-header">
             <span class="nav-section-title">
-              <i :class="group.icon"></i>
               <span>{{ group.title }}</span>
             </span>
           </div>
@@ -52,7 +50,7 @@
             @click="handleNavClick(item)"
           >
             <span class="nav-item-icon-wrap">
-              <i :class="item.icon"></i>
+              <component :is="navIcons[item.id] || Circle" :size="16" :stroke-width="1.75" />
             </span>
             <span v-show="!sidebarCollapsed" class="nav-item-name">{{ item.name }}</span>
             <span
@@ -76,32 +74,17 @@
         <div class="sidebar-user-card" :title="user.nickname || user.username || '平台用户'" @click="openProfileModal">
           <div class="user-meta-left">
             <div class="user-avatar-wrap">
-              <img :src="userAvatar" class="user-avatar-sidebar" alt="Avatar">
-              <span class="avatar-online-dot"></span>
+              <Monogram :name="user.nickname || user.username" :size="30" shape="circle" />
             </div>
             <div v-show="!sidebarCollapsed" class="user-text-info">
               <span class="user-name-text">{{ user.nickname || user.username || '平台用户' }}</span>
               <span class="user-role-text" :class="'role-' + (user.role || '').toLowerCase()">
-                <i v-if="isSuperAdmin" class="fa-solid fa-shield-halved"></i>
-                <i v-else-if="user.role === 'DEVELOPER'" class="fa-solid fa-code"></i>
-                <i v-else class="fa-solid fa-eye"></i>
                 <span>{{ user.roleName || (isSuperAdmin ? '超级管理员' : (user.role === 'VIEWER' ? '只读观察员' : '开发者')) }}</span>
               </span>
             </div>
           </div>
           <button v-show="!sidebarCollapsed" class="btn-sidebar-logout" title="退出登录" @click.stop="logout">
-            <i class="fa-solid fa-arrow-right-from-bracket"></i>
-          </button>
-        </div>
-        <div class="sidebar-collapse-bar">
-          <button
-            type="button"
-            class="sidebar-collapse-btn"
-            :title="sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'"
-            @click="toggleSidebar"
-          >
-            <i :class="sidebarCollapsed ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-left'"></i>
-            <span v-show="!sidebarCollapsed">收起侧边栏</span>
+            <LogOut :size="15" :stroke-width="1.75" />
           </button>
         </div>
       </div>
@@ -114,10 +97,10 @@
         </div>
         <div class="topbar-right">
           <button class="btn-theme-toggle" title="切换主题" @click="toggleTheme">
-            <i :class="theme === 'light' ? 'fa-solid fa-sun' : 'fa-solid fa-moon'" :style="{ color: theme === 'light' ? '#f59e0b' : '#9ca3af' }"></i>
+            <component :is="theme === 'light' ? Sun : Moon" :size="16" :stroke-width="1.75" />
           </button>
           <div class="topbar-user-menu" style="cursor: pointer;" title="点击打开个人中心与安全设置" @click="openProfileModal">
-            <img class="topbar-user-avatar" :src="userAvatar" alt="Avatar">
+            <Monogram :name="user.nickname || user.username" :size="26" shape="circle" />
             <div class="topbar-user-info">
               <span class="topbar-user-name">{{ user.nickname || user.username || '管理员' }}</span>
               <span class="topbar-user-tag" :class="'role-' + (user.role || '').toLowerCase()">{{ user.roleName || (isSuperAdmin ? '超级管理员' : (user.role === 'VIEWER' ? '只读观察员' : '开发者')) }}</span>
@@ -132,8 +115,8 @@
       <section v-show="currentTab === 'overview'" class="app-subview active">
         <div class="overview-hero-row">
           <div class="overview-heading">
-            <h2>大模型 Token 消耗与调度分析</h2>
-            <p v-if="isSuperAdmin">实时监控全站 Token 使用量、多模型吞吐率、调用频次趋势及运行成本分摊</p>
+            <h2>用量与成本</h2>
+            <p v-if="isSuperAdmin">全平台 Token 用量、调用趋势与成本</p>
             <p v-else>仅统计你名下智能体的 Token、调用与成本，不含平台公共智能体</p>
           </div>
           <div class="overview-date-filter">
@@ -144,7 +127,7 @@
         </div>
         <div class="token-stats-grid">
           <div class="token-stat-card token-card-blue">
-            <div class="token-card-header"><span class="token-card-title">总 Token 消耗量</span><div class="token-card-icon icon-blue"><i class="fa-solid fa-ticket"></i></div></div>
+            <div class="token-card-header"><span class="token-card-title">Token 总量</span><div class="token-card-icon icon-blue"><i class="fa-solid fa-ticket"></i></div></div>
             <div class="token-card-val">{{ formatToken(totalTokens) }}</div>
             <div class="token-card-footer">
               <span :class="Number(stats.tokenChangePercent || 0) >= 0 ? 'stat-trend-up' : 'stat-trend-down'">
@@ -155,35 +138,35 @@
             </div>
           </div>
           <div class="token-stat-card token-card-purple">
-            <div class="token-card-header"><span class="token-card-title">Prompt 输入 Tokens</span><div class="token-card-icon icon-purple"><i class="fa-solid fa-arrow-down-long"></i></div></div>
+            <div class="token-card-header"><span class="token-card-title">输入 Token</span><div class="token-card-icon icon-purple"><i class="fa-solid fa-arrow-down-long"></i></div></div>
             <div class="token-card-val">{{ formatToken(stats.promptTokens) }}</div>
-            <div class="token-card-footer"><span>占总体消耗 {{ promptShare }}%</span></div>
+            <div class="token-card-footer"><span>占比 {{ promptShare }}%</span></div>
           </div>
           <div class="token-stat-card token-card-emerald">
-            <div class="token-card-header"><span class="token-card-title">Completion 输出 Tokens</span><div class="token-card-icon icon-emerald"><i class="fa-solid fa-arrow-up-long"></i></div></div>
+            <div class="token-card-header"><span class="token-card-title">输出 Token</span><div class="token-card-icon icon-emerald"><i class="fa-solid fa-arrow-up-long"></i></div></div>
             <div class="token-card-val">{{ formatToken(stats.completionTokens) }}</div>
-            <div class="token-card-footer"><span>占总体消耗 {{ completionShare }}%</span></div>
+            <div class="token-card-footer"><span>占比 {{ completionShare }}%</span></div>
           </div>
             <div class="token-stat-card token-card-amber">
-            <div class="token-card-header"><span class="token-card-title">预估推理成本 (CNY)</span><div class="token-card-icon icon-amber"><i class="fa-solid fa-coins"></i></div></div>
+            <div class="token-card-header"><span class="token-card-title">预估成本</span><div class="token-card-icon icon-amber"><i class="fa-solid fa-coins"></i></div></div>
             <div class="token-card-val">{{ formatCny(stats.estimatedCostCny) }}</div>
-            <div class="token-card-footer"><span>按各模型官方挂牌价估算</span><span>DeepSeek 取高峰时段</span></div>
+            <div class="token-card-footer"><span>按模型官方定价估算</span></div>
           </div>
         </div>
         <div class="charts-grid-row">
           <div class="chart-card-box">
-            <div class="chart-header"><div class="chart-title-group"><h3><i class="fa-solid fa-chart-line" style="color: var(--accent-blue);"></i> 每日 Token 消耗与请求频次趋势</h3><p>Prompt / Completion 消耗量走势</p></div></div>
+            <div class="chart-header"><div class="chart-title-group"><h3><i class="fa-solid fa-chart-line" style="color: var(--accent-blue);"></i> Token 趋势</h3><p>输入 / 输出</p></div></div>
             <div class="chart-canvas-wrapper"><canvas ref="trendCanvas"></canvas></div>
           </div>
           <div class="chart-card-box">
-            <div class="chart-header"><div class="chart-title-group"><h3><i class="fa-solid fa-chart-pie" style="color: var(--accent-purple);"></i> 多模型 Token 消耗占比</h3><p>各模型调度配比</p></div></div>
+            <div class="chart-header"><div class="chart-title-group"><h3><i class="fa-solid fa-chart-pie" style="color: var(--accent-purple);"></i> 模型占比</h3><p>按 Token 用量</p></div></div>
             <div class="chart-canvas-wrapper" style="max-height: 260px;"><canvas ref="donutCanvas"></canvas></div>
           </div>
         </div>
         <div class="charts-grid-row-equal">
           <div class="chart-card-box">
             <div class="chart-header">
-              <div class="chart-title-group"><h3><i class="fa-solid fa-ranking-star" style="color: #f59e0b;"></i> Top 智能体调用活跃度排行</h3><p>按调用频次排序</p></div>
+              <div class="chart-title-group"><h3><i class="fa-solid fa-ranking-star" style="color: #f59e0b;"></i> 调用排行</h3><p>按调用次数</p></div>
               <button class="btn-filter-pill" @click="currentTab = 'agents'">查看全部 →</button>
             </div>
             <div class="ranking-list-card">
@@ -191,7 +174,7 @@
               <div v-for="item in (stats.ranking || [])" :key="item.rank" class="ranking-item-row">
                 <div class="ranking-meta-left">
                   <div class="ranking-badge-idx" :class="item.rank <= 3 ? 'top-' + item.rank : ''">{{ item.rank }}</div>
-                  <div class="ranking-agent-avatar">{{ item.avatar }}</div>
+                  <Monogram :name="item.name" :size="28" />
                   <div>
                     <div class="ranking-name">{{ item.name }}</div>
                     <div class="ranking-model">{{ item.model }}</div>
@@ -205,7 +188,7 @@
             </div>
           </div>
           <div class="chart-card-box">
-            <div class="chart-header"><div class="chart-title-group"><h3><i class="fa-solid fa-stopwatch" style="color: var(--accent-emerald);"></i> 各分类智能体响应时延</h3><p>业务分类下的平均延迟</p></div></div>
+            <div class="chart-header"><div class="chart-title-group"><h3><i class="fa-solid fa-stopwatch" style="color: var(--accent-emerald);"></i> 响应时延</h3><p>按分类平均值</p></div></div>
             <div class="chart-canvas-wrapper"><canvas ref="latencyCanvas"></canvas></div>
           </div>
         </div>
@@ -214,16 +197,15 @@
       <section v-show="currentTab === 'agents'" class="app-subview active">
         <div class="dashboard-header-bar">
           <div class="header-bar-left">
-            <h2 class="header-bar-title">智能体资产总览</h2>
-            <div class="cluster-live-status"><span class="cluster-dot"></span><span>调度集群就绪 · 负载正常</span></div>
+            <h2 class="header-bar-title">智能体</h2>
           </div>
-          <button v-if="user.role !== 'VIEWER'" class="btn-create-agent" @click="openCreate"><i class="fa-solid fa-plus"></i><span>注册新智能体</span></button>
+          <button v-if="user.role !== 'VIEWER'" class="btn-create-agent" @click="openCreate"><i class="fa-solid fa-plus"></i><span>新建智能体</span></button>
         </div>
         <section class="stats-grid">
-          <div class="stat-card"><div class="stat-info"><span class="stat-label">智能体资产总数</span><span class="stat-value">{{ agentAssetTotal }}</span></div><div class="stat-icon-wrapper icon-blue"><i class="fa-solid fa-layer-group"></i></div></div>
-          <div class="stat-card"><div class="stat-info"><span class="stat-label">在线运行智能体</span><span class="stat-value">{{ runningAgentTotal }}</span></div><div class="stat-icon-wrapper icon-emerald"><i class="fa-solid fa-bolt-lightning"></i></div></div>
-          <div class="stat-card"><div class="stat-info"><span class="stat-label">累计调度调用量</span><span class="stat-value">{{ Number(stats.totalCalls || 0).toLocaleString() }}</span></div><div class="stat-icon-wrapper icon-purple"><i class="fa-solid fa-comments"></i></div></div>
-          <div class="stat-card"><div class="stat-info"><span class="stat-label">平均响应耗时</span><span class="stat-value">{{ stats.avgResponseTimeMs || 0 }}ms</span></div><div class="stat-icon-wrapper icon-amber"><i class="fa-solid fa-stopwatch"></i></div></div>
+          <div class="stat-card"><div class="stat-info"><span class="stat-label">智能体总数</span><span class="stat-value">{{ agentAssetTotal }}</span></div><div class="stat-icon-wrapper icon-blue"><i class="fa-solid fa-layer-group"></i></div></div>
+          <div class="stat-card"><div class="stat-info"><span class="stat-label">运行中</span><span class="stat-value">{{ runningAgentTotal }}</span></div><div class="stat-icon-wrapper icon-emerald"><i class="fa-solid fa-bolt-lightning"></i></div></div>
+          <div class="stat-card"><div class="stat-info"><span class="stat-label">累计调用</span><span class="stat-value">{{ Number(stats.totalCalls || 0).toLocaleString() }}</span></div><div class="stat-icon-wrapper icon-purple"><i class="fa-solid fa-comments"></i></div></div>
+          <div class="stat-card"><div class="stat-info"><span class="stat-label">平均响应</span><span class="stat-value">{{ stats.avgResponseTimeMs || 0 }}ms</span></div><div class="stat-icon-wrapper icon-amber"><i class="fa-solid fa-stopwatch"></i></div></div>
         </section>
         <section class="toolbar-section">
           <div class="search-box-wrapper">
@@ -322,7 +304,7 @@
                 <!-- 顶部 Header: 头像 + 标题行 + 运行状态 -->
                 <div class="agent-card-header">
                   <div class="agent-meta-left">
-                    <div class="agent-avatar-badge">{{ a.avatar || '🤖' }}</div>
+                    <Monogram :name="a.name" :size="36" />
                     <div class="agent-title-box">
                       <div class="agent-title-row">
                         <h3 :title="a.name">{{ a.name }}</h3>
@@ -439,7 +421,7 @@
                   <tr v-for="a in agents" :key="a.id">
                     <td>
                       <div class="table-agent-meta">
-                        <div class="table-agent-avatar">{{ a.avatar || '🤖' }}</div>
+                        <Monogram :name="a.name" :size="30" />
                         <div class="table-agent-info">
                           <div class="table-agent-title-row">
                             <span class="table-agent-title" :title="a.name">{{ a.name }}</span>
@@ -603,13 +585,7 @@
             <div class="form-group">
               <label class="form-label">调度大模型</label>
               <div class="form-control-styled" style="display:flex;align-items:center;min-height:40px;">{{ routedModelLabel }}</div>
-              <p class="section-hint" style="margin-top:6px;">由模型网关的默认通道决定，请到「AI 引擎与模型网关」中修改</p>
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">智能体业务头像</label>
-            <div class="emoji-selector-list">
-              <button v-for="e in emojis" :key="e" type="button" class="emoji-btn" :class="{ active: form.avatar === e }" @click="form.avatar = e">{{ e }}</button>
+              <p class="section-hint" style="margin-top:6px;">由模型网关的默认通道决定，请到「模型网关」中修改</p>
             </div>
           </div>
           <div class="form-row-2">
@@ -665,11 +641,11 @@
     <div class="modal-dialog" style="max-width: 520px;">
       <div class="modal-header">
         <div style="display: flex; align-items: center; gap: 10px;">
-          <div style="width: 36px; height: 36px; border-radius: 10px; background: rgba(59, 130, 246, 0.15); display: flex; align-items: center; justify-content: center; color: #60a5fa; font-size: 1.1rem;">
+          <div style="width: 36px; height: 36px; border-radius: 10px; background: var(--brand-soft-2); display: flex; align-items: center; justify-content: center; color: var(--brand-text); font-size: 1rem;">
             <i class="fa-solid fa-user-gear"></i>
           </div>
           <div>
-            <h3 style="margin: 0; font-size: 1.15rem;">个人中心与账号安全</h3>
+            <h3 style="margin: 0; font-size: 1rem;">个人中心</h3>
             <span style="font-size: 0.8rem; color: var(--text-secondary);">管理个人昵称与安全登录密码</span>
           </div>
         </div>
@@ -680,13 +656,13 @@
         <!-- Account Info Summary -->
         <div style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; display: flex; align-items: center; justify-content: space-between;">
           <div style="display: flex; align-items: center; gap: 12px;">
-            <img :src="userAvatar" style="width: 44px; height: 44px; border-radius: 12px; object-fit: cover; border: 1px solid var(--border-color);" alt="avatar">
+            <Monogram :name="user.nickname || user.username" :size="44" shape="circle" />
             <div>
               <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary);">{{ user.nickname || user.username }}</div>
               <div style="font-size: 0.8rem; color: var(--text-muted); font-family: monospace;">@{{ user.username }}</div>
             </div>
           </div>
-          <div style="font-size: 0.78rem; font-weight: 600; padding: 4px 10px; border-radius: 6px; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);">
+          <div style="font-size: 0.78rem; font-weight: 500; padding: 3px 10px; border-radius: 6px; color: var(--text-secondary); border: 1px solid var(--border-color);">
             <span>{{ user.roleName || (isSuperAdmin ? '超级管理员' : (user.role === 'VIEWER' ? '只读观察员' : '开发者')) }}</span>
           </div>
         </div>
@@ -708,7 +684,7 @@
 
         <div style="border-top: 1px solid var(--border-color); padding-top: 16px;">
           <h4 style="margin: 0 0 12px 0; font-size: 0.95rem; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
-            <i class="fa-solid fa-lock" style="color: var(--accent-amber);"></i>
+            <i class="fa-solid fa-lock" style="color: var(--text-muted);"></i>
             <span>修改登录密码</span>
           </h4>
           <form style="display: flex; flex-direction: column; gap: 12px;" @submit.prevent="saveUserPassword">
@@ -807,8 +783,23 @@ import UserManagementPanel from '../components/UserManagementPanel.vue'
 import RolePermissionPanel from '../components/RolePermissionPanel.vue'
 import SecurityOpenPanel from '../components/SecurityOpenPanel.vue'
 import AgentLogo from '../components/AgentLogo.vue'
-import defaultAdminAvatar from '../assets/avatar-admin.jpg'
-import defaultDevAvatar from '../assets/avatar-dev.jpg'
+import Monogram from '../components/Monogram.vue'
+import {
+  LayoutDashboard, Bot, LayoutTemplate, Wrench, BookOpen, Network, Users, ShieldCheck, KeyRound,
+  Circle, PanelLeftClose, LogOut, Sun, Moon
+} from 'lucide-vue-next'
+
+const navIcons = {
+  overview: LayoutDashboard,
+  agents: Bot,
+  templates: LayoutTemplate,
+  tools: Wrench,
+  knowledge: BookOpen,
+  gateway: Network,
+  users: Users,
+  roles: ShieldCheck,
+  security: KeyRound
+}
 
 defineOptions({ name: 'DashboardView' })
 
@@ -924,29 +915,17 @@ const isSuperAdmin = computed(() => {
 })
 const isViewer = computed(() => user.value?.role === 'VIEWER')
 
-const userAvatar = computed(() => {
-  const name = user.value?.username
-  const av = user.value?.avatar
-  if (name === 'developer' || user.value?.role === 'DEVELOPER') {
-    if (!av || av.includes('dicebear') || av.includes('bottts') || av.includes('avatar-dev')) {
-      return defaultDevAvatar
-    }
-    return av
-  }
-  return defaultAdminAvatar
-})
-
 const pageTitle = computed(() => {
-  if (currentTab.value === 'overview') return '概览仪表盘 (Overview & Analytics)'
-  if (currentTab.value === 'agents') return 'Agents 智能体资产管理'
-  if (currentTab.value === 'templates') return '行业场景模版中心 (Agent Templates)'
-  if (currentTab.value === 'tools') return '平台工具管理 (Shared Tools)'
-  if (currentTab.value === 'knowledge') return '企业私有知识库 (RAG)'
-  if (currentTab.value === 'gateway') return 'AI 引擎与模型网关 (LLM / Embedding / Dify)'
-  if (currentTab.value === 'users') return '企业租户用户管理 (User Management)'
-  if (currentTab.value === 'roles') return '系统固定角色与权限矩阵 (Roles & Permissions)'
-  if (currentTab.value === 'security') return '开放与安全 (Open API & Guardrails)'
-  return 'AgentMatrix 企业控制台'
+  if (currentTab.value === 'overview') return '概览'
+  if (currentTab.value === 'agents') return '智能体'
+  if (currentTab.value === 'templates') return '场景模板'
+  if (currentTab.value === 'tools') return '工具'
+  if (currentTab.value === 'knowledge') return '知识库'
+  if (currentTab.value === 'gateway') return '模型网关'
+  if (currentTab.value === 'users') return '用户'
+  if (currentTab.value === 'roles') return '角色与权限'
+  if (currentTab.value === 'security') return '开放与安全'
+  return 'AgentMatrix'
 })
 
 // Navigation taxonomy structure (4 Primary Enterprise Categories)
@@ -954,13 +933,13 @@ const navGroups = computed(() => {
   const groups = [
     {
       id: 'metrics',
-      title: '运行监控',
+      title: '监控',
       enTitle: 'METRICS',
       icon: 'fa-solid fa-chart-line',
       items: [
         {
           id: 'overview',
-          name: '概览分析',
+          name: '概览',
           title: '概览分析 (Token消耗与指标)',
           icon: 'fa-solid fa-chart-pie'
         }
@@ -968,26 +947,26 @@ const navGroups = computed(() => {
     },
     {
       id: 'studio',
-      title: '智能体工程',
+      title: '构建',
       enTitle: 'AGENT STUDIO',
       icon: 'fa-solid fa-wand-magic-sparkles',
       items: [
         {
           id: 'agents',
-          name: 'Agents 资产',
+          name: '智能体',
           title: 'Agents 智能体资产管理',
           icon: 'fa-solid fa-robot',
           count: stats.value.totalAgents || agents.value.length || 0
         },
         {
           id: 'templates',
-          name: '场景模版中心',
+          name: '场景模板',
           title: '场景模版中心 (预置行业智能体)',
           icon: 'fa-solid fa-layer-group'
         },
         {
           id: 'tools',
-          name: '工具管理',
+          name: '工具',
           title: '平台工具管理 (全智能体共用)',
           icon: 'fa-solid fa-screwdriver-wrench'
         }
@@ -995,13 +974,13 @@ const navGroups = computed(() => {
     },
     {
       id: 'knowledge',
-      title: '知识与检索',
+      title: '数据',
       enTitle: 'DATA & RAG',
       icon: 'fa-solid fa-database',
       items: [
         {
           id: 'knowledge',
-          name: '企业私有知识库',
+          name: '知识库',
           title: '企业私有知识库 (RAG检索)',
           icon: 'fa-solid fa-book-bookmark'
         }
@@ -1015,13 +994,13 @@ const navGroups = computed(() => {
   if (isSuperAdmin.value) {
     govItems.push({
       id: 'gateway',
-      name: 'AI 引擎与模型网关',
-      title: 'AI 引擎与模型网关 (LLM / Embedding / Dify)',
+      name: '模型网关',
+      title: '模型网关',
       icon: 'fa-solid fa-server'
     })
     govItems.push({
       id: 'users',
-      name: '平台用户管理',
+      name: '用户',
       title: '企业租户用户管理 (RBAC)',
       icon: 'fa-solid fa-users-gear'
     })
@@ -1029,7 +1008,7 @@ const navGroups = computed(() => {
 
   govItems.push({
     id: 'roles',
-    name: '角色与权限矩阵',
+    name: '角色与权限',
     title: '系统固定角色与权限对照矩阵',
     icon: 'fa-solid fa-shield-halved'
   })
@@ -1038,14 +1017,12 @@ const navGroups = computed(() => {
     id: 'security',
     name: '开放与安全',
     title: '开放凭证、接入终端、护栏策略与审计',
-    icon: 'fa-solid fa-fingerprint',
-    badge: 'GATEWAY',
-    badgeType: 'emerald'
+    icon: 'fa-solid fa-fingerprint'
   })
 
   groups.push({
     id: 'governance',
-    title: isSuperAdmin.value ? '企业系统治理' : '平台规则与安全',
+    title: isSuperAdmin.value ? '管理' : '规则与安全',
     enTitle: isSuperAdmin.value ? 'GOVERNANCE' : 'SECURITY',
     icon: isSuperAdmin.value ? 'fa-solid fa-sliders' : 'fa-solid fa-shield-cat',
     items: govItems
@@ -1506,7 +1483,38 @@ async function copyAgent(agent) {
 
 function chartTheme() {
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light'
-  return { text: isDark ? '#94a3b8' : '#64748b', grid: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }
+  return {
+    text: isDark ? '#8a857c' : '#8e897f',
+    grid: isDark ? 'rgba(240,230,215,0.06)' : 'rgba(60,45,30,0.06)',
+    primary: isDark ? '#e08a6d' : '#d97757',
+    primaryFill: isDark ? 'rgba(224,138,109,0.12)' : 'rgba(217,119,87,0.10)',
+    secondary: isDark ? '#6b665e' : '#c2bbae',
+    empty: isDark ? 'rgba(240,230,215,0.07)' : 'rgba(60,45,30,0.07)',
+    // 同一暖色相的明度阶梯，避免多色混杂
+    ramp: isDark
+      ? ['#e08a6d', '#b8674c', '#f0b39c', '#8c4d38', '#f5cfc0', '#6b665e']
+      : ['#d97757', '#e8a58c', '#a8522f', '#f2cdbf', '#6b5c4f', '#c2bbae']
+  }
+}
+
+function chartBaseOptions(colors, { legend = true } = {}) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: {
+        display: legend,
+        align: 'end',
+        labels: { color: colors.text, font: { size: 12 }, usePointStyle: true, pointStyle: 'circle', boxWidth: 6, boxHeight: 6, padding: 16 }
+      },
+      tooltip: { padding: 10, cornerRadius: 6, displayColors: true, boxWidth: 8, boxHeight: 8, usePointStyle: true }
+    },
+    scales: {
+      x: { ticks: { color: colors.text, font: { size: 11 } }, grid: { display: false }, border: { display: false } },
+      y: { beginAtZero: true, suggestedMax: 1, ticks: { color: colors.text, font: { size: 11 }, maxTicksLimit: 5 }, grid: { color: colors.grid }, border: { display: false } }
+    }
+  }
 }
 
 function renderCharts() {
@@ -1518,6 +1526,7 @@ function renderCharts() {
   const max = Math.max(0, ...prompt, ...completion)
   const divisor = max >= 1000000 ? 1000000 : (max >= 1000 ? 1000 : 1)
   const unit = divisor === 1000000 ? 'M' : (divisor === 1000 ? 'K' : '')
+  const line = { tension: 0.35, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4 }
 
   if (trendChart) trendChart.destroy()
   trendChart = new Chart(trendCanvas.value, {
@@ -1525,29 +1534,28 @@ function renderCharts() {
     data: {
       labels: trend.map((p) => p.label),
       datasets: [
-        { label: `Prompt Tokens${unit ? ' (' + unit + ')' : ''}`, data: prompt.map((v) => Number((v / divisor).toFixed(2))), borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.15)', tension: 0.35, fill: true },
-        { label: `Completion Tokens${unit ? ' (' + unit + ')' : ''}`, data: completion.map((v) => Number((v / divisor).toFixed(2))), borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', tension: 0.35, fill: true }
+        { ...line, label: `输入${unit ? ' (' + unit + ')' : ''}`, data: prompt.map((v) => Number((v / divisor).toFixed(2))), borderColor: colors.primary, backgroundColor: colors.primaryFill, fill: true },
+        { ...line, label: `输出${unit ? ' (' + unit + ')' : ''}`, data: completion.map((v) => Number((v / divisor).toFixed(2))), borderColor: colors.secondary, backgroundColor: 'transparent', fill: false }
       ]
     },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: colors.text, font: { size: 11 } } } }, scales: { x: { ticks: { color: colors.text }, grid: { color: colors.grid } }, y: { ticks: { color: colors.text }, grid: { color: colors.grid } } } }
+    options: chartBaseOptions(colors)
   })
 
   const modelMap = stats.value.modelDistribution || {}
   const labels = Object.keys(modelMap)
-  const palette = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#64748b']
   if (donutChart) donutChart.destroy()
   donutChart = new Chart(donutCanvas.value, {
     type: 'doughnut',
-    data: { labels: labels.length ? labels : ['暂无数据'], datasets: [{ data: labels.length ? labels.map((k) => modelMap[k]) : [1], backgroundColor: labels.length ? labels.map((_, i) => palette[i % palette.length]) : ['#64748b'], borderWidth: 0 }] },
-    options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'right', labels: { color: colors.text, font: { size: 11 } } } } }
+    data: { labels: labels.length ? labels : ['暂无数据'], datasets: [{ data: labels.length ? labels.map((k) => modelMap[k]) : [1], backgroundColor: labels.length ? labels.map((_, i) => colors.ramp[i % colors.ramp.length]) : [colors.empty], borderWidth: 0, hoverOffset: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '78%', plugins: { legend: { position: 'right', labels: { color: colors.text, font: { size: 12 }, usePointStyle: true, pointStyle: 'circle', boxWidth: 6, boxHeight: 6, padding: 14 } }, tooltip: { enabled: labels.length > 0 } } }
   })
 
   const latency = stats.value.latencyByCategory || []
   if (latencyChart) latencyChart.destroy()
   latencyChart = new Chart(latencyCanvas.value, {
     type: 'bar',
-    data: { labels: latency.map((r) => r.category), datasets: [{ label: '平均响应耗时 (ms)', data: latency.map((r) => r.avgLatencyMs || 0), backgroundColor: 'rgba(59,130,246,0.8)', borderRadius: 6 }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: colors.text, font: { size: 11 } } } }, scales: { x: { ticks: { color: colors.text }, grid: { display: false } }, y: { ticks: { color: colors.text }, grid: { color: colors.grid } } } }
+    data: { labels: latency.map((r) => r.category), datasets: [{ label: '平均响应 (ms)', data: latency.map((r) => r.avgLatencyMs || 0), backgroundColor: colors.primary, borderRadius: 4, maxBarThickness: 28 }] },
+    options: chartBaseOptions(colors, { legend: false })
   })
 }
 

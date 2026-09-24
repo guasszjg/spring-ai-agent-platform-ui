@@ -5,7 +5,7 @@
       <!-- 头部 Hero 工具条 -->
       <div class="kb-hero-toolbar">
         <div>
-          <h2 class="kb-page-title">企业私有知识库中心 (Enterprise RAG)</h2>
+          <h2 class="kb-page-title">知识库</h2>
         </div>
         <div class="kb-hero-actions">
           <button v-if="canSyncDify" class="btn-secondary kb-sync-btn" :disabled="syncing" title="从 Dify 导入或同步已有知识库" @click="syncFromDify">
@@ -177,11 +177,11 @@
           @click="openKbDetail(kb)"
         >
           <div class="kb-card-header">
-            <div class="kb-card-avatar">{{ kb.avatar || '📚' }}</div>
+            <Monogram :name="kb.name" :size="40" />
             <div class="kb-card-title-group">
               <h3 class="kb-card-name" :title="kb.name">{{ kb.name }}</h3>
               <div class="kb-card-badges">
-                <span v-if="kb.isSystem" class="provider-badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3);">
+                <span v-if="kb.isSystem" class="provider-badge" style="background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.3);">
                   <i class="fa-solid fa-earth-americas"></i> 公共
                 </span>
                 <span v-else class="provider-badge" :style="isOwnKb(kb)
@@ -279,7 +279,7 @@
             <tr v-for="kb in displayKbList" :key="kb.id" class="table-row-hover" @click="openKbDetail(kb)">
               <td class="col-kb-name">
                 <div class="kb-table-title-cell">
-                  <span class="kb-table-avatar">{{ kb.avatar || '📚' }}</span>
+                  <Monogram :name="kb.name" :size="34" />
                   <div class="kb-table-info">
                     <div class="kb-table-name-row">
                       <span class="kb-table-name" :title="kb.name">{{ kb.name }}</span>
@@ -429,7 +429,7 @@
         </button>
 
         <div class="kb-detail-hero">
-          <div class="kb-detail-avatar">{{ selectedKb?.avatar || '📚' }}</div>
+          <Monogram :name="selectedKb?.name" :size="44" />
           <div class="kb-detail-meta">
             <div class="kb-title-row">
               <h2>{{ selectedKb?.name }}</h2>
@@ -455,7 +455,7 @@
         </div>
 
         <!-- 只读权限提示条 -->
-        <div v-if="!canManageKb(selectedKb)" style="margin: 14px 0 0 0; padding: 10px 16px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 8px; font-size: 13px; color: #60a5fa; display: flex; align-items: center; gap: 8px;">
+        <div v-if="!canManageKb(selectedKb)" style="margin: 14px 0 0 0; padding: 10px 16px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 8px; font-size: 13px; display: flex; align-items: center; gap: 8px;">
           <i class="fa-solid fa-shield-halved"></i>
           <span>您当前仅具备该知识库的只读使用权限（归属于: {{ selectedKb?.isSystem ? '系统公共' : (selectedKb?.ownerUsername || '其他开发者') }}），无法新增或修改文档与问答。</span>
         </div>
@@ -879,7 +879,7 @@
                 <i class="fa-solid fa-code-branch"></i> 索引快照: <strong>V{{ activeIndexVersion.versionNo }} ({{ activeIndexVersion.status }})</strong>
               </span>
               <button type="button" class="badge-recall-version btn-offline-badge" title="查看 100% 私有化离线闭环自检报告" @click="openOfflineReadinessModal()">
-                <i class="fa-solid fa-shield-halved" style="color: #10b981;"></i> 离线闭环: <strong style="color: #34d399;">就绪</strong>
+                <i class="fa-solid fa-shield-halved"></i> 离线闭环: <strong style="color: #34d399;">就绪</strong>
               </button>
             </div>
             <p class="retrieval-header-desc">
@@ -1078,7 +1078,7 @@
             <div class="param-item">
               <div class="param-label-row">
                 <label class="param-label">上下文 Token 预算上限 (Budget Pruning)</label>
-                <span class="param-val-badge" style="color: #818cf8;">{{ testParams.maxContextTokens }} Tokens</span>
+                <span class="param-val-badge">{{ testParams.maxContextTokens }} Tokens</span>
               </div>
               <input
                 type="range"
@@ -1136,7 +1136,7 @@
             <div class="param-item">
               <div class="param-label-row">
                 <label class="param-label">图文跨模态检索 (Multimodal RAG)</label>
-                <span class="param-val-badge" style="color: #c084fc;">
+                <span class="param-val-badge">
                   {{ testParams.queryType === 'IMAGE' ? '以图搜图' : '以文搜图 / 混合检索' }}
                 </span>
               </div>
@@ -1288,11 +1288,11 @@
                 生效引擎: <strong>{{ retrievalResult.engineResolution?.effectiveEngine || 'DIFY' }}</strong>
                 <span class="engine-src-tag">({{ formatEngineSource(retrievalResult.engineResolution?.source) }})</span>
               </span>
-              <span v-if="retrievalResult.metrics?.totalTokens" class="result-stat-chip" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3);">
+              <span v-if="retrievalResult.metrics?.totalTokens" class="result-stat-chip" style="background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.3);">
                 <i class="fa-solid fa-coins"></i>
                 Token 消耗: <strong>{{ retrievalResult.metrics.totalTokens }}</strong> / {{ retrievalResult.metrics.maxContextTokens || 3000 }}
               </span>
-              <span v-if="retrievalResult.metrics?.rewrittenQuery && retrievalResult.metrics.rewrittenQuery !== retrievalResult.query" class="result-stat-chip" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);">
+              <span v-if="retrievalResult.metrics?.rewrittenQuery && retrievalResult.metrics.rewrittenQuery !== retrievalResult.query" class="result-stat-chip" style="background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3);">
                 <i class="fa-solid fa-wand-magic-sparkles"></i>
                 改写后 Query: <strong>"{{ retrievalResult.metrics.rewrittenQuery }}"</strong>
               </span>
@@ -1326,7 +1326,7 @@
                     <i :class="chunk.chunkType === 'GRAPH' ? 'fa-solid fa-circle-nodes text-cyan' : ((chunk.imageUrl || chunk.metadata?.isImage || chunk.chunkType === 'IMAGE') ? 'fa-solid fa-image text-purple' : 'fa-solid fa-file-lines')"></i>
                     {{ chunk.sourceName || '未命名文档' }}
                   </span>
-                  <span v-if="chunk.metadata?.parentExpanded" class="tag-parent-expanded" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); font-size: 11px; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                  <span v-if="chunk.metadata?.parentExpanded" class="tag-parent-expanded" style="background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.3); font-size: 11px; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
                     <i class="fa-solid fa-diagram-project"></i> 已展开父块
                   </span>
                   <span v-if="chunk.metadata?.semanticCacheHit" class="tag-cache-hit">
@@ -1569,7 +1569,7 @@
                         <span class="chunk-doc-title" :title="chunk.sourceName">
                           <i class="fa-solid fa-file-lines"></i> {{ chunk.sourceName || '未命名文档' }}
                         </span>
-                        <span v-if="chunk.metadata?.parentExpanded" class="tag-parent-expanded" style="background: rgba(168, 85, 247, 0.15); color: #c084fc; font-size: 11px; padding: 1px 6px; border-radius: 4px;">
+                        <span v-if="chunk.metadata?.parentExpanded" class="tag-parent-expanded" style="background: rgba(168, 85, 247, 0.15); font-size: 11px; padding: 1px 6px; border-radius: 4px;">
                           <i class="fa-solid fa-diagram-project"></i> 父块展开
                         </span>
                       </div>
@@ -1752,7 +1752,7 @@
     <div class="modal-backdrop" :class="{ open: kbModalOpen }">
       <div class="modal-dialog" style="max-width: 680px;">
         <div class="modal-header">
-          <h3>{{ kbForm.id ? '编辑知识库配置' : (kbForm.provider === 'SPRING_AI' ? '创建新知识库 (Spring AI 原生自研)' : '创建新知识库 (Dify RAG)') }}</h3>
+          <h3>{{ kbForm.id ? '编辑知识库配置' : (kbForm.provider === 'SPRING_AI' ? '新建知识库' : '新建知识库（Dify）') }}</h3>
           <button class="btn-modal-close" @click="kbModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <form @submit.prevent="saveKnowledgeBase">
@@ -1762,21 +1762,6 @@
               <input v-model="kbForm.name" class="form-control-styled" placeholder="例如：产品知识库、售后排障手册..." required>
             </div>
 
-            <div class="form-group">
-              <label class="form-label">知识库头像 / 图标</label>
-              <div class="emoji-selector-list">
-                <button
-                  v-for="em in emojiList"
-                  :key="em"
-                  type="button"
-                  class="emoji-btn"
-                  :class="{ active: kbForm.avatar === em }"
-                  @click="kbForm.avatar = em"
-                >
-                  {{ em }}
-                </button>
-              </div>
-            </div>
 
             <div class="form-group">
               <label class="form-label">底层 RAG 服务适配 *</label>
@@ -1784,14 +1769,13 @@
                 <div
                   class="provider-radio-card"
                   :class="{ active: kbForm.provider === 'SPRING_AI', disabled: !!kbForm.id }"
-                  :style="kbForm.provider === 'SPRING_AI' ? 'border-color: #a855f7; background: rgba(168, 85, 247, 0.08);' : ''"
                   @click="!kbForm.id && onProviderSelect('SPRING_AI')"
                 >
                   <div class="provider-radio-title" style="display: flex; align-items: center; justify-content: space-between;">
-                    <span><i class="fa-solid fa-brain" style="color: #a855f7;"></i> Spring AI 原生自研</span>
-                    <span class="tag-recommend" style="background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4);">自研原生</span>
+                    <span><i class="fa-solid fa-brain"></i> Spring AI 原生自研</span>
+                    <span class="tag-recommend">自研</span>
                   </div>
-                  <div class="provider-radio-desc" style="font-size: 12px; margin-top: 6px; color: #94a3b8; line-height: 1.5;">
+                  <div class="provider-radio-desc" style="font-size: 12px; margin-top: 6px; line-height: 1.5;">
                     本地智能切片管线 + 1024 维密集向量化 + 双路混合检索，全流程自主可控。
                   </div>
                 </div>
@@ -1799,14 +1783,13 @@
                 <div
                   class="provider-radio-card"
                   :class="{ active: kbForm.provider === 'DIFY', disabled: !!kbForm.id }"
-                  :style="kbForm.provider === 'DIFY' ? 'border-color: #3b82f6; background: rgba(59, 130, 246, 0.08);' : ''"
                   @click="!kbForm.id && onProviderSelect('DIFY')"
                 >
                   <div class="provider-radio-title" style="display: flex; align-items: center; justify-content: space-between;">
                     <span><i class="fa-solid fa-link text-blue"></i> Dify 外挂 RAG</span>
-                    <span style="font-size: 10.5px; padding: 1px 6px; border-radius: 4px; background: rgba(59, 130, 246, 0.15); color: #60a5fa;">外挂</span>
+                    <span class="tag-recommend">外挂</span>
                   </div>
-                  <div class="provider-radio-desc" style="font-size: 12px; margin-top: 6px; color: #94a3b8; line-height: 1.5;">
+                  <div class="provider-radio-desc" style="font-size: 12px; margin-top: 6px; line-height: 1.5;">
                     与配置好的 Dify 引擎双向 1:1 映射，由 Dify 远程 API 托管切片与向量索引。
                   </div>
                 </div>
@@ -1823,8 +1806,8 @@
                 <!-- 自研引擎展示原生向量模型 -->
                 <div v-if="kbForm.provider === 'SPRING_AI'" class="embedding-model-item">
                   <div class="model-info-row">
-                    <span class="model-name"><i class="fa-solid fa-cube" style="color: #a855f7;"></i> 平台原生向量管线 (1024 维)</span>
-                    <span class="tag-recommend" style="background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4);">自研原生</span>
+                    <span class="model-name"><i class="fa-solid fa-cube"></i> 平台原生向量管线 (1024 维)</span>
+                    <span class="tag-recommend">自研</span>
                   </div>
                   <div class="model-desc">
                     由 Spring AI 平台本地服务生成 1024 维密集特征向量并落库于 PostgreSQL。未配置外部商业 Key 时自动启用平台内置高维特征投影，零依赖且高可用。
@@ -1858,7 +1841,7 @@
                   @click="kbForm.searchMethod = 'hybrid_search'"
                 >
                   <div class="retrieval-card-top">
-                    <i class="fa-solid fa-layer-group" style="color: #6366f1;"></i>
+                    <i class="fa-solid fa-layer-group"></i>
                     <span class="retrieval-card-title">混合检索 (Hybrid)</span>
                     <span class="tag-recommend">推荐</span>
                   </div>
@@ -1870,7 +1853,7 @@
                   @click="kbForm.searchMethod = 'semantic_search'"
                 >
                   <div class="retrieval-card-top">
-                    <i class="fa-solid fa-brain" style="color: #0284c7;"></i>
+                    <i class="fa-solid fa-brain"></i>
                     <span class="retrieval-card-title">向量检索 (Semantic)</span>
                   </div>
                   <p class="retrieval-card-desc">生成查询向量并搜索最相似文本分段，擅长理解语义、意图和近义表达</p>
@@ -1881,7 +1864,7 @@
                   @click="kbForm.searchMethod = 'full_text_search'"
                 >
                   <div class="retrieval-card-top">
-                    <i class="fa-solid fa-font" style="color: #059669;"></i>
+                    <i class="fa-solid fa-font"></i>
                     <span class="retrieval-card-title">全文检索 (Full-text)</span>
                   </div>
                   <p class="retrieval-card-desc">基于传统分词与倒排索引，擅长精准匹配专有名词、产品型号与特定编号</p>
@@ -1939,11 +1922,11 @@
               <div v-if="kbForm.rerankMode === 'weighted_score'" class="weights-control-card">
                 <div class="weights-labels-row">
                   <div class="weight-label-item">
-                    <span class="weight-title"><i class="fa-solid fa-brain" style="color: #3b82f6;"></i> 语义检索权重 (Vector)</span>
-                    <span class="weight-value" style="color: #3b82f6;">{{ Math.round((kbForm.vectorWeight || 0.7) * 100) }}% ({{ kbForm.vectorWeight || 0.7 }})</span>
+                    <span class="weight-title"><i class="fa-solid fa-brain"></i> 语义检索权重 (Vector)</span>
+                    <span class="weight-value">{{ Math.round((kbForm.vectorWeight || 0.7) * 100) }}% ({{ kbForm.vectorWeight || 0.7 }})</span>
                   </div>
                   <div class="weight-label-item" style="text-align: right;">
-                    <span class="weight-title"><i class="fa-solid fa-font" style="color: #10b981;"></i> 关键字检索权重 (Keyword)</span>
+                    <span class="weight-title"><i class="fa-solid fa-font"></i> 关键字检索权重 (Keyword)</span>
                     <span class="weight-value" style="color: #10b981;">{{ Math.round((kbForm.keywordWeight || 0.3) * 100) }}% ({{ kbForm.keywordWeight || 0.3 }})</span>
                   </div>
                 </div>
@@ -1977,7 +1960,7 @@
               <!-- 方案 2: Rerank 模型 (Reranking model) -->
               <div v-else class="rerank-model-card">
                 <div class="model-info-row">
-                  <span class="model-name"><i class="fa-solid fa-arrows-spin" style="color: #6366f1;"></i> {{ kbForm.rerankModel || 'qwen3-rerank' }}</span>
+                  <span class="model-name"><i class="fa-solid fa-arrows-spin"></i> {{ kbForm.rerankModel || 'qwen3-rerank' }}</span>
                   <span class="tag-recommend">通义千问重排模型</span>
                 </div>
                 <div class="model-desc">
@@ -2298,6 +2281,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
+import Monogram from './Monogram.vue'
 import { accountLabel } from '../composables/useAccountOptions'
 
 const props = defineProps({
