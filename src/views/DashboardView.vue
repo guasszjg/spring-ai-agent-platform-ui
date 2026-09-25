@@ -174,7 +174,7 @@
               <div v-for="item in (stats.ranking || [])" :key="item.rank" class="ranking-item-row">
                 <div class="ranking-meta-left">
                   <div class="ranking-badge-idx" :class="item.rank <= 3 ? 'top-' + item.rank : ''">{{ item.rank }}</div>
-                  <Monogram :name="item.name" :size="28" />
+                  <AgentAvatar :name="item.name" :size="30" />
                   <div>
                     <div class="ranking-name">{{ item.name }}</div>
                     <div class="ranking-model">{{ item.model }}</div>
@@ -304,7 +304,7 @@
                 <!-- 顶部 Header: 头像 + 标题行 + 运行状态 -->
                 <div class="agent-card-header">
                   <div class="agent-meta-left">
-                    <Monogram :name="a.name" :size="36" />
+                    <AgentAvatar :name="a.name" :size="38" />
                     <div class="agent-title-box">
                       <div class="agent-title-row">
                         <h3 :title="a.name">{{ a.name }}</h3>
@@ -421,7 +421,7 @@
                   <tr v-for="a in agents" :key="a.id">
                     <td>
                       <div class="table-agent-meta">
-                        <Monogram :name="a.name" :size="30" />
+                        <AgentAvatar :name="a.name" :size="32" />
                         <div class="table-agent-info">
                           <div class="table-agent-title-row">
                             <span class="table-agent-title" :title="a.name">{{ a.name }}</span>
@@ -785,6 +785,7 @@ import SecurityOpenPanel from '../components/SecurityOpenPanel.vue'
 import AgentLogo from '../components/AgentLogo.vue'
 import Monogram from '../components/Monogram.vue'
 import AgentMascot from '../components/AgentMascot.vue'
+import AgentAvatar from '../components/AgentAvatar.vue'
 import {
   LayoutDashboard, Bot, LayoutTemplate, Wrench, BookOpen, Network, Users, ShieldCheck, KeyRound,
   Circle, PanelLeftClose, LogOut, Sun, Moon

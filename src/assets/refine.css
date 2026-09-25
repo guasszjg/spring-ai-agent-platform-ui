@@ -1730,3 +1730,36 @@ input[type="range"] {
 .empty-state .empty-mascot {
   margin: 0 auto 14px;
 }
+
+/* ---------- 智能体列表视图：ID / 提示词单元格去蓝色 ---------- */
+.table-id-pill,
+.table-id-pill .id-tag-label,
+.table-id-pill .id-val,
+.table-id-pill .id-lead-icon {
+  color: var(--text-muted) !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+.table-id-pill .id-val {
+  color: var(--text-secondary) !important;
+  font-weight: 500 !important;
+}
+
+.table-prompt-cell {
+  background: var(--surface-subtle) !important;
+  border: none !important;
+  color: var(--text-secondary) !important;
+}
+
+.table-prompt-cell .prompt-cell-icon {
+  color: var(--text-muted) !important;
+}
+
+.table-code-pill,
+.table-code-pill .code-val,
+.table-code-pill i {
+  color: var(--text-muted) !important;
+  background: transparent !important;
+  border: none !important;
+}

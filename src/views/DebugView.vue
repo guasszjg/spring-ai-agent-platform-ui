@@ -8,7 +8,7 @@
         </router-link>
         <div class="header-agent-badge">
           <h2 class="header-agent-title">
-            <Monogram v-if="agent" :name="agent.name" :size="26" />
+            <AgentAvatar v-if="agent" :name="agent.name" :size="28" />
             <span>{{ agent ? agent.name : '智能体加载中...' }}</span>
             <span v-if="pageTab === 'orchestrate'" class="header-tag-pill" :class="promptDirty ? 'draft' : 'published'">
               {{ promptDirty ? '未发布' : '已发布' }}
@@ -626,8 +626,8 @@ import AgentLogsPanel from '../components/AgentLogsPanel.vue'
 import AgentMonitorPanel from '../components/AgentMonitorPanel.vue'
 import AgentApiPanel from '../components/AgentApiPanel.vue'
 import ToolGlyph from '../components/ToolGlyph.vue'
-import Monogram from '../components/Monogram.vue'
 import AgentMascot from '../components/AgentMascot.vue'
+import AgentAvatar from '../components/AgentAvatar.vue'
 import { User } from 'lucide-vue-next'
 import { FALLBACK_PLATFORM_TOOLS, matchSavedTool, toDebugTool } from '../composables/platformTools'
 

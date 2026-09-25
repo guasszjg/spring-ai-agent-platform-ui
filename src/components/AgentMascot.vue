@@ -6,6 +6,7 @@
   <svg
     class="agent-mascot"
     :class="{ inverse, animated }"
+    :style="tone ? { '--am-tone': tone } : null"
     :width="size"
     :height="size"
     viewBox="0 0 64 64"
@@ -28,7 +29,9 @@
 defineProps({
   size: { type: Number, default: 40 },
   inverse: { type: Boolean, default: false },
-  animated: { type: Boolean, default: false }
+  animated: { type: Boolean, default: false },
+  // 自定义主体颜色（用于按智能体区分），默认品牌色
+  tone: { type: String, default: '' }
 })
 </script>
 
@@ -40,7 +43,7 @@ defineProps({
 }
 
 .am-body {
-  fill: var(--brand-strong, #c15f3c);
+  fill: var(--am-tone, var(--brand-strong, #c15f3c));
 }
 
 .am-eye {
@@ -48,18 +51,18 @@ defineProps({
 }
 
 .am-antenna {
-  stroke: var(--brand-strong, #c15f3c);
+  stroke: var(--am-tone, var(--brand-strong, #c15f3c));
   stroke-width: 2.6;
   stroke-linecap: round;
 }
 
 .am-signal {
-  fill: var(--brand, #d97757);
+  fill: var(--am-tone, var(--brand, #d97757));
   opacity: 0.28;
 }
 
 .am-signal-core {
-  fill: var(--brand, #d97757);
+  fill: var(--am-tone, var(--brand, #d97757));
 }
 
 /* 反色：放在品牌色背景上 */
