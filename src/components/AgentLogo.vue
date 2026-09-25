@@ -2,6 +2,7 @@
   <!-- 品牌标志：品牌色圆角方块 + 线条 "A" -->
   <svg
     class="agent-logo-mark"
+    :class="{ inverse }"
     :width="size"
     :height="size"
     viewBox="0 0 32 32"
@@ -20,6 +21,11 @@ defineProps({
   size: {
     type: Number,
     default: 32
+  },
+  // 反色：用于品牌色背景之上（白底 + 品牌色线条）
+  inverse: {
+    type: Boolean,
+    default: false
   }
 })
 </script>
@@ -34,10 +40,18 @@ defineProps({
   fill: var(--brand-strong, #c15f3c);
 }
 
+.inverse .mark-bg {
+  fill: #ffffff;
+}
+
 .mark-line {
   stroke: #ffffff;
   stroke-width: 2.4;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.inverse .mark-line {
+  stroke: var(--brand-strong, #c15f3c);
 }
 </style>

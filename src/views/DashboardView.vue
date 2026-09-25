@@ -273,7 +273,7 @@
             <p class="empty-sub-hint" style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">正在从服务端获取最新状态，请稍候</p>
           </div>
           <div v-else-if="!agents.length" class="empty-state">
-            <i class="fa-solid fa-robot"></i>
+            <AgentMascot class="empty-mascot" :size="64" animated />
             <h4>未找到符合条件的智能体</h4>
             <p v-if="keyword || category !== '全部' || scopeFilter !== 'all' || statusFilter" class="empty-sub-hint" style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
               当前筛选条件未匹配到任何资产（{{ scopeFilter !== 'all' ? (scopeFilter === 'mine' ? '专属资产' : '系统公共') : '' }} {{ category !== '全部' ? category : '' }} {{ keyword ? `关键词: "${keyword}"` : '' }} {{ statusFilter ? statusLabel(statusFilter) : '' }}）
@@ -784,6 +784,7 @@ import RolePermissionPanel from '../components/RolePermissionPanel.vue'
 import SecurityOpenPanel from '../components/SecurityOpenPanel.vue'
 import AgentLogo from '../components/AgentLogo.vue'
 import Monogram from '../components/Monogram.vue'
+import AgentMascot from '../components/AgentMascot.vue'
 import {
   LayoutDashboard, Bot, LayoutTemplate, Wrench, BookOpen, Network, Users, ShieldCheck, KeyRound,
   Circle, PanelLeftClose, LogOut, Sun, Moon

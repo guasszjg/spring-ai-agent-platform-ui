@@ -1695,3 +1695,38 @@ input[type="range"] {
   border-color: var(--border-color) !important;
   box-shadow: none !important;
 }
+
+/* ---------- 智能体形象（AgentMascot）的使用位置 ---------- */
+.msg-avatar-bot {
+  background: var(--brand-soft) !important;
+  border-color: transparent !important;
+}
+
+.chat-empty-mascot {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  text-align: center;
+}
+
+.chat-empty-mascot svg {
+  margin-bottom: 8px;
+}
+
+.chat-empty-mascot strong {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 4px;
+}
+
+.chat-empty-mascot span {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.empty-state .empty-mascot {
+  margin: 0 auto 14px;
+}

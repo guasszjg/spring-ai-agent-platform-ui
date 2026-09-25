@@ -1,5 +1,5 @@
 /* ==========================================================
-   登录页：左侧品牌陈述 + 右侧表单，大留白、雾蓝主调、无装饰动效
+   登录页：左侧品牌陈述 + 右侧表单，品牌色块 + 同心弧线 + 编排示意动画
    ========================================================== */
 
 .lg-page {
@@ -10,24 +10,69 @@
   color: var(--text-primary);
 }
 
-/* ---------- 左侧品牌区 ---------- */
+/* ---------- 左侧品牌区：品牌色渐变块 ---------- */
 .lg-brand {
+  --lg-ink: #ffffff;
+  --lg-ink-soft: rgba(255, 255, 255, 0.78);
+  --lg-ink-muted: rgba(255, 255, 255, 0.6);
   position: relative;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  gap: 40px;
   padding: 40px 56px;
+  color: var(--lg-ink);
   background:
-    radial-gradient(ellipse 80% 60% at 0% 100%, var(--brand-soft-2) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 50% at 100% 0%, var(--brand-soft) 0%, transparent 60%),
-    var(--bg-secondary);
-  border-right: 1px solid var(--border-color);
+    radial-gradient(ellipse 90% 70% at 100% 100%, rgba(255, 214, 190, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 60% at 0% 0%, rgba(120, 40, 15, 0.35) 0%, transparent 65%),
+    linear-gradient(155deg, #b4532f 0%, #c96442 38%, #d97757 70%, #e39a7c 100%);
   overflow: hidden;
+  isolation: isolate;
+}
+
+[data-theme="dark"] .lg-brand,
+:root:not([data-theme="light"]) .lg-brand {
+  background:
+    radial-gradient(ellipse 90% 70% at 100% 100%, rgba(224, 138, 109, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 60% at 0% 0%, rgba(40, 14, 6, 0.55) 0%, transparent 65%),
+    linear-gradient(155deg, #6e2d17 0%, #8f3d20 40%, #b4532f 75%, #c96442 100%);
+}
+
+/* 同心弧线纹理 */
+.lg-rings {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.lg-rings circle {
+  fill: none;
+  stroke-width: 1;
+}
+
+.lg-rings-br circle {
+  stroke: rgba(255, 255, 255, 0.13);
+}
+
+.lg-rings-tl circle {
+  stroke: rgba(255, 255, 255, 0.07);
+}
+
+/* 细颗粒质感 */
+.lg-grain {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.16;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 .lg-logo {
-  position: relative;
-  z-index: 1;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -36,10 +81,11 @@
   letter-spacing: -0.01em;
 }
 
-.lg-statement {
-  position: relative;
-  z-index: 1;
-  max-width: 480px;
+.lg-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 44px;
+  max-width: 520px;
 }
 
 .lg-statement h1 {
@@ -47,56 +93,146 @@
   line-height: 1.15;
   font-weight: 600;
   letter-spacing: -0.03em;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .lg-statement p {
   font-size: 16px;
   line-height: 1.6;
-  color: var(--text-secondary);
-  margin-bottom: 36px;
+  color: var(--lg-ink-soft);
 }
 
-.lg-capabilities {
-  list-style: none;
-  display: grid;
-  grid-template-columns: repeat(2, max-content);
-  gap: 12px 40px;
+/* ---------- 编排示意动画 ---------- */
+.lg-orchestra {
+  width: 100%;
+  max-width: 520px;
+  height: auto;
+  overflow: visible;
 }
 
-.lg-capabilities li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  color: var(--text-secondary);
+.lg-orbit {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 1;
+  stroke-dasharray: 2 6;
 }
 
-.lg-capabilities li::before {
-  content: "";
-  width: 14px;
-  height: 1px;
-  background: var(--brand);
+.lg-orbit-dot {
+  fill: #ffffff;
+  opacity: 0.85;
+}
+
+.lg-link {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-width: 1.2;
+}
+
+/* 沿连线流向中心的光点 */
+.lg-pulse {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-dasharray: 7 100;
+  stroke-dashoffset: 107;
+  animation: lg-flow 2.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.8));
+}
+
+@keyframes lg-flow {
+  0% { stroke-dashoffset: 107; opacity: 0; }
+  12% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { stroke-dashoffset: 7; opacity: 0; }
+}
+
+.lg-node rect {
+  fill: rgba(255, 255, 255, 0.12);
+  stroke: rgba(255, 255, 255, 0.4);
+  stroke-width: 1;
+  backdrop-filter: blur(4px);
+}
+
+.lg-node text {
+  fill: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.lg-mascot {
+  filter: drop-shadow(0 12px 22px rgba(60, 20, 5, 0.35));
+}
+
+/* 中心呼吸光圈 */
+.lg-halo {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 1.2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: lg-halo 3.6s ease-out infinite;
+}
+
+.lg-halo-2 {
+  animation-delay: 1.8s;
+}
+
+@keyframes lg-halo {
+  0% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(2.1); opacity: 0; }
+}
+
+/* 背景同心弧线：缓慢向外扩散的涟漪 */
+.lg-rings-br circle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: lg-ripple 9s ease-in-out infinite alternate;
+}
+
+.lg-rings-br circle:nth-child(odd) {
+  animation-delay: -4.5s;
+}
+
+@keyframes lg-ripple {
+  0% { transform: scale(0.97); opacity: 0.55; }
+  100% { transform: scale(1.03); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lg-pulse,
+  .lg-halo,
+  .lg-rings-br circle {
+    animation: none;
+  }
+
+  .lg-pulse,
+  .lg-halo {
+    opacity: 0;
+  }
 }
 
 .lg-foot {
-  position: relative;
-  z-index: 1;
-  font-size: 12px;
-  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  font-size: 13px;
+  color: var(--lg-ink-muted);
 }
 
-/* 极淡的网格底纹，向右下渐隐 */
-.lg-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(var(--brand-soft-2) 1px, transparent 1px),
-    linear-gradient(90deg, var(--brand-soft-2) 1px, transparent 1px);
-  background-size: 56px 56px;
-  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 100% 100%, #000 0%, transparent 70%);
-  mask-image: radial-gradient(ellipse 70% 60% at 100% 100%, #000 0%, transparent 70%);
-  pointer-events: none;
+.lg-foot span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lg-foot span::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 /* ---------- 右侧表单区 ---------- */

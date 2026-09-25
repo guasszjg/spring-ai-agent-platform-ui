@@ -1,25 +1,53 @@
 <template>
   <div class="lg-page">
-    <!-- 左侧：品牌陈述 -->
+    <!-- 左侧：品牌色块 + 同心弧线纹理 + 产品示意卡片 -->
     <aside class="lg-brand">
+      <svg class="lg-rings" viewBox="0 0 800 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <g class="lg-rings-br">
+          <circle v-for="r in ringsLarge" :key="'l' + r" cx="820" cy="940" :r="r" />
+        </g>
+        <g class="lg-rings-tl">
+          <circle v-for="r in ringsSmall" :key="'s' + r" cx="-40" cy="-60" :r="r" />
+        </g>
+      </svg>
+      <div class="lg-grain" aria-hidden="true"></div>
+
       <div class="lg-logo">
-        <AgentLogo :size="28" />
+        <AgentLogo :size="28" inverse />
         <span>AgentMatrix</span>
       </div>
 
-      <div class="lg-statement">
-        <h1>企业级智能体平台</h1>
-        <p>统一编排、调度与治理组织内的每一个智能体。</p>
-        <ul class="lg-capabilities">
-          <li>智能体编排</li>
-          <li>模型网关</li>
-          <li>知识库检索</li>
-          <li>安全治理</li>
-        </ul>
+      <div class="lg-hero">
+        <div class="lg-statement">
+          <h1>企业级智能体平台</h1>
+          <p>统一编排、调度与治理组织内的每一个智能体。</p>
+        </div>
+
+        <!-- 编排示意动画：能力节点经连线汇聚到中心智能体 -->
+        <svg class="lg-orchestra" viewBox="0 0 520 330" aria-hidden="true">
+          <ellipse class="lg-orbit" cx="260" cy="165" rx="215" ry="128" />
+          <circle class="lg-orbit-dot" r="3.5">
+            <animateMotion dur="22s" repeatCount="indefinite" path="M475 165a215 128 0 1 1-430 0a215 128 0 1 1 430 0" />
+          </circle>
+
+          <g v-for="(n, i) in orchestraNodes" :key="n.label">
+            <path class="lg-link" :d="n.path" />
+            <path class="lg-pulse" :d="n.path" pathLength="100" :style="{ animationDelay: i * 0.7 + 's' }" />
+            <g class="lg-node" :transform="`translate(${n.x} ${n.y})`">
+              <rect x="-50" y="-17" width="100" height="34" rx="17" />
+              <text y="5" text-anchor="middle">{{ n.label }}</text>
+            </g>
+          </g>
+
+          <circle class="lg-halo" cx="260" cy="167" r="40" />
+          <circle class="lg-halo lg-halo-2" cx="260" cy="167" r="40" />
+          <AgentMascot class="lg-mascot" :size="100" x="210" y="108" inverse animated />
+        </svg>
       </div>
 
-      <div class="lg-foot">© {{ year }} AgentMatrix</div>
-      <div class="lg-grid" aria-hidden="true"></div>
+      <div class="lg-foot">
+        <span>智能体编排</span><span>模型网关</span><span>知识库检索</span><span>安全治理</span>
+      </div>
     </aside>
 
     <!-- 右侧：登录表单 -->
@@ -114,6 +142,7 @@ import { useRouter } from 'vue-router'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import AgentLogo from '../components/AgentLogo.vue'
+import AgentMascot from '../components/AgentMascot.vue'
 import { Sun, Moon, Eye, EyeOff, Loader2 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -126,7 +155,17 @@ const rememberMe = ref(true)
 const showPassword = ref(false)
 const submitting = ref(false)
 const theme = ref(localStorage.getItem('theme') || 'dark')
-const year = new Date().getFullYear()
+// 同心弧线半径：右下角大圈、左上角小圈
+const ringsLarge = Array.from({ length: 14 }, (_, i) => 90 + i * 64)
+const ringsSmall = Array.from({ length: 6 }, (_, i) => 60 + i * 52)
+
+// 编排动画的四个能力节点及其连向中心 (260,165) 的曲线
+const orchestraNodes = [
+  { label: '知识库', x: 82, y: 62, path: 'M132 62 C 200 62, 215 120, 228 142' },
+  { label: '模型网关', x: 438, y: 62, path: 'M388 62 C 320 62, 305 120, 292 142' },
+  { label: '工具调用', x: 82, y: 268, path: 'M132 268 C 200 268, 215 210, 228 188' },
+  { label: '安全治理', x: 438, y: 268, path: 'M388 268 C 320 268, 305 210, 292 188' }
+]
 
 function toggleTheme() {
   theme.value = theme.value === 'dark' ? 'light' : 'dark'

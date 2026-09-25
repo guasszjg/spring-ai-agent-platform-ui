@@ -287,11 +287,15 @@
           <button class="btn-icon-round" @click="resetChat"><i class="fa-solid fa-rotate-right"></i></button>
         </div>
         <div class="chat-history-scroll" ref="streamRef">
-          <div v-if="!messages.length && !sending" class="chat-empty">在下方输入内容开始调试</div>
+          <div v-if="!messages.length && !sending" class="chat-empty chat-empty-mascot">
+            <AgentMascot :size="56" animated />
+            <strong>{{ agent?.name || '智能体' }}</strong>
+            <span>在下方输入内容开始调试</span>
+          </div>
           <div v-for="(msg, i) in messages" :key="i" class="chat-msg-row" :class="msg.role === 'user' ? 'chat-msg-user' : 'chat-msg-bot'">
             <div class="msg-avatar" :class="msg.role === 'user' ? 'msg-avatar-user' : 'msg-avatar-bot'">
               <User v-if="msg.role === 'user'" :size="15" :stroke-width="1.75" />
-              <template v-else>{{ (agent?.name || 'A').trim().charAt(0).toUpperCase() }}</template>
+              <AgentMascot v-else :size="22" />
             </div>
             <div class="msg-content-wrapper">
               <div v-if="msg.tool" class="msg-tool-chip"><i class="fa-solid fa-circle-check" style="color: var(--accent-emerald);"></i> 工具调用: {{ msg.tool }}</div>
@@ -304,7 +308,7 @@
             </div>
           </div>
           <div v-if="sending" class="chat-msg-row chat-msg-bot">
-            <div class="msg-avatar msg-avatar-bot">{{ (agent?.name || 'A').trim().charAt(0).toUpperCase() }}</div>
+            <div class="msg-avatar msg-avatar-bot"><AgentMascot :size="22" animated /></div>
             <div class="msg-content-wrapper">
               <div class="msg-bubble"><i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent-blue);"></i> {{ appliedSettings.thinking.enabled ? '思考中...' : '生成中...' }}</div>
             </div>
@@ -623,6 +627,7 @@ import AgentMonitorPanel from '../components/AgentMonitorPanel.vue'
 import AgentApiPanel from '../components/AgentApiPanel.vue'
 import ToolGlyph from '../components/ToolGlyph.vue'
 import Monogram from '../components/Monogram.vue'
+import AgentMascot from '../components/AgentMascot.vue'
 import { User } from 'lucide-vue-next'
 import { FALLBACK_PLATFORM_TOOLS, matchSavedTool, toDebugTool } from '../composables/platformTools'
 
