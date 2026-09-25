@@ -529,7 +529,8 @@
       </section>
 
       <section v-show="currentTab === 'gateway'" class="app-subview active">
-        <GatewayPanel ref="gatewayPanelRef" />
+        <!-- 仅超管模块：非超管不挂载，避免加载时请求无权限接口 -->
+        <GatewayPanel v-if="isSuperAdmin" ref="gatewayPanelRef" />
       </section>
 
       <section v-show="currentTab === 'tools'" class="app-subview active">
@@ -537,11 +538,11 @@
       </section>
 
       <section v-show="currentTab === 'users'" class="app-subview active">
-        <UserManagementPanel ref="usersPanelRef" :currentUser="user" />
+        <UserManagementPanel v-if="isSuperAdmin" ref="usersPanelRef" :currentUser="user" />
       </section>
 
       <section v-show="currentTab === 'roles'" class="app-subview active">
-        <RolePermissionPanel ref="rolesPanelRef" />
+        <RolePermissionPanel v-if="isSuperAdmin" ref="rolesPanelRef" />
       </section>
 
       <section v-show="currentTab === 'security'" class="app-subview active">
@@ -807,6 +808,8 @@ const route = useRoute()
 const { showToast } = useToast()
 
 const validTabs = ['overview', 'agents', 'templates', 'tools', 'knowledge', 'gateway', 'users', 'roles', 'security', 'open-platform']
+// 仅超级管理员可见的模块：导航隐藏，且通过 URL 或点击进入时会被拦回概览
+const superAdminOnlyTabs = ['gateway', 'users', 'roles']
 
 function parseInitialTab() {
   const raw = route.query.tab
@@ -1016,14 +1019,13 @@ const navGroups = computed(() => {
       title: '企业租户用户管理 (RBAC)',
       icon: 'fa-solid fa-users-gear'
     })
+    govItems.push({
+      id: 'roles',
+      name: '角色与权限',
+      title: '系统固定角色与权限对照矩阵',
+      icon: 'fa-solid fa-shield-halved'
+    })
   }
-
-  govItems.push({
-    id: 'roles',
-    name: '角色与权限',
-    title: '系统固定角色与权限对照矩阵',
-    icon: 'fa-solid fa-shield-halved'
-  })
 
   govItems.push({
     id: 'security',
@@ -1066,7 +1068,7 @@ function triggerTabRefresh(tabId) {
 }
 
 function handleNavClick(item) {
-  if ((item.id === 'gateway' || item.id === 'users') && !isSuperAdmin.value) {
+  if (superAdminOnlyTabs.includes(item.id) && !isSuperAdmin.value) {
     showToast('无权限访问该功能，仅超级管理员可用', 'error')
     return
   }
@@ -1281,7 +1283,7 @@ watch(() => route.query.tab, (newTab) => {
 })
 
 watch(currentTab, (tab) => {
-  if ((tab === 'gateway' || tab === 'users') && !isSuperAdmin.value) {
+  if (superAdminOnlyTabs.includes(tab) && !isSuperAdmin.value) {
     showToast('无权限访问该模块，已自动返回概览', 'error')
     currentTab.value = 'overview'
     return
@@ -1581,7 +1583,7 @@ onMounted(() => {
     if (res.success && res.data) {
       user.value = res.data
       localStorage.setItem('user', JSON.stringify(res.data))
-      if ((currentTab.value === 'gateway' || currentTab.value === 'users') && !isSuperAdmin.value) {
+      if (superAdminOnlyTabs.includes(currentTab.value) && !isSuperAdmin.value) {
         currentTab.value = 'overview'
       }
     }
