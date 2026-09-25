@@ -421,7 +421,7 @@
               <span class="hero-state-pill">当前知识库全局路由 Dify 实例</span>
             </div>
             <h3 v-if="activeDify">{{ activeDify.name }} <code class="hero-model-code">{{ activeDify.baseUrl }}</code></h3>
-            <h3 v-else class="hero-empty-title">尚未配置或激活外部 Dify 实例（系统仅使用本地 Spring AI 自研 RAG 引擎）</h3>
+            <h3 v-else class="hero-empty-title">尚未配置或激活 Dify 实例（知识库将仅使用平台内置引擎）</h3>
             <p v-if="activeDify" class="hero-subtext">
               密钥脱敏: <code>{{ activeDify.apiKeyMasked }}</code> · 备注: {{ activeDify.description || '无备注' }}
             </p>

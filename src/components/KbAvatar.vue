@@ -1,12 +1,12 @@
 <template>
-  <!-- 知识库头像：浅色底方块 + 书本线性图标；Dify 外挂用"书本 + 链接"区分 -->
+  <!-- 知识库头像：浅色底方块 + 书本线性图标；Dify 引擎知识库用"书本 + 链接"区分 -->
   <span
     class="kb-avatar"
     :style="{ width: size + 'px', height: size + 'px', '--kb-tone': tone }"
     :title="name"
   >
     <BookText :size="Math.round(size * 0.5)" :stroke-width="1.75" />
-    <span v-if="external" class="kb-avatar-badge" title="Dify 外挂知识库">
+    <span v-if="external" class="kb-avatar-badge" title="Dify 引擎知识库">
       <Link2 :size="Math.max(9, Math.round(size * 0.26))" :stroke-width="2.2" />
     </span>
   </span>
@@ -20,7 +20,7 @@ import { toneOf } from '../composables/tone'
 const props = defineProps({
   name: { type: String, default: '' },
   size: { type: Number, default: 36 },
-  // 是否为外挂引擎（Dify）知识库
+  // 是否为 Dify 引擎知识库
   external: { type: Boolean, default: false }
 })
 

@@ -1763,3 +1763,28 @@ input[type="range"] {
   background: transparent !important;
   border: none !important;
 }
+
+/* 知识库服务卡片：不可用（Dify 未配置 / 未就绪、编辑时锁定引擎） */
+.provider-radio-card.disabled {
+  cursor: not-allowed !important;
+}
+
+.provider-radio-card.disabled:not(.active) {
+  opacity: 0.55;
+  filter: grayscale(1);
+  background: var(--surface-subtle) !important;
+}
+
+.provider-unavailable {
+  margin-top: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--accent-amber);
+}
+
+.provider-unavailable i {
+  margin-top: 2px;
+}

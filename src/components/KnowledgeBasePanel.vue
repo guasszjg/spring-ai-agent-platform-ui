@@ -44,8 +44,8 @@
         <div class="stat-card">
           <div class="stat-info">
             <span class="stat-label">Dify 引擎</span>
-            <span class="stat-value kb-engine-status" :class="{ offline: !difyEngineConfigured }">
-              {{ difyEngineConfigured ? '在线' : '未接入' }}
+            <span class="stat-value kb-engine-status" :class="{ offline: !difyEngineReady }">
+              {{ difyEngineReady ? '在线' : (difyEngineConfigured ? '未就绪' : '未接入') }}
             </span>
             <span class="stat-desc kb-engine-host" :title="difyEngineHost">{{ difyEngineHost }}</span>
           </div>
@@ -190,10 +190,10 @@
                   <i class="fa-solid fa-user"></i> {{ accountLabel(kb) }}
                 </span>
                 <span v-if="kb.provider === 'SPRING_AI'" class="provider-badge spring-ai">
-                  <i class="fa-solid fa-brain"></i> Spring AI 自研
+                  <i class="fa-solid fa-brain"></i> 内置引擎
                 </span>
                 <span v-else class="provider-badge dify">
-                  <i class="fa-solid fa-link"></i> Dify 外挂
+                  <i class="fa-solid fa-link"></i> Dify 引擎
                 </span>
                 <span class="search-method-badge" :class="kb.searchMethod || 'hybrid_search'">
                   <i :class="getSearchMethodIcon(kb.searchMethod)"></i> {{ getSearchMethodLabel(kb.searchMethod, kb) }}
@@ -304,10 +304,10 @@
               </td>
               <td class="col-kb-provider">
                 <span v-if="kb.provider === 'SPRING_AI'" class="provider-badge spring-ai">
-                  <i class="fa-solid fa-brain"></i> Spring AI
+                  <i class="fa-solid fa-brain"></i> 内置引擎
                 </span>
                 <span v-else class="provider-badge dify">
-                  <i class="fa-solid fa-link"></i> Dify RAG
+                  <i class="fa-solid fa-link"></i> Dify 引擎
                 </span>
               </td>
               <td class="col-kb-retrieval">
@@ -433,7 +433,7 @@
           <div class="kb-detail-meta">
             <div class="kb-title-row">
               <h2>{{ selectedKb?.name }}</h2>
-              <span v-if="selectedKb?.provider === 'SPRING_AI'" class="provider-badge spring-ai"><i class="fa-solid fa-brain"></i> Spring AI 自研引擎</span>
+              <span v-if="selectedKb?.provider === 'SPRING_AI'" class="provider-badge spring-ai"><i class="fa-solid fa-brain"></i> 内置引擎</span>
               <span v-else class="provider-badge dify"><i class="fa-solid fa-link"></i> Dify: {{ selectedKb?.externalDatasetId ? selectedKb.externalDatasetId.substring(0, 14) + '...' : '未绑定' }}</span>
               <span class="search-method-badge" :class="selectedKb?.searchMethod || 'hybrid_search'">
                 <i :class="getSearchMethodIcon(selectedKb?.searchMethod)"></i> {{ getSearchMethodLabel(selectedKb?.searchMethod, selectedKb) }} (Top {{ selectedKb?.topK || 3 }})
@@ -753,7 +753,7 @@
         <div v-else-if="faqList.length === 0" class="kb-empty-state" style="padding: 40px;">
           <div class="empty-icon-wrap"><i class="fa-solid fa-comments"></i></div>
           <h3>暂无相关问答 (FAQ)</h3>
-          <p>录入高频业务问答对，系统将自动向量化并同步到底层 Dify RAG 引擎，提升智能体应答精准度。</p>
+          <p>录入高频业务问答对，系统会自动完成向量化并写入知识库引擎，提升智能体回答的准确度。</p>
           <button v-if="canManageKb(selectedKb)" class="btn-create-agent" @click="openCreateFaq">
             <i class="fa-solid fa-plus"></i><span>立即添加第一条问答</span>
           </button>
@@ -905,7 +905,7 @@
               >
                 <i class="fa-solid fa-code-compare"></i>
                 <span>双引擎影子 A/B 评测</span>
-                <span class="badge-mode-p3">P3 推荐</span>
+                <span class="badge-mode-p3">推荐</span>
               </button>
             </div>
           </div>
@@ -1093,11 +1093,11 @@
 
             <!-- 引擎覆盖 (L3 调试覆盖) -->
             <div class="param-item">
-              <label class="param-label">物理引擎覆盖 (L3 Debug Override)</label>
+              <label class="param-label">检索引擎</label>
               <select v-model="testParams.engineOverride" class="form-control-styled">
-                <option value="">跟随知识库配置 ({{ selectedKb?.provider || 'DIFY' }})</option>
-                <option value="DIFY">强制 DIFY 外挂引擎</option>
-                <option value="SPRING_AI">Spring AI 原生自研引擎 (P4 增强)</option>
+                <option value="">跟随知识库配置（{{ selectedKb?.provider === 'SPRING_AI' ? '内置引擎' : 'Dify 引擎' }}）</option>
+                <option value="DIFY">强制使用 Dify 引擎</option>
+                <option value="SPRING_AI">强制使用内置引擎</option>
               </select>
             </div>
 
@@ -1497,7 +1497,7 @@
                     </div>
                     <span class="shadow-delta-tag" :class="shadowResult.latencyDiffMs <= 0 ? 'faster' : 'slower'">
                       <i :class="shadowResult.latencyDiffMs <= 0 ? 'fa-solid fa-gauge-high' : 'fa-solid fa-gauge-simple'"></i>
-                      {{ shadowResult.latencyDiffMs <= 0 ? '自研引擎快 ' + Math.abs(shadowResult.latencyDiffMs) + ' ms' : '自研引擎慢 ' + shadowResult.latencyDiffMs + ' ms' }}
+                      {{ shadowResult.latencyDiffMs <= 0 ? '内置引擎快 ' + Math.abs(shadowResult.latencyDiffMs) + ' ms' : '内置引擎慢 ' + shadowResult.latencyDiffMs + ' ms' }}
                     </span>
                   </div>
                 </div>
@@ -1541,12 +1541,12 @@
 
             <!-- 左右双栏并排切片对比 (Side-by-Side Comparison) -->
             <div class="shadow-compare-grid">
-              <!-- 左栏: Spring AI 自研引擎 -->
+              <!-- 左栏: 内置引擎 -->
               <div class="shadow-col col-primary">
                 <div class="shadow-col-header">
                   <div class="col-title-wrap">
                     <i class="fa-solid fa-brain text-blue"></i>
-                    <h4>Spring AI 原生自研引擎</h4>
+                    <h4>内置引擎</h4>
                     <span class="col-count-tag">{{ shadowResult.primaryChunks?.length || 0 }} 命中切片</span>
                   </div>
                   <span class="engine-indicator-pill spring-ai">主评测路径</span>
@@ -1554,7 +1554,7 @@
 
                 <div v-if="!shadowResult.primaryChunks || shadowResult.primaryChunks.length === 0" class="col-empty-card">
                   <i class="fa-solid fa-inbox"></i>
-                  <span>自研引擎暂无匹配切片</span>
+                  <span>内置引擎暂无匹配切片</span>
                 </div>
 
                 <div v-else class="col-chunks-list">
@@ -1593,7 +1593,7 @@
                 <div class="shadow-col-header">
                   <div class="col-title-wrap">
                     <i class="fa-solid fa-link text-purple"></i>
-                    <h4>Dify 托管外部引擎</h4>
+                    <h4>Dify 引擎</h4>
                     <span class="col-count-tag">{{ shadowResult.secondaryChunks?.length || 0 }} 命中切片</span>
                   </div>
                   <span class="engine-indicator-pill dify">对照基准路径</span>
@@ -1643,20 +1643,20 @@
           <h3>{{ retrievalMode === 'shadow' ? '准备就绪，输入问题开始双引擎影子 A/B 评测' : '准备就绪，输入问题开始召回测试' }}</h3>
           <p>
             {{ retrievalMode === 'shadow'
-              ? '系统将同时把 Query 分发至 Spring AI 自研引擎与 Dify 托管引擎，毫秒级比对 Jaccard 召回重叠率、端到端延迟与 Token 上下文装填。'
+              ? '系统会把同一个问题同时发给内置引擎和 Dify 引擎，对比两边的召回重合度、响应耗时和上下文用量。'
               : '输入您关心的业务问题，点击“执行检索”即可实时查看分块召回效果、得分详情与耗时指标。'
             }}
           </p>
         </div>
       </div>
 
-      <!-- TAB 4: 知识库成本与治理看板 (Phase P3) -->
+      <!-- TAB 4: 知识库成本与治理看板 -->
       <div v-show="activeSubTab === 'cost-governance'" class="kb-tab-content cost-governance-tab">
         <div class="cost-header-banner">
           <div class="cost-banner-info">
             <h3><i class="fa-solid fa-coins text-amber"></i> 知识库成本看板与多格式治理模型</h3>
             <p>
-              遵循《Spring-AI自研RAG双引擎设计》第 10 章成本治理模型：向量嵌入按 ￥0.5 / 1M Tokens 计量，重新排序按 ￥0.003 / 次计量。动态 Token 预算制有效阻断超长上下文对大模型造成的冗余开销。
+              计费参考：向量嵌入按 ￥0.5 / 1M Tokens 计量，重新排序按 ￥0.003 / 次计量。动态 Token 预算制有效阻断超长上下文对大模型造成的冗余开销。
             </p>
           </div>
           <button type="button" class="btn-cost-refresh" :disabled="loadingCostStats" title="刷新成本与治理指标" @click="loadCostStats">
@@ -1764,7 +1764,7 @@
 
 
             <div class="form-group">
-              <label class="form-label">底层 RAG 服务适配 *</label>
+              <label class="form-label">知识库引擎 *</label>
               <div class="provider-radio-cards" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                 <div
                   class="provider-radio-card"
@@ -1772,25 +1772,29 @@
                   @click="!kbForm.id && onProviderSelect('SPRING_AI')"
                 >
                   <div class="provider-radio-title" style="display: flex; align-items: center; justify-content: space-between;">
-                    <span><i class="fa-solid fa-brain"></i> Spring AI 原生自研</span>
-                    <span class="tag-recommend">自研</span>
+                    <span><i class="fa-solid fa-brain"></i> 平台内置引擎</span>
+                    <span class="tag-recommend">推荐</span>
                   </div>
                   <div class="provider-radio-desc" style="font-size: 12px; margin-top: 6px; line-height: 1.5;">
-                    本地智能切片管线 + 1024 维密集向量化 + 双路混合检索，全流程自主可控。
+                    由平台直接完成文档切片、向量化与混合检索，数据保存在本地，无需额外部署。
                   </div>
                 </div>
 
                 <div
                   class="provider-radio-card"
-                  :class="{ active: kbForm.provider === 'DIFY', disabled: !!kbForm.id }"
-                  @click="!kbForm.id && onProviderSelect('DIFY')"
+                  :class="{ active: kbForm.provider === 'DIFY', disabled: !!kbForm.id || (!kbForm.id && !difyEngineReady) }"
+                  :title="!kbForm.id && !difyEngineReady ? difyUnavailableReason : ''"
+                  @click="!kbForm.id && difyEngineReady && onProviderSelect('DIFY')"
                 >
                   <div class="provider-radio-title" style="display: flex; align-items: center; justify-content: space-between;">
-                    <span><i class="fa-solid fa-link text-blue"></i> Dify 外挂 RAG</span>
-                    <span class="tag-recommend">外挂</span>
+                    <span><i class="fa-solid fa-link text-blue"></i> Dify 外部引擎</span>
+                    <span class="tag-recommend">外部</span>
                   </div>
                   <div class="provider-radio-desc" style="font-size: 12px; margin-top: 6px; line-height: 1.5;">
-                    与配置好的 Dify 引擎双向 1:1 映射，由 Dify 远程 API 托管切片与向量索引。
+                    对接已部署的 Dify，文档切片与向量索引由 Dify 负责。
+                  </div>
+                  <div v-if="!kbForm.id && !difyEngineReady" class="provider-unavailable">
+                    <i class="fa-solid fa-circle-info"></i> {{ difyUnavailableReason }}
                   </div>
                 </div>
               </div>
@@ -1801,17 +1805,28 @@
 
             <!-- Embedding 向量模型 -->
             <div class="form-group">
-              <label class="form-label">Embedding 向量模型</label>
+              <label class="form-label">向量模型</label>
               <div class="embedding-model-box">
-                <!-- 自研引擎展示原生向量模型 -->
+                <!-- 内置引擎展示当前生效的向量模型 -->
                 <div v-if="kbForm.provider === 'SPRING_AI'" class="embedding-model-item">
-                  <div class="model-info-row">
-                    <span class="model-name"><i class="fa-solid fa-cube"></i> 平台原生向量管线 (1024 维)</span>
-                    <span class="tag-recommend">自研</span>
-                  </div>
-                  <div class="model-desc">
-                    由 Spring AI 平台本地服务生成 1024 维密集特征向量并落库于 PostgreSQL。未配置外部商业 Key 时自动启用平台内置高维特征投影，零依赖且高可用。
-                  </div>
+                  <template v-if="activeEmbedding.configured">
+                    <div class="model-info-row">
+                      <span class="model-name"><i class="fa-solid fa-cube"></i> {{ activeEmbedding.modelName }}（{{ activeEmbedding.dimension }} 维）</span>
+                      <span class="tag-recommend">当前生效</span>
+                    </div>
+                    <div class="model-desc">
+                      使用模型网关中已激活的向量模型「{{ activeEmbedding.name }}」。内置引擎的知识库统一使用该模型，如需更换请到「模型网关 → 向量模型」切换激活配置。
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="model-info-row">
+                      <span class="model-name"><i class="fa-solid fa-cube"></i> 未配置向量模型</span>
+                      <span class="tag-recommend">需配置</span>
+                    </div>
+                    <div class="model-desc">
+                      尚未在「模型网关 → 向量模型」中激活任何配置，文档将无法生成语义向量。请先配置并激活一个向量模型。
+                    </div>
+                  </template>
                 </div>
 
                 <!-- Dify 引擎展示 Dify 通义模型 -->
@@ -1826,14 +1841,14 @@
                 </div>
 
                 <div v-if="kbForm.id" class="input-hint text-amber" style="margin-top: 6px;">
-                  <i class="fa-solid fa-circle-info"></i> {{ kbForm.provider === 'SPRING_AI' ? '提示：已建立知识库的向量维度已锁定为 1024 维' : 'Dify 规则：已建立知识库的 Embedding 模型在初始化后不可变更' }}
+                  <i class="fa-solid fa-circle-info"></i> {{ kbForm.provider === 'SPRING_AI' ? '提示：在模型网关切换向量模型后，已入库文档需要重新索引才能按新模型检索' : 'Dify 规则：已建立知识库的 Embedding 模型在初始化后不可变更' }}
                 </div>
               </div>
             </div>
 
             <!-- 检索设置 (混合检索 / 向量检索 / 全文检索) -->
             <div class="form-group">
-              <label class="form-label">检索设置 (Retrieval Setting) *</label>
+              <label class="form-label">检索方式 *</label>
               <div class="retrieval-method-grid">
                 <div
                   class="retrieval-card"
@@ -2445,6 +2460,14 @@ const syncing = ref(false)
 const searchKeyword = ref('')
 const difyEngineHost = ref('未配置')
 const difyEngineConfigured = ref(false)
+// 已配置且最近一次连通性探测成功才算就绪，才允许新建 Dify 知识库
+const difyEngineReady = ref(false)
+const difyEngineProbeStatus = ref('UNCONFIGURED')
+const difyUnavailableReason = computed(() => {
+  if (!difyEngineConfigured.value) return '未配置 Dify 引擎，请先在「模型网关 → Dify 知识引擎」中配置'
+  if (difyEngineProbeStatus.value === 'FAILED') return 'Dify 引擎连通性测试失败，请在「模型网关 → Dify 知识引擎」中检查配置'
+  return 'Dify 引擎尚未通过连通性测试，请先在「模型网关 → Dify 知识引擎」中测试连接'
+})
 const kbPage = ref(1)
 const kbPageSize = ref(12)
 const kbTotalPages = ref(1)
@@ -2515,6 +2538,20 @@ let faqSearchTimer = null
 
 // 模态框状态
 const kbModalOpen = ref(false)
+
+// 当前生效的向量模型（自研知识库统一使用，来自模型网关的激活配置）
+const activeEmbedding = reactive({ configured: false, name: '', modelName: '', dimension: 1024 })
+
+async function loadActiveEmbedding() {
+  const res = await http.get('/api/model-gateway/embeddings/active')
+  if (res && res.success && res.data) {
+    Object.assign(activeEmbedding, { configured: false, name: '', modelName: '', dimension: 1024 }, res.data)
+    // 新建自研知识库时记录实际使用的模型名，便于列表中展示
+    if (!kbForm.id && kbForm.provider === 'SPRING_AI' && activeEmbedding.configured) {
+      kbForm.embeddingModel = activeEmbedding.modelName
+    }
+  }
+}
 const savingKb = ref(false)
 const kbForm = reactive({
   id: '',
@@ -2570,9 +2607,13 @@ async function loadEngineInfo() {
   const res = await http.get('/api/knowledge-engine')
   if (res.success && res.data) {
     difyEngineConfigured.value = !!res.data.configured
+    difyEngineReady.value = !!res.data.ready
+    difyEngineProbeStatus.value = res.data.probeStatus || (res.data.configured ? 'UNTESTED' : 'UNCONFIGURED')
     difyEngineHost.value = res.data.host || res.data.baseUrl || '未配置'
   } else {
     difyEngineConfigured.value = false
+    difyEngineReady.value = false
+    difyEngineProbeStatus.value = 'UNCONFIGURED'
     difyEngineHost.value = '未配置'
   }
 }
@@ -2721,10 +2762,10 @@ function onProviderSelect(type) {
 }
 
 function getEmbeddingModelLabel(kb) {
-  if (!kb) return '自研原生 (1024维)'
+  if (!kb) return '内置向量模型'
   if (kb.provider === 'SPRING_AI') {
     if (!kb.embeddingModel || kb.embeddingModel === 'text-embedding-v3' || kb.embeddingModel === 'spring-ai-native-1024') {
-      return '自研原生 (1024维)'
+      return '内置向量模型'
     }
     return kb.embeddingModel
   }
@@ -2750,6 +2791,8 @@ function openCreateKb() {
     keywordWeight: 0.3
   })
   kbModalOpen.value = true
+  loadActiveEmbedding()
+  loadEngineInfo()
 }
 
 function openEditKb(kb) {
@@ -2772,6 +2815,7 @@ function openEditKb(kb) {
     keywordWeight: kb.keywordWeight !== undefined && kb.keywordWeight !== null ? kb.keywordWeight : 0.3
   })
   kbModalOpen.value = true
+  loadActiveEmbedding()
 }
 
 async function saveKnowledgeBase() {
@@ -2818,7 +2862,7 @@ async function saveKnowledgeBase() {
   if (res.success) {
     const successMsg = kbForm.id
       ? '知识库信息更新成功'
-      : (kbForm.provider === 'SPRING_AI' ? 'Spring AI 原生自研知识库创建成功' : '知识库创建成功并已映射至 Dify')
+      : (kbForm.provider === 'SPRING_AI' ? '知识库创建成功' : '知识库创建成功，已同步至 Dify')
     showToast(successMsg, 'success')
     kbModalOpen.value = false
     loadKnowledgeBases()
