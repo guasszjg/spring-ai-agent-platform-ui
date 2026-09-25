@@ -74,7 +74,7 @@
         <div class="sidebar-user-card" :title="user.nickname || user.username || '平台用户'" @click="openProfileModal">
           <div class="user-meta-left">
             <div class="user-avatar-wrap">
-              <Monogram :name="user.nickname || user.username" :size="30" shape="circle" />
+              <UserAvatar :name="user.nickname || user.username" :seed="user.username" :size="30" />
             </div>
             <div v-show="!sidebarCollapsed" class="user-text-info">
               <span class="user-name-text">{{ user.nickname || user.username || '平台用户' }}</span>
@@ -100,7 +100,7 @@
             <component :is="theme === 'light' ? Sun : Moon" :size="16" :stroke-width="1.75" />
           </button>
           <div class="topbar-user-menu" style="cursor: pointer;" title="点击打开个人中心与安全设置" @click="openProfileModal">
-            <Monogram :name="user.nickname || user.username" :size="26" shape="circle" />
+            <UserAvatar :name="user.nickname || user.username" :seed="user.username" :size="26" />
             <div class="topbar-user-info">
               <span class="topbar-user-name">{{ user.nickname || user.username || '管理员' }}</span>
               <span class="topbar-user-tag" :class="'role-' + (user.role || '').toLowerCase()">{{ user.roleName || (isSuperAdmin ? '超级管理员' : (user.role === 'VIEWER' ? '只读观察员' : '开发者')) }}</span>
@@ -564,11 +564,8 @@
       <form @submit.prevent="saveAgent">
         <div class="modal-body">
           <div v-if="!form.id" class="form-group">
-            <label class="form-label">行业场景模版预设</label>
-            <select class="form-control-styled" @change="applyTemplate($event.target.value)">
-              <option value="">-- 选择预设专家智能体模版 --</option>
-              <option v-for="t in templates" :key="t.id || t.name" :value="t.id || t.name">{{ t.avatar }} {{ t.name }} ({{ t.category }})</option>
-            </select>
+            <label class="form-label">行业模板</label>
+            <TemplatePicker ref="templatePickerRef" @select="applyTemplate" />
           </div>
           <div class="form-row-2">
             <div class="form-group"><label class="form-label">智能体名称 *</label><input v-model="form.name" class="form-control-styled" required></div>
@@ -578,8 +575,7 @@
             <div class="form-group">
               <label class="form-label">所属业务分类</label>
               <select v-model="form.category" class="form-control-styled">
-                <option v-for="c in categories.slice(1)" :key="c" :value="c">{{ c }}</option>
-                <option value="通用智能">通用智能</option>
+                <option v-for="c in formCategoryOptions" :key="c" :value="c">{{ c }}</option>
               </select>
             </div>
             <div class="form-group">
@@ -656,7 +652,7 @@
         <!-- Account Info Summary -->
         <div style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; display: flex; align-items: center; justify-content: space-between;">
           <div style="display: flex; align-items: center; gap: 12px;">
-            <Monogram :name="user.nickname || user.username" :size="44" shape="circle" />
+            <UserAvatar :name="user.nickname || user.username" :seed="user.username" :size="44" />
             <div>
               <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-primary);">{{ user.nickname || user.username }}</div>
               <div style="font-size: 0.8rem; color: var(--text-muted); font-family: monospace;">@{{ user.username }}</div>
@@ -783,9 +779,10 @@ import UserManagementPanel from '../components/UserManagementPanel.vue'
 import RolePermissionPanel from '../components/RolePermissionPanel.vue'
 import SecurityOpenPanel from '../components/SecurityOpenPanel.vue'
 import AgentLogo from '../components/AgentLogo.vue'
-import Monogram from '../components/Monogram.vue'
+import UserAvatar from '../components/UserAvatar.vue'
 import AgentMascot from '../components/AgentMascot.vue'
 import AgentAvatar from '../components/AgentAvatar.vue'
+import TemplatePicker from '../components/TemplatePicker.vue'
 import {
   LayoutDashboard, Bot, LayoutTemplate, Wrench, BookOpen, Network, Users, ShieldCheck, KeyRound,
   Circle, PanelLeftClose, LogOut, Sun, Moon
@@ -874,6 +871,7 @@ function toggleSidebar() {
 }
 
 const templates = ref([])
+const templatePickerRef = ref(null)
 const routedChannel = ref('')
 const routedModel = ref('')
 const routedModelLabel = computed(() => {
@@ -895,6 +893,18 @@ let latencyChart = null
 let searchTimer = null
 
 const categories = ['全部', '代码研发', '运维架构', '产品策划', '知识库客服', '数据分析', '内容创作']
+// 表单分类选项：内置分类 + 通用智能 + 当前值（模板可能带入内置列表之外的分类，如"金融风控"）
+const formCategoryOptions = computed(() => {
+  const list = [...categories.slice(1), '通用智能']
+  if (form.category && !list.includes(form.category)) list.push(form.category)
+  return list
+})
+
+// 由名称生成业务编码：有英文/数字时用其 slug，纯中文名称则用时间戳后缀，避免生成一串下划线
+function makeAgentCode(name) {
+  const slug = String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  return 'agent_' + (slug || Date.now().toString(36))
+}
 const emojis = ['🤖', '🚀', '⚡', '🛡️', '✨', '🎨', '📋', '🌐', '💻', '🧠', '📊']
 const form = reactive({
   id: '', name: '', code: '', category: '通用智能', modelName: '',
@@ -1370,6 +1380,7 @@ function emptyForm() {
 
 function openCreate() {
   emptyForm()
+  templatePickerRef.value?.reset()
   agentModalOpen.value = true
 }
 
@@ -1387,24 +1398,16 @@ function openEdit(agent) {
 function onUseTemplateFromPanel(t) {
   if (!t) return
   emptyForm()
-  form.name = t.name || ''
-  form.code = 'agent_' + (t.name || 'bot').toLowerCase().replace(/[^a-z0-9]/gi, '_')
-  form.category = t.category || '通用智能'
-  form.modelName = routedModel.value || ''
-  form.systemPrompt = t.systemPrompt || ''
-  form.description = t.description || ''
-  form.temperature = t.temperature != null ? t.temperature : 0.7
-  form.avatar = t.avatar || '🤖'
-  form.tagsText = Array.isArray(t.tags) ? t.tags.join(', ') : (t.tags || '')
+  templatePickerRef.value?.reset(t)
+  applyTemplate(t)
   agentModalOpen.value = true
 }
 
-function applyTemplate(val) {
-  if (!val) return
-  const t = templates.value.find(item => item.id === val || item.name === val) || templates.value[Number(val)]
+// 由 TemplatePicker 直接回传完整模板对象
+function applyTemplate(t) {
   if (!t) return
   form.name = t.name || ''
-  form.code = 'agent_' + (t.name || 'bot').toLowerCase().replace(/[^a-z0-9]/gi, '_')
+  form.code = makeAgentCode(t.name)
   form.category = t.category || '通用智能'
   form.modelName = routedModel.value || ''
   form.systemPrompt = t.systemPrompt || ''

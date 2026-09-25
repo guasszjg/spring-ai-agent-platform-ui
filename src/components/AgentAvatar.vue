@@ -1,5 +1,5 @@
 <template>
-  <!-- 智能体头像：浅色底方块 + 智能体形象；颜色按名称稳定映射，便于在列表中区分 -->
+  <!-- 智能体 / 模板头像：浅色底方块 + 智能体形象；颜色按名称（或 toneKey）稳定映射 -->
   <span
     class="agent-avatar"
     :style="{ width: size + 'px', height: size + 'px', '--av-tone': tone }"
@@ -12,22 +12,17 @@
 <script setup>
 import { computed } from 'vue'
 import AgentMascot from './AgentMascot.vue'
+import { toneOf } from '../composables/tone'
 
 const props = defineProps({
   name: { type: String, default: '' },
+  // 可选：按其他维度着色（如模板按行业分类），默认按名称
+  toneKey: { type: String, default: '' },
   size: { type: Number, default: 36 },
   animated: { type: Boolean, default: false }
 })
 
-// 低饱和大地色系：陶土、赭黄、灰绿、雾蓝、灰紫、赤陶
-const TONES = ['#c15f3c', '#b0823a', '#6f8f6a', '#5f7f9a', '#8d6a8f', '#a0694f']
-
-const tone = computed(() => {
-  const s = String(props.name || '')
-  let h = 0
-  for (const ch of s) h = (h * 31 + ch.codePointAt(0)) >>> 0
-  return TONES[h % TONES.length]
-})
+const tone = computed(() => toneOf(props.toneKey || props.name))
 </script>
 
 <style scoped>

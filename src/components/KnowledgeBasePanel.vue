@@ -177,7 +177,7 @@
           @click="openKbDetail(kb)"
         >
           <div class="kb-card-header">
-            <Monogram :name="kb.name" :size="40" />
+            <KbAvatar :name="kb.name" :external="kb.provider !== 'SPRING_AI'" :size="40" />
             <div class="kb-card-title-group">
               <h3 class="kb-card-name" :title="kb.name">{{ kb.name }}</h3>
               <div class="kb-card-badges">
@@ -279,7 +279,7 @@
             <tr v-for="kb in displayKbList" :key="kb.id" class="table-row-hover" @click="openKbDetail(kb)">
               <td class="col-kb-name">
                 <div class="kb-table-title-cell">
-                  <Monogram :name="kb.name" :size="34" />
+                  <KbAvatar :name="kb.name" :external="kb.provider !== 'SPRING_AI'" :size="34" />
                   <div class="kb-table-info">
                     <div class="kb-table-name-row">
                       <span class="kb-table-name" :title="kb.name">{{ kb.name }}</span>
@@ -429,7 +429,7 @@
         </button>
 
         <div class="kb-detail-hero">
-          <Monogram :name="selectedKb?.name" :size="44" />
+          <KbAvatar :name="selectedKb?.name" :external="selectedKb?.provider !== 'SPRING_AI'" :size="44" />
           <div class="kb-detail-meta">
             <div class="kb-title-row">
               <h2>{{ selectedKb?.name }}</h2>
@@ -2281,7 +2281,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
-import Monogram from './Monogram.vue'
+import KbAvatar from './KbAvatar.vue'
 import { accountLabel } from '../composables/useAccountOptions'
 
 const props = defineProps({
