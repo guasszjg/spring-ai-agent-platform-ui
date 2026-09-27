@@ -11,13 +11,64 @@
       <AgentMascot :size="34" animated />
     </button>
 
-    <transition name="ad-slide">
-      <aside v-if="open" class="ad-panel" role="dialog" aria-label="AI 助手">
-        <header class="ad-head">
-          <span class="ad-title">AI 助手</span>
-          <div class="ad-head-actions">
+    <transition :name="effectiveMode === 'dock' ? 'ad-slide' : 'ad-pop'">
+      <aside
+        v-if="open"
+        ref="panelRef"
+        class="ad-panel"
+        :class="['mode-' + effectiveMode, { interacting }]"
+        :style="panelStyle"
+        role="dialog"
+        aria-label="AI 助手"
+      >
+        <!-- 调整大小的拖拽区域：停靠模式拖左边缘；悬浮模式拖右边、下边、右下角 -->
+        <div v-if="effectiveMode === 'dock'" class="ad-resize ad-resize-w" @pointerdown="startResize($event, 'w')"></div>
+        <template v-if="effectiveMode === 'float'">
+          <div class="ad-resize ad-resize-e" @pointerdown="startResize($event, 'e')"></div>
+          <div class="ad-resize ad-resize-s" @pointerdown="startResize($event, 's')"></div>
+          <div class="ad-resize ad-resize-se" @pointerdown="startResize($event, 'se')"></div>
+        </template>
+
+        <header
+          class="ad-head"
+          :class="{ draggable: effectiveMode === 'float' }"
+          @pointerdown="startDrag"
+          @dblclick="toggleFull"
+        >
+          <span class="ad-title">
+            <AgentMascot :size="20" />
+            AI 助手
+          </span>
+          <div class="ad-head-actions" @pointerdown.stop @dblclick.stop>
             <button type="button" title="新对话" :disabled="sending || !messages.length" @click="newChat">
               <SquarePen :size="16" :stroke-width="1.75" />
+            </button>
+            <span class="ad-head-sep"></span>
+            <button
+              v-if="!isNarrow"
+              type="button"
+              :class="{ on: mode === 'dock' }"
+              title="停靠在右侧"
+              @click="setMode('dock')"
+            >
+              <PanelRight :size="16" :stroke-width="1.75" />
+            </button>
+            <button
+              v-if="!isNarrow"
+              type="button"
+              :class="{ on: mode === 'float' }"
+              title="悬浮窗口（可拖动、调整大小）"
+              @click="setMode('float')"
+            >
+              <PictureInPicture2 :size="16" :stroke-width="1.75" />
+            </button>
+            <button
+              v-if="!isNarrow"
+              type="button"
+              :title="mode === 'full' ? '退出全屏（Esc）' : '全屏'"
+              @click="toggleFull"
+            >
+              <component :is="mode === 'full' ? Minimize2 : Maximize2" :size="15" :stroke-width="1.75" />
             </button>
             <button type="button" title="关闭" @click="open = false">
               <X :size="17" :stroke-width="1.75" />
@@ -111,8 +162,11 @@
 </template>
 
 <script setup>
-import { nextTick, ref } from 'vue'
-import { Workflow, BookOpen, Network, Wrench, KeyRound, Stethoscope, ArrowUp, SquarePen, X } from 'lucide-vue-next'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import {
+  Workflow, BookOpen, Network, Wrench, KeyRound, Stethoscope, ArrowUp, SquarePen, X,
+  PanelRight, PictureInPicture2, Maximize2, Minimize2
+} from 'lucide-vue-next'
 import { http } from '../api/http'
 import AgentMascot from './AgentMascot.vue'
 
@@ -123,6 +177,156 @@ const focused = ref(false)
 const messages = ref([]) // { role, content, html, meta?, degraded? }
 const scrollRef = ref(null)
 const inputRef = ref(null)
+const panelRef = ref(null)
+
+// ==================== 窗口布局：停靠 / 悬浮 / 全屏 ====================
+const LAYOUT_KEY = 'agentmatrix.assistant.layout'
+const DOCK_MIN = 360
+const FLOAT_MIN_W = 340
+const FLOAT_MIN_H = 420
+const EDGE = 12 // 悬浮窗与视口边缘的最小间距
+
+const mode = ref('dock')          // 用户选择的模式
+const prevMode = ref('dock')      // 进入全屏前的模式，退出时恢复
+const dockWidth = ref(440)
+const floatRect = reactive({ x: 0, y: 0, w: 420, h: 640 })
+const viewport = reactive({ w: window.innerWidth, h: window.innerHeight })
+const interacting = ref(false)    // 拖动 / 调整大小进行中，关闭过渡避免卡顿
+
+const isNarrow = computed(() => viewport.w < 640)
+const effectiveMode = computed(() => (isNarrow.value ? 'full' : mode.value))
+
+const panelStyle = computed(() => {
+  if (effectiveMode.value === 'dock') {
+    return { width: clampDock(dockWidth.value) + 'px' }
+  }
+  if (effectiveMode.value === 'float') {
+    const r = clampFloat({ ...floatRect })
+    return { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' }
+  }
+  return {}
+})
+
+function clampDock(w) {
+  return Math.round(Math.min(Math.max(w, DOCK_MIN), Math.max(DOCK_MIN, viewport.w * 0.7)))
+}
+
+function clampFloat(r) {
+  const w = Math.min(Math.max(r.w, FLOAT_MIN_W), viewport.w - EDGE * 2)
+  const h = Math.min(Math.max(r.h, FLOAT_MIN_H), viewport.h - EDGE * 2)
+  const x = Math.min(Math.max(r.x, EDGE), viewport.w - w - EDGE)
+  const y = Math.min(Math.max(r.y, EDGE), viewport.h - h - EDGE)
+  return { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) }
+}
+
+function defaultFloatRect() {
+  const w = 420
+  const h = Math.min(640, viewport.h - EDGE * 2 - 60)
+  return { x: viewport.w - w - 28, y: viewport.h - h - 28, w, h }
+}
+
+function loadLayout() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null')
+    if (saved) {
+      if (['dock', 'float', 'full'].includes(saved.mode)) mode.value = saved.mode
+      if (['dock', 'float'].includes(saved.prevMode)) prevMode.value = saved.prevMode
+      if (Number(saved.dockWidth) > 0) dockWidth.value = Number(saved.dockWidth)
+      if (saved.floatRect && Number(saved.floatRect.w) > 0) {
+        Object.assign(floatRect, saved.floatRect)
+        return
+      }
+    }
+  } catch { /* 忽略损坏的本地配置 */ }
+  Object.assign(floatRect, defaultFloatRect())
+}
+
+function saveLayout() {
+  try {
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify({
+      mode: mode.value,
+      prevMode: prevMode.value,
+      dockWidth: clampDock(dockWidth.value),
+      floatRect: clampFloat({ ...floatRect })
+    }))
+  } catch { /* 本地存储不可用时忽略 */ }
+}
+
+function setMode(m) {
+  if (m !== 'full') prevMode.value = m
+  mode.value = m
+  saveLayout()
+}
+
+function toggleFull() {
+  if (isNarrow.value) return
+  setMode(mode.value === 'full' ? (prevMode.value || 'dock') : 'full')
+}
+
+// 悬浮模式：拖动标题栏移动窗口
+function startDrag(e) {
+  if (effectiveMode.value !== 'float' || e.button !== 0) return
+  const start = { mx: e.clientX, my: e.clientY, x: floatRect.x, y: floatRect.y }
+  beginPointer(e, (ev) => {
+    const next = clampFloat({ ...floatRect, x: start.x + ev.clientX - start.mx, y: start.y + ev.clientY - start.my })
+    floatRect.x = next.x
+    floatRect.y = next.y
+  })
+}
+
+// 调整大小：停靠模式拖左边缘；悬浮模式拖右边 / 下边 / 右下角
+function startResize(e, dir) {
+  if (e.button !== 0) return
+  const start = { mx: e.clientX, my: e.clientY, w: floatRect.w, h: floatRect.h }
+  beginPointer(e, (ev) => {
+    if (dir === 'w') {
+      dockWidth.value = clampDock(viewport.w - ev.clientX)
+      return
+    }
+    if (dir.includes('e')) floatRect.w = Math.max(FLOAT_MIN_W, Math.min(start.w + ev.clientX - start.mx, viewport.w - floatRect.x - EDGE))
+    if (dir.includes('s')) floatRect.h = Math.max(FLOAT_MIN_H, Math.min(start.h + ev.clientY - start.my, viewport.h - floatRect.y - EDGE))
+  })
+}
+
+function beginPointer(e, onMove) {
+  e.preventDefault()
+  interacting.value = true
+  const prevSelect = document.body.style.userSelect
+  document.body.style.userSelect = 'none'
+  const move = (ev) => onMove(ev)
+  const up = () => {
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', up)
+    document.body.style.userSelect = prevSelect
+    interacting.value = false
+    saveLayout()
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', up)
+}
+
+function onWindowResize() {
+  viewport.w = window.innerWidth
+  viewport.h = window.innerHeight
+  Object.assign(floatRect, clampFloat({ ...floatRect }))
+}
+
+function onKeydown(e) {
+  if (e.key === 'Escape' && open.value && mode.value === 'full' && !isNarrow.value) {
+    setMode(prevMode.value || 'dock')
+  }
+}
+
+onMounted(() => {
+  loadLayout()
+  window.addEventListener('resize', onWindowResize)
+  window.addEventListener('keydown', onKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onWindowResize)
+  window.removeEventListener('keydown', onKeydown)
+})
 
 const capabilities = [
   { label: '搭建智能体', icon: Workflow, prompt: '我想新建一个智能体，需要哪些步骤？' },
@@ -259,20 +463,57 @@ async function send(text) {
 /* ---------- 面板 ---------- */
 .ad-panel {
   position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
   z-index: 950;
-  width: min(420px, 100vw);
   display: flex;
   flex-direction: column;
   background: var(--bg-primary);
+  transition: width 0.18s ease, height 0.18s ease;
+}
+
+.ad-panel.interacting {
+  transition: none;
+}
+
+/* 停靠：贴右侧全高，左边缘可拖动调宽 */
+.ad-panel.mode-dock {
+  top: 0;
+  right: 0;
+  bottom: 0;
   border-left: 1px solid var(--border-color);
   box-shadow: -18px 0 40px -24px rgba(0, 0, 0, 0.35);
 }
 
+/* 悬浮：独立小窗，可拖动与调整大小 */
+.ad-panel.mode-float {
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow:
+    0 24px 60px -18px rgba(40, 20, 8, 0.35),
+    0 8px 20px -10px rgba(40, 20, 8, 0.2);
+}
+
+/* 全屏：铺满视口，内容居中限宽 */
+.ad-panel.mode-full {
+  inset: 0;
+  z-index: 1000;
+}
+
+.mode-full .ad-body > *,
+.mode-full .ad-foot > * {
+  max-width: 860px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.mode-full .ad-welcome {
+  padding-top: 8vh;
+}
+
 .ad-slide-enter-active,
-.ad-slide-leave-active {
+.ad-slide-leave-active,
+.ad-pop-enter-active,
+.ad-pop-leave-active {
   transition: transform 0.22s ease, opacity 0.22s ease;
 }
 
@@ -282,17 +523,101 @@ async function send(text) {
   opacity: 0;
 }
 
+.ad-pop-enter-from,
+.ad-pop-leave-to {
+  transform: scale(0.97) translateY(8px);
+  opacity: 0;
+}
+
+/* ---------- 调整大小的拖拽区域 ---------- */
+.ad-resize {
+  position: absolute;
+  z-index: 2;
+}
+
+.ad-resize-w {
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  width: 7px;
+  cursor: ew-resize;
+}
+
+.ad-resize-w::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 3px;
+  height: 36px;
+  margin-top: -18px;
+  border-radius: 3px;
+  background: var(--border-hover);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.ad-resize-w:hover::after,
+.interacting .ad-resize-w::after {
+  opacity: 1;
+}
+
+.ad-resize-e {
+  top: 16px;
+  bottom: 16px;
+  right: 0;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.ad-resize-s {
+  left: 16px;
+  right: 16px;
+  bottom: 0;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.ad-resize-se {
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+}
+
+.ad-resize-se::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--border-hover);
+  border-bottom: 2px solid var(--border-hover);
+  border-bottom-right-radius: 2px;
+}
+
 .ad-head {
   height: 52px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px 0 18px;
+  padding: 0 10px 0 16px;
   border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  user-select: none;
+}
+
+.ad-head.draggable {
+  cursor: move;
 }
 
 .ad-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
@@ -300,7 +625,21 @@ async function send(text) {
 
 .ad-head-actions {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 2px;
+  cursor: default;
+}
+
+.ad-head-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--border-color);
+}
+
+.ad-head-actions button.on {
+  background: var(--brand-soft, var(--surface-active));
+  color: var(--brand-text, var(--text-primary));
 }
 
 .ad-head-actions button {
