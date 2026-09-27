@@ -1,5 +1,7 @@
 <template>
   <div class="app-layout">
+    <!-- 全局 AI 助手：右下角入口 + 右侧对话面板 -->
+    <AssistantDock />
     <aside class="app-sidebar" :class="{ collapsed: sidebarCollapsed }">
       <div class="sidebar-header">
         <div class="sidebar-header-row">
@@ -784,6 +786,7 @@ import UserAvatar from '../components/UserAvatar.vue'
 import AgentMascot from '../components/AgentMascot.vue'
 import AgentAvatar from '../components/AgentAvatar.vue'
 import TemplatePicker from '../components/TemplatePicker.vue'
+import AssistantDock from '../components/AssistantDock.vue'
 import {
   LayoutDashboard, Bot, LayoutTemplate, Wrench, BookOpen, Network, Users, ShieldCheck, KeyRound,
   Circle, PanelLeftClose, LogOut, Sun, Moon
