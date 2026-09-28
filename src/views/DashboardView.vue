@@ -547,6 +547,10 @@
         <RolePermissionPanel v-if="isSuperAdmin" ref="rolesPanelRef" />
       </section>
 
+      <section v-show="currentTab === 'assistant-eval'" class="app-subview active">
+        <AssistantEvalPanel v-if="isSuperAdmin" ref="evalPanelRef" />
+      </section>
+
       <section v-show="currentTab === 'security'" class="app-subview active">
         <SecurityOpenPanel
           ref="securityPanelRef"
@@ -780,6 +784,7 @@ import AgentTemplatesPanel from '../components/AgentTemplatesPanel.vue'
 import KnowledgeBasePanel from '../components/KnowledgeBasePanel.vue'
 import UserManagementPanel from '../components/UserManagementPanel.vue'
 import RolePermissionPanel from '../components/RolePermissionPanel.vue'
+import AssistantEvalPanel from '../components/AssistantEvalPanel.vue'
 import SecurityOpenPanel from '../components/SecurityOpenPanel.vue'
 import AgentLogo from '../components/AgentLogo.vue'
 import UserAvatar from '../components/UserAvatar.vue'
@@ -810,9 +815,9 @@ const router = useRouter()
 const route = useRoute()
 const { showToast } = useToast()
 
-const validTabs = ['overview', 'agents', 'templates', 'tools', 'knowledge', 'gateway', 'users', 'roles', 'security', 'open-platform']
+const validTabs = ['overview', 'agents', 'templates', 'tools', 'knowledge', 'gateway', 'users', 'roles', 'assistant-eval', 'security', 'open-platform']
 // 仅超级管理员可见的模块：导航隐藏，且通过 URL 或点击进入时会被拦回概览
-const superAdminOnlyTabs = ['gateway', 'users', 'roles']
+const superAdminOnlyTabs = ['gateway', 'users', 'roles', 'assistant-eval']
 
 function parseInitialTab() {
   const raw = route.query.tab
@@ -831,6 +836,7 @@ const gatewayPanelRef = ref(null)
 const toolsPanelRef = ref(null)
 const usersPanelRef = ref(null)
 const rolesPanelRef = ref(null)
+const evalPanelRef = ref(null)
 const securityPanelRef = ref(null)
 const securityInnerTab = ref(route.query.tab === 'open-platform' ? 'keys' : (typeof route.query.sec === 'string' && route.query.sec ? route.query.sec : 'overview'))
 const timeRange = ref('7days')
@@ -1028,6 +1034,12 @@ const navGroups = computed(() => {
       title: '系统固定角色与权限对照矩阵',
       icon: 'fa-solid fa-shield-halved'
     })
+    govItems.push({
+      id: 'assistant-eval',
+      name: '助手评测',
+      title: 'AI 助手评测：回归工具选择、参数与越权拒绝',
+      icon: 'fa-solid fa-vial-circle-check'
+    })
   }
 
   govItems.push({
@@ -1065,6 +1077,8 @@ function triggerTabRefresh(tabId) {
     usersPanelRef.value?.resetUsers?.(true)
   } else if (tabId === 'roles') {
     rolesPanelRef.value?.loadRoles?.()
+  } else if (tabId === 'assistant-eval') {
+    evalPanelRef.value?.refresh?.()
   } else if (tabId === 'security') {
     securityPanelRef.value?.resetAndReload?.(true)
   }
