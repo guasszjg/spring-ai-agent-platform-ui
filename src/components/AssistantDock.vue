@@ -1,5 +1,5 @@
 <template>
-  <!-- 平台 AI 助手：右侧悬浮入口 + 滑出式对话面板；对话走模型网关默认路由（/api/assistant/chat） -->
+  <!-- 平台 AI 助手：右侧悬浮入口 + 滑出式对话面板；流式对话（/api/assistant/chat/stream），执行模式可调用只读平台工具 -->
   <div class="ad">
     <button
       v-show="!open"
@@ -40,7 +40,16 @@
             AI 助手
           </span>
           <div class="ad-head-actions" @pointerdown.stop @dblclick.stop>
-            <button type="button" title="新对话" :disabled="sending || !messages.length" @click="newChat">
+            <button
+              type="button"
+              :class="{ on: view === 'history' }"
+              title="历史对话"
+              :disabled="sending"
+              @click="toggleHistory"
+            >
+              <History :size="16" :stroke-width="1.75" />
+            </button>
+            <button type="button" title="新对话" :disabled="sending || (!messages.length && view === 'chat')" @click="newChat">
               <SquarePen :size="16" :stroke-width="1.75" />
             </button>
             <span class="ad-head-sep"></span>
@@ -77,8 +86,36 @@
         </header>
 
         <div ref="scrollRef" class="ad-body">
+          <!-- 历史对话 -->
+          <div v-if="view === 'history'" class="ad-history">
+            <div class="ad-section-label">历史对话（保留 90 天）</div>
+            <div v-if="historyLoading" class="ad-history-empty">加载中…</div>
+            <div v-else-if="!historyList.length" class="ad-history-empty">还没有历史对话</div>
+            <template v-else>
+              <div
+                v-for="c in historyList"
+                :key="c.id"
+                class="ad-history-item"
+                :class="{ active: c.id === conversationId }"
+                role="button"
+                tabindex="0"
+                @click="openConversation(c.id)"
+                @keydown.enter="openConversation(c.id)"
+              >
+                <MessageSquare :size="15" :stroke-width="1.75" class="ad-history-icon" />
+                <div class="ad-history-text">
+                  <span class="ad-history-title">{{ c.title || '新对话' }}</span>
+                  <span class="ad-history-time">{{ formatTime(c.updatedAt) }}</span>
+                </div>
+                <button type="button" class="ad-history-del" title="删除" @click.stop="deleteConversation(c.id)">
+                  <Trash2 :size="14" :stroke-width="1.75" />
+                </button>
+              </div>
+            </template>
+          </div>
+
           <!-- 欢迎页 -->
-          <div v-if="!messages.length" class="ad-welcome">
+          <div v-else-if="!messages.length" class="ad-welcome">
             <div class="ad-hero">
               <AgentMascot :size="88" animated />
               <div class="ad-hero-text">
@@ -116,16 +153,20 @@
               class="ad-msg"
               :class="m.role === 'user' ? 'is-user' : 'is-bot'"
             >
-              <span v-if="m.role !== 'user'" class="ad-msg-avatar"><AgentMascot :size="22" /></span>
+              <span v-if="m.role !== 'user'" class="ad-msg-avatar"><AgentMascot :size="22" :animated="!!m.streaming" /></span>
               <div class="ad-msg-main">
-                <div class="ad-bubble" :class="{ degraded: m.degraded }" v-html="m.html"></div>
+                <div v-if="m.tools && m.tools.length" class="ad-tools">
+                  <span v-for="t in m.tools" :key="t.id" class="ad-tool" :class="t.status">
+                    <LoaderCircle v-if="t.status === 'running'" :size="13" :stroke-width="2" class="ad-spin" />
+                    <Check v-else-if="t.status === 'done'" :size="13" :stroke-width="2.2" />
+                    <CircleAlert v-else :size="13" :stroke-width="2" />
+                    {{ t.status === 'running' ? '正在' + t.label + '…' : t.label }}
+                  </span>
+                </div>
+                <div v-if="m.html" class="ad-bubble" :class="{ degraded: m.degraded }" v-html="m.html"></div>
+                <div v-else-if="m.streaming" class="ad-bubble ad-typing"><i></i><i></i><i></i></div>
+                <div v-if="m.notice" class="ad-notice">{{ m.notice }}</div>
                 <div v-if="m.meta" class="ad-meta">{{ m.meta }}</div>
-              </div>
-            </div>
-            <div v-if="sending" class="ad-msg is-bot">
-              <span class="ad-msg-avatar"><AgentMascot :size="22" animated /></span>
-              <div class="ad-msg-main">
-                <div class="ad-bubble ad-typing"><i></i><i></i><i></i></div>
               </div>
             </div>
           </template>
@@ -138,23 +179,50 @@
               v-model="draft"
               rows="1"
               placeholder="输入你的问题，Enter 发送，Shift+Enter 换行"
-              :disabled="sending"
               @focus="focused = true"
               @blur="focused = false"
               @input="autosize"
-              @keydown.enter.exact.prevent="send()"
+              @keydown.enter.exact.prevent="!sending && send()"
             ></textarea>
             <button
+              v-if="sending"
               type="button"
               class="ad-send"
-              :disabled="sending || !draft.trim()"
+              title="停止生成"
+              @click="stop"
+            >
+              <Square :size="12" :stroke-width="0" fill="currentColor" />
+            </button>
+            <button
+              v-else
+              type="button"
+              class="ad-send"
+              :disabled="!draft.trim()"
               title="发送"
               @click="send()"
             >
               <ArrowUp :size="16" :stroke-width="2.2" />
             </button>
           </div>
-          <p class="ad-disclaimer">内容由 AI 生成，仅供参考</p>
+          <div class="ad-foot-bar">
+            <div class="ad-mode" role="radiogroup" aria-label="对话模式">
+              <button
+                v-for="opt in modeOptions"
+                :key="opt.value"
+                type="button"
+                role="radio"
+                :aria-checked="chatMode === opt.value"
+                :class="{ on: chatMode === opt.value }"
+                :title="opt.hint"
+                :disabled="sending"
+                @click="setChatMode(opt.value)"
+              >
+                <component :is="opt.icon" :size="13" :stroke-width="2" />
+                {{ opt.label }}
+              </button>
+            </div>
+            <span class="ad-disclaimer">内容由 AI 生成，仅供参考</span>
+          </div>
         </footer>
       </aside>
     </transition>
@@ -165,7 +233,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import {
   Workflow, BookOpen, Network, Wrench, KeyRound, Stethoscope, ArrowUp, SquarePen, X,
-  PanelRight, PictureInPicture2, Maximize2, Minimize2
+  PanelRight, PictureInPicture2, Maximize2, Minimize2, History, Square, LoaderCircle, Check,
+  CircleAlert, Trash2, MessageSquare, Zap
 } from 'lucide-vue-next'
 import { http } from '../api/http'
 import AgentMascot from './AgentMascot.vue'
@@ -174,7 +243,33 @@ const open = ref(false)
 const draft = ref('')
 const sending = ref(false)
 const focused = ref(false)
-const messages = ref([]) // { role, content, html, meta?, degraded? }
+// { role, content, html, meta?, degraded?, streaming?, notice?, tools?: [{ id, label, status }] }
+const messages = ref([])
+const conversationId = ref(null)
+const view = ref('chat') // chat | history
+const historyList = ref([])
+const historyLoading = ref(false)
+let abortCtrl = null
+
+// ==================== 对话模式：执行（可查询平台数据）/ 问答 ====================
+const MODE_KEY = 'agentmatrix.assistant.mode'
+const modeOptions = [
+  { value: 'AGENT', label: '执行', icon: Zap, hint: '可以查询你有权限的智能体、知识库、模型通道与用量，并诊断问题' },
+  { value: 'CHAT', label: '问答', icon: MessageSquare, hint: '只回答使用问题，不查询平台数据，回复更快' }
+]
+const chatMode = ref('AGENT')
+
+function loadChatMode() {
+  try {
+    const saved = localStorage.getItem(MODE_KEY)
+    if (saved === 'AGENT' || saved === 'CHAT') chatMode.value = saved
+  } catch { /* 本地存储不可用时使用默认模式 */ }
+}
+
+function setChatMode(value) {
+  chatMode.value = value
+  try { localStorage.setItem(MODE_KEY, value) } catch { /* 忽略 */ }
+}
 const scrollRef = ref(null)
 const inputRef = ref(null)
 const panelRef = ref(null)
@@ -319,6 +414,7 @@ function onKeydown(e) {
 
 onMounted(() => {
   loadLayout()
+  loadChatMode()
   window.addEventListener('resize', onWindowResize)
   window.addEventListener('keydown', onKeydown)
 })
@@ -326,6 +422,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onWindowResize)
   window.removeEventListener('keydown', onKeydown)
+  if (abortCtrl) abortCtrl.abort()
 })
 
 const capabilities = [
@@ -338,9 +435,10 @@ const capabilities = [
 ]
 
 const examples = [
-  '平台内置引擎和 Dify 外部引擎有什么区别？',
-  '向量模型测试连接失败怎么办？',
-  '开发者和超级管理员的权限有什么不同？'
+  '我有哪些运行中的智能体？哪个调用最多？',
+  '这周 token 用了多少，成本多少？',
+  '模型通道现在都正常吗？',
+  '平台内置引擎和 Dify 外部引擎有什么区别？'
 ]
 
 function openPanel() {
@@ -350,8 +448,84 @@ function openPanel() {
 
 function newChat() {
   messages.value = []
+  conversationId.value = null
+  view.value = 'chat'
   draft.value = ''
-  nextTick(autosize)
+  nextTick(() => {
+    autosize()
+    inputRef.value && inputRef.value.focus()
+  })
+}
+
+// ==================== 历史对话 ====================
+async function toggleHistory() {
+  if (view.value === 'history') {
+    view.value = 'chat'
+    return
+  }
+  view.value = 'history'
+  historyLoading.value = true
+  const res = await http.get('/api/assistant/conversations')
+  historyLoading.value = false
+  historyList.value = res && res.success && Array.isArray(res.data) ? res.data : []
+}
+
+async function openConversation(id) {
+  const res = await http.get(`/api/assistant/conversations/${encodeURIComponent(id)}`)
+  if (!res || !res.success || !res.data) {
+    historyList.value = historyList.value.filter(c => c.id !== id)
+    return
+  }
+  conversationId.value = res.data.id
+  messages.value = (res.data.messages || []).map(fromStoredMessage)
+  view.value = 'chat'
+  scrollToBottom()
+}
+
+function fromStoredMessage(m) {
+  if (m.role === 'user') {
+    return { role: 'user', content: m.content || '', html: escapeHtml(m.content || '').replace(/\n/g, '<br>') }
+  }
+  let tools = []
+  try {
+    tools = (JSON.parse(m.toolCalls || '[]') || []).map((t, i) => ({ id: `${m.id}-${i}`, label: t.label, status: t.ok ? 'done' : 'failed' }))
+  } catch { /* 忽略损坏的工具记录 */ }
+  return {
+    role: 'assistant',
+    content: m.content || '',
+    html: renderMarkdown(m.content || ''),
+    degraded: !!m.degraded,
+    tools,
+    meta: m.degraded ? '' : metaText(m.model, m.latencyMs, (m.promptTokens || 0) + (m.completionTokens || 0))
+  }
+}
+
+async function deleteConversation(id) {
+  const res = await http.del(`/api/assistant/conversations/${encodeURIComponent(id)}`)
+  if (res && res.success) {
+    historyList.value = historyList.value.filter(c => c.id !== id)
+    if (conversationId.value === id) {
+      conversationId.value = null
+      messages.value = []
+    }
+  }
+}
+
+function formatTime(value) {
+  if (!value) return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return String(value)
+  const pad = (n) => String(n).padStart(2, '0')
+  const today = new Date()
+  const sameDay = d.toDateString() === today.toDateString()
+  return sameDay
+    ? `今天 ${pad(d.getHours())}:${pad(d.getMinutes())}`
+    : `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function metaText(model, latencyMs, tokens) {
+  return [model, latencyMs != null ? (latencyMs / 1000).toFixed(1) + 's' : '', tokens ? tokens + ' tokens' : '']
+    .filter(Boolean).join(' · ')
 }
 
 function autosize() {
@@ -381,6 +555,9 @@ function renderMarkdown(text) {
   html = html
     .replace(/`([^`\n]+)`/g, '<code>$1</code>')
     .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    // 表格：表头行 + 分隔行（|---|:---:|）+ 数据行；流式输出中分隔行尚未到达时按普通文本显示
+    .replace(/^(\|.*\|)[ \t]*\n\|?[ \t]*:?-{2,}:?[ \t]*(?:\|[ \t]*:?-{2,}:?[ \t]*)*\|?[ \t]*\n((?:\|.*\|[ \t]*(?:\n|$))*)/gm,
+      (_, head, body) => keep(renderTable(head, body)))
     .replace(/^\s*(?:-{3,}|\*{3,})\s*$/gm, () => keep('<hr>'))
     .replace(/^#{1,4} (.+)$/gm, (_, t) => keep(`<h4>${t}</h4>`))
     .replace(/^&gt; ?(.*)$/gm, '<bq>$1</bq>')
@@ -396,42 +573,99 @@ function renderMarkdown(text) {
   return html.replace(/@@B(\d+)@@/g, (_, i) => blocks[Number(i)])
 }
 
+function renderTable(head, body) {
+  const cells = (row) => row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim())
+  const th = cells(head).map(c => `<th>${c}</th>`).join('')
+  const rows = body.split('\n').filter(r => r.trim())
+    .map(r => `<tr>${cells(r).map(c => `<td>${c}</td>`).join('')}</tr>`).join('')
+  return `<div class="md-table"><table><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`
+}
+
+// 流式回复：增量到达时按帧合并重绘，避免每个字都重新渲染 Markdown
+function scheduleRender(msg) {
+  if (msg.renderPending) return
+  msg.renderPending = true
+  requestAnimationFrame(() => {
+    msg.renderPending = false
+    msg.html = renderMarkdown(msg.content)
+    scrollToBottom()
+  })
+}
+
+function upsertTool(msg, data) {
+  const existing = msg.tools.find(t => t.id === data.id)
+  if (existing) existing.status = data.status
+  else msg.tools.push({ id: data.id, label: data.label || data.name, status: data.status })
+  scrollToBottom()
+}
+
 async function send(text) {
   const content = (text ?? draft.value).trim()
   if (!content || sending.value) return
-  const history = messages.value
-    .filter(m => !m.degraded)
-    .map(m => ({ role: m.role, content: m.content }))
+  view.value = 'chat'
 
   messages.value.push({ role: 'user', content, html: escapeHtml(content).replace(/\n/g, '<br>') })
+  messages.value.push({ role: 'assistant', content: '', html: '', streaming: true, tools: [], notice: '', meta: '' })
+  // 取响应式代理，后续修改才会触发界面更新
+  const reply = messages.value[messages.value.length - 1]
   draft.value = ''
   nextTick(autosize)
   sending.value = true
   scrollToBottom()
 
-  try {
-    const res = await http.post('/api/assistant/chat', { message: content, history })
-    if (res && res.success && res.data) {
-      const d = res.data
-      const meta = [d.model, d.latencyMs != null ? (d.latencyMs / 1000).toFixed(1) + 's' : '', d.tokensUsed ? d.tokensUsed + ' tokens' : '']
-        .filter(Boolean).join(' · ')
-      messages.value.push({
-        role: 'assistant',
-        content: d.reply || '',
-        html: renderMarkdown(d.reply || ''),
-        meta: d.degraded ? '' : meta,
-        degraded: !!d.degraded
-      })
-    } else {
-      messages.value.push({ role: 'assistant', content: '', html: escapeHtml((res && res.message) || '请求失败，请稍后重试'), degraded: true })
+  abortCtrl = new AbortController()
+  const result = await http.stream('/api/assistant/chat/stream',
+    { conversationId: conversationId.value, message: content, mode: chatMode.value },
+    {
+      signal: abortCtrl.signal,
+      onEvent(event, data) {
+        if (event === 'start') {
+          conversationId.value = data.conversationId
+        } else if (event === 'tool') {
+          upsertTool(reply, data)
+        } else if (event === 'message') {
+          reply.content += data.delta || ''
+          scheduleRender(reply)
+        } else if (event === 'guardrail') {
+          reply.notice = data.message || '输出命中内容安全策略，已中断'
+        } else if (event === 'done') {
+          reply.content = data.content || reply.content
+          reply.html = renderMarkdown(reply.content)
+          reply.degraded = !!data.degraded
+          if (data.notice) reply.notice = data.notice
+          reply.meta = data.degraded ? '' : metaText(data.model, data.latencyMs, (data.promptTokens || 0) + (data.completionTokens || 0))
+          if (data.conversationId) conversationId.value = data.conversationId
+        } else if (event === 'error') {
+          reply.content = data.message || '请求失败，请稍后重试'
+          reply.html = escapeHtml(reply.content)
+          reply.degraded = true
+        }
+      }
+    })
+
+  if (result.aborted) {
+    reply.notice = '已停止生成'
+    if (!reply.content) {
+      reply.content = '（已停止）'
+      reply.degraded = true
     }
-  } catch (e) {
-    messages.value.push({ role: 'assistant', content: '', html: '网络异常，请稍后重试', degraded: true })
-  } finally {
-    sending.value = false
-    scrollToBottom()
-    nextTick(() => inputRef.value && inputRef.value.focus())
+    reply.html = renderMarkdown(reply.content)
+  } else if (!result.success) {
+    reply.content = result.message || '请求失败，请稍后重试'
+    reply.html = escapeHtml(reply.content)
+    reply.degraded = true
   }
+  // 运行中的工具在中断后不再更新，统一标记为未完成
+  reply.tools.forEach(t => { if (t.status === 'running') t.status = 'failed' })
+  reply.streaming = false
+  abortCtrl = null
+  sending.value = false
+  scrollToBottom()
+  nextTick(() => inputRef.value && inputRef.value.focus())
+}
+
+function stop() {
+  if (abortCtrl) abortCtrl.abort()
 }
 </script>
 
@@ -990,11 +1224,204 @@ async function send(text) {
   cursor: not-allowed;
 }
 
-.ad-disclaimer {
+.ad-foot-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin-top: 8px;
-  text-align: center;
+}
+
+.ad-disclaimer {
   font-size: 11.5px;
   color: var(--text-muted);
+}
+
+/* ---------- 模式切换 ---------- */
+.ad-mode {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--surface-subtle);
+}
+
+.ad-mode button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ad-mode button.on {
+  background: var(--bg-card);
+  color: var(--brand-text, var(--text-primary));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.ad-mode button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* ---------- 工具调用提示 ---------- */
+.ad-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ad-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-color);
+}
+
+.ad-tool.done {
+  color: var(--success, #3f8f5a);
+}
+
+.ad-tool.failed {
+  color: var(--warning, #b7791f);
+}
+
+.ad-spin {
+  animation: ad-spin 0.9s linear infinite;
+}
+
+@keyframes ad-spin {
+  to { transform: rotate(360deg); }
+}
+
+.ad-notice {
+  font-size: 12px;
+  color: var(--warning, #b7791f);
+  padding-left: 2px;
+}
+
+/* ---------- 表格 ---------- */
+.ad-bubble :deep(.md-table) {
+  margin: 6px 0;
+  overflow-x: auto;
+}
+
+.ad-bubble :deep(table) {
+  border-collapse: collapse;
+  font-size: 12.5px;
+  min-width: 100%;
+}
+
+.ad-bubble :deep(th),
+.ad-bubble :deep(td) {
+  padding: 5px 8px;
+  border: 1px solid var(--border-color);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.ad-bubble :deep(th) {
+  background: var(--surface-subtle);
+  font-weight: 600;
+}
+
+/* ---------- 历史对话 ---------- */
+.ad-history {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ad-history .ad-section-label {
+  margin-bottom: 6px;
+}
+
+.ad-history-empty {
+  padding: 32px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.ad-history-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.ad-history-item:hover,
+.ad-history-item:focus-visible {
+  background: var(--surface-subtle);
+  outline: none;
+}
+
+.ad-history-item.active {
+  background: var(--brand-soft, var(--surface-active));
+}
+
+.ad-history-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.ad-history-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ad-history-title {
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ad-history-time {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.ad-history-del {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  opacity: 0;
+  cursor: pointer;
+}
+
+.ad-history-item:hover .ad-history-del,
+.ad-history-del:focus-visible {
+  opacity: 1;
+}
+
+.ad-history-del:hover {
+  color: var(--danger, #c0392b);
+  background: var(--surface-active);
 }
 
 @media (max-width: 520px) {
@@ -1006,7 +1433,8 @@ async function send(text) {
 @media (prefers-reduced-motion: reduce) {
   .ad-slide-enter-active,
   .ad-slide-leave-active,
-  .ad-typing i {
+  .ad-typing i,
+  .ad-spin {
     transition: none;
     animation: none;
   }
