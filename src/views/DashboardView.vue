@@ -792,6 +792,7 @@ import AgentMascot from '../components/AgentMascot.vue'
 import AgentAvatar from '../components/AgentAvatar.vue'
 import TemplatePicker from '../components/TemplatePicker.vue'
 import AssistantDock from '../components/AssistantDock.vue'
+import { setAssistantPage } from '../composables/useAssistantContext'
 import {
   LayoutDashboard, Bot, LayoutTemplate, Wrench, BookOpen, Network, Users, ShieldCheck, KeyRound,
   Circle, PanelLeftClose, LogOut, Sun, Moon
@@ -1070,7 +1071,9 @@ function triggerTabRefresh(tabId) {
   } else if (tabId === 'tools') {
     toolsPanelRef.value?.loadTools?.()
   } else if (tabId === 'knowledge') {
-    kbPanelRef.value?.resetToList?.(true)
+    const kbId = queryKbId()
+    if (kbId) openKbFromQuery(kbId)
+    else kbPanelRef.value?.resetToList?.(true)
   } else if (tabId === 'gateway') {
     gatewayPanelRef.value?.refreshAll?.()
   } else if (tabId === 'users') {
@@ -1298,6 +1301,38 @@ watch(() => route.query.tab, (newTab) => {
     currentTab.value = target
   }
 })
+
+// 助手回复中的知识库链接（/dashboard?tab=knowledge&kb=ID）：打开对应知识库详情，打开后从地址中去掉 kb
+function queryKbId() {
+  const raw = route.query.kb
+  const v = Array.isArray(raw) ? raw[0] : raw
+  return typeof v === 'string' && v ? v : null
+}
+
+let kbOpening = null
+async function openKbFromQuery(id) {
+  if (kbOpening === id) return
+  kbOpening = id
+  try {
+    const opened = await kbPanelRef.value?.openById?.(id)
+    if (!opened) showToast('知识库不存在或无权查看', 'error')
+  } finally {
+    kbOpening = null
+    if (queryKbId() === id) {
+      const { kb, ...rest } = route.query
+      router.replace({ query: rest }).catch(() => {})
+    }
+  }
+}
+
+watch(() => route.query.kb, () => {
+  const id = queryKbId()
+  // 切换到知识库页时由 triggerTabRefresh 打开；已在知识库页时直接打开
+  if (id) nextTick(() => { if (currentTab.value === 'knowledge') openKbFromQuery(id) })
+})
+
+// 助手的页面上下文：切换模块时登记当前页面（知识库详情等资源由各面板登记）
+watch(currentTab, (tab) => setAssistantPage(tab), { immediate: true })
 
 watch(currentTab, (tab) => {
   if (superAdminOnlyTabs.includes(tab) && !isSuperAdmin.value) {
@@ -1615,6 +1650,7 @@ onActivated(() => {
     skipNextActivate.value = false
     return
   }
+  setAssistantPage(currentTab.value)
   if (currentTab.value === 'agents') {
     loadStats()
     loadAgents()

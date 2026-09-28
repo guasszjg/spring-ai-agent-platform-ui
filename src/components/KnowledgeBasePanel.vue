@@ -2294,6 +2294,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { clearAssistantResource, setAssistantResource } from '../composables/useAssistantContext'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import KbAvatar from './KbAvatar.vue'
@@ -2357,6 +2358,7 @@ const selectedKb = ref(null)
 function resetToList(forceReload = true) {
   currentView.value = 'list'
   selectedKb.value = null
+  clearAssistantResource()
   searchKeyword.value = ''
   scopeFilter.value = 'all'
   kbPage.value = 1
@@ -2372,9 +2374,21 @@ watch(() => props.active, (val) => {
   }
 })
 
+// 按 ID 直接打开知识库详情（助手回复中的知识库链接 /dashboard?tab=knowledge&kb=ID）
+async function openById(id) {
+  if (!id) return false
+  const res = await http.get(`/api/knowledge-bases/${encodeURIComponent(id)}`)
+  if (res && res.success && res.data) {
+    openKbDetail(res.data)
+    return true
+  }
+  return false
+}
+
 defineExpose({
   resetToList,
-  loadKnowledgeBases
+  loadKnowledgeBases,
+  openById
 })
 
 // ==================== 召回测试与调试状态 (Phase P1 & P2 & P3) ====================
@@ -2887,6 +2901,7 @@ async function saveKnowledgeBase() {
 function openKbDetail(kb) {
   selectedKb.value = kb
   currentView.value = 'detail'
+  setAssistantResource('KNOWLEDGE_BASE', kb.id, kb.name)
   activeSubTab.value = 'documents'
   docPage.value = 1
   faqPage.value = 1

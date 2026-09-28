@@ -5,6 +5,7 @@
       v-show="!open"
       type="button"
       class="ad-launcher"
+      :style="{ bottom: launcherBottom + 'px' }"
       title="AI 助手"
       @click="openPanel"
     >
@@ -163,7 +164,7 @@
                     {{ t.status === 'running' ? '正在' + t.label + '…' : t.label }}
                   </span>
                 </div>
-                <div v-if="m.html" class="ad-bubble" :class="{ degraded: m.degraded }" v-html="m.html"></div>
+                <div v-if="m.html" class="ad-bubble" :class="{ degraded: m.degraded }" @click="onBubbleClick" v-html="m.html"></div>
                 <div v-else-if="m.streaming" class="ad-bubble ad-typing"><i></i><i></i><i></i></div>
                 <!-- 操作卡片：写操作不直接执行，用户确认后才执行 -->
                 <div
@@ -217,10 +218,19 @@
 
                   <div class="ad-card-foot">
                     <template v-if="cardStatus(card) === 'PENDING'">
-                      <span class="ad-card-hint"><Clock :size="12" :stroke-width="2" /> {{ expiryText(card) }}</span>
+                      <span v-if="blockedBy(card)" class="ad-card-hint waiting">
+                        <Link2 :size="12" :stroke-width="2" /> 需先确认「{{ blockedBy(card) }}」
+                      </span>
+                      <span v-else class="ad-card-hint"><Clock :size="12" :stroke-width="2" /> {{ expiryText(card) }}</span>
                       <div class="ad-card-actions">
                         <button type="button" class="btn-cancel" :disabled="card.busy" @click="cancelAction(card)">取消</button>
-                        <button type="button" class="btn-confirm" :disabled="card.busy" @click="confirmAction(card)">
+                        <button
+                          type="button"
+                          class="btn-confirm"
+                          :disabled="card.busy || !!blockedBy(card)"
+                          :title="blockedBy(card) ? '请先确认上一张卡片' : ''"
+                          @click="confirmAction(card)"
+                        >
                           <LoaderCircle v-if="card.busy" :size="13" :stroke-width="2" class="ad-spin" />
                           {{ card.riskLevel === 'W2' ? '确认修改' : '确认创建' }}
                         </button>
@@ -239,6 +249,16 @@
                       <CircleAlert :size="13" :stroke-width="2" /> 执行失败：{{ card.result && card.result.error || '未知原因' }}
                     </span>
                     <span v-else class="ad-card-result muted">{{ statusText(cardStatus(card)) }}</span>
+                  </div>
+                  <!-- 新签发的 API Key：只在确认后的这次响应中返回，不落库、刷新或切换会话后无法再次查看 -->
+                  <div v-if="card.secret" class="ad-card-secret">
+                    <div class="ad-card-secret-row">
+                      <code>{{ card.secret }}</code>
+                      <button type="button" class="ad-card-link" @click="copySecret(card)">
+                        <component :is="card.copied ? Check : Copy" :size="12" :stroke-width="2" /> {{ card.copied ? '已复制' : '复制' }}
+                      </button>
+                    </div>
+                    <p><CircleAlert :size="12" :stroke-width="2" /> 仅显示一次，请立即复制保存；关闭或刷新后无法再次查看。</p>
                   </div>
                   <p v-if="card.error" class="ad-card-error">{{ card.error }}</p>
                 </div>
@@ -267,6 +287,15 @@
         </div>
 
         <footer class="ad-foot">
+          <div v-if="contextLabel" class="ad-context" :class="{ off: !includeContext }">
+            <Crosshair :size="12" :stroke-width="2" />
+            <span class="ad-context-text">{{ includeContext ? '关于' : '不关联' }} {{ contextLabel }}</span>
+            <button
+              type="button"
+              :title="includeContext ? '这次提问不关联当前页面的资源' : '关联当前页面的资源'"
+              @click="includeContext = !includeContext"
+            >{{ includeContext ? '不关联' : '关联' }}</button>
+          </div>
           <div class="ad-input" :class="{ focused }">
             <textarea
               ref="inputRef"
@@ -326,15 +355,23 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   Workflow, BookOpen, Network, Wrench, KeyRound, Stethoscope, ArrowUp, SquarePen, X,
   PanelRight, PictureInPicture2, Maximize2, Minimize2, History, Square, LoaderCircle, Check,
-  CircleAlert, Trash2, MessageSquare, Zap, ThumbsUp, ThumbsDown, ExternalLink, PencilLine, Plus, Clock
+  CircleAlert, Trash2, MessageSquare, Zap, ThumbsUp, ThumbsDown, ExternalLink, PencilLine, Plus, Clock,
+  Copy, Crosshair, Link2
 } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { http } from '../api/http'
 import AgentMascot from './AgentMascot.vue'
+import { useAssistantContext } from '../composables/useAssistantContext'
+
+const props = defineProps({
+  // 入口按钮离底部的距离：页面右下角有自己的按钮时（例如调试台的发送按钮）上移避开
+  launcherBottom: { type: Number, default: 28 }
+})
+const launcherBottom = computed(() => props.launcherBottom)
 
 const router = useRouter()
 
@@ -533,12 +570,43 @@ const capabilities = [
   { label: '问题排查', icon: Stethoscope, prompt: '智能体调试时没有回复，应该怎么排查？' }
 ]
 
-const examples = [
+const generalExamples = [
   '我有哪些运行中的智能体？哪个调用最多？',
   '这周 token 用了多少，成本多少？',
   '模型通道现在都正常吗？',
   '平台内置引擎和 Dify 外部引擎有什么区别？'
 ]
+
+// ==================== 页面上下文：用户正在看的智能体 / 知识库 ====================
+const pageContext = useAssistantContext()
+const includeContext = ref(true)
+// 换了一个资源后重新默认关联
+watch(() => pageContext.resourceId, () => { includeContext.value = true })
+
+const contextLabel = computed(() => {
+  if (!pageContext.resourceId || !pageContext.resourceName) return ''
+  return (pageContext.resourceType === 'AGENT' ? '智能体' : '知识库') + '「' + pageContext.resourceName + '」'
+})
+
+function requestContext() {
+  const ctx = {}
+  if (pageContext.page) ctx.page = pageContext.page
+  if (includeContext.value && pageContext.resourceId) {
+    ctx.resourceType = pageContext.resourceType
+    ctx.resourceId = pageContext.resourceId
+  }
+  return Object.keys(ctx).length ? ctx : null
+}
+
+const examples = computed(() => {
+  if (includeContext.value && pageContext.resourceType === 'AGENT' && pageContext.resourceId) {
+    return ['这个智能体为什么没有回复？', '帮这个智能体优化一下系统提示词', '给这个智能体创建一个开放 API 凭证']
+  }
+  if (includeContext.value && pageContext.resourceType === 'KNOWLEDGE_BASE' && pageContext.resourceId) {
+    return ['这个知识库有多少文档和 FAQ？', '给这个知识库添加一条 FAQ', '这个知识库绑定给了哪些智能体？']
+  }
+  return generalExamples
+})
 
 function openPanel() {
   open.value = true
@@ -661,6 +729,7 @@ function renderMarkdown(text) {
   html = html.replace(/```[a-zA-Z]*\n?([\s\S]*?)```/g, (_, code) => keep(`<pre><code>${code.replace(/\n$/, '')}</code></pre>`))
   html = html
     .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    .replace(/\[([^\]\n]{1,80})\]\((\/(?!\/)[A-Za-z0-9_\-\/?=&;.%#]*)\)/g, '<a class="md-link" href="$2" data-internal="1">$1</a>')
     .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
     // 表格：表头行 + 分隔行（|---|:---:|）+ 数据行；流式输出中分隔行尚未到达时按普通文本显示
     .replace(/^(\|.*\|)[ \t]*\n\|?[ \t]*:?-{2,}:?[ \t]*(?:\|[ \t]*:?-{2,}:?[ \t]*)*\|?[ \t]*\n((?:\|.*\|[ \t]*(?:\n|$))*)/gm,
@@ -722,7 +791,7 @@ async function send(text) {
 
   abortCtrl = new AbortController()
   const result = await http.stream('/api/assistant/chat/stream',
-    { conversationId: conversationId.value, message: content, mode: chatMode.value },
+    { conversationId: conversationId.value, message: content, mode: chatMode.value, context: requestContext() },
     {
       signal: abortCtrl.signal,
       onEvent(event, data) {
@@ -819,6 +888,35 @@ async function actOnCard(card, verb) {
 }
 
 const confirmAction = (card) => actOnCard(card, 'confirm')
+
+// 依赖的前序卡片（多步编排）尚未执行成功时，返回其标题；前序卡片不在当前界面时以服务端校验为准
+function blockedBy(card) {
+  if (!card.dependsOn || !card.dependsOn.length) return null
+  for (const depId of card.dependsOn) {
+    for (const m of messages.value) {
+      const dep = (m.actions || []).find(a => a.id === depId)
+      if (dep && cardStatus(dep) !== 'EXECUTED') return dep.title
+    }
+  }
+  return null
+}
+
+async function copySecret(card) {
+  try {
+    await navigator.clipboard.writeText(card.secret)
+    card.copied = true
+    setTimeout(() => { card.copied = false }, 2000)
+  } catch {
+    card.error = '复制失败，请手动选中复制'
+  }
+}
+
+function onBubbleClick(e) {
+  const a = e.target.closest && e.target.closest('a[data-internal]')
+  if (!a) return
+  e.preventDefault()
+  openLink(a.getAttribute('href'))
+}
 const cancelAction = (card) => actOnCard(card, 'cancel')
 
 function openLink(url) {
@@ -1788,6 +1886,97 @@ async function sendFeedback(m, rating) {
 
 .ad-card-link:hover {
   background: var(--surface-subtle);
+}
+
+.ad-card-hint.waiting {
+  color: var(--warning, #b7791f);
+}
+
+.btn-confirm:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ad-card-secret {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px dashed var(--warning, #b7791f);
+  background: rgba(183, 121, 31, 0.06);
+}
+
+.ad-card-secret-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ad-card-secret code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: var(--text-primary);
+  user-select: all;
+}
+
+.ad-card-secret p {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--warning, #b7791f);
+}
+
+.ad-bubble :deep(a.md-link) {
+  color: var(--brand-text, var(--brand));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.ad-context {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--surface-subtle);
+}
+
+.ad-context.off {
+  color: var(--text-muted);
+}
+
+.ad-context.off .ad-context-text {
+  text-decoration: line-through;
+}
+
+.ad-context-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ad-context button {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ad-context button:hover {
+  color: var(--text-primary);
 }
 
 .ad-card-error {
