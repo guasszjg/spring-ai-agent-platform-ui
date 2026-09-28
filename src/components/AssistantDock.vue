@@ -165,8 +165,102 @@
                 </div>
                 <div v-if="m.html" class="ad-bubble" :class="{ degraded: m.degraded }" v-html="m.html"></div>
                 <div v-else-if="m.streaming" class="ad-bubble ad-typing"><i></i><i></i><i></i></div>
+                <!-- 操作卡片：写操作不直接执行，用户确认后才执行 -->
+                <div
+                  v-for="card in m.actions || []"
+                  :key="card.id"
+                  class="ad-card"
+                  :class="['status-' + cardStatus(card).toLowerCase()]"
+                >
+                  <div class="ad-card-head">
+                    <span class="ad-card-icon">
+                      <component :is="card.riskLevel === 'W2' ? PencilLine : Plus" :size="14" :stroke-width="2" />
+                    </span>
+                    <span class="ad-card-title">{{ card.title }}</span>
+                    <span class="ad-card-risk" :class="card.riskLevel">{{ card.riskLevel === 'W2' ? '修改' : '新建' }}</span>
+                  </div>
+
+                  <dl v-if="card.preview && card.preview.fields" class="ad-card-fields">
+                    <template v-for="f in card.preview.fields" :key="f.label">
+                      <dt>{{ f.label }}</dt>
+                      <dd v-if="!f.multiline">{{ f.value }}</dd>
+                      <dd v-else>
+                        <div class="ad-card-long" :class="{ open: card.expanded && card.expanded[f.label] }">{{ f.value }}</div>
+                        <button v-if="f.value && f.value.length > 120" type="button" class="ad-card-toggle" @click="toggleField(card, f.label)">
+                          {{ card.expanded && card.expanded[f.label] ? '收起' : '展开全部' }}
+                        </button>
+                      </dd>
+                    </template>
+                  </dl>
+
+                  <div v-if="card.preview && card.preview.diff" class="ad-card-diff">
+                    <div class="ad-card-diff-label">{{ card.preview.diff.label }}</div>
+                    <div class="ad-card-diff-cols">
+                      <div class="before">
+                        <span>修改前</span>
+                        <div class="ad-card-long" :class="{ open: card.expanded && card.expanded.__diff }">{{ card.preview.diff.before || '（空）' }}</div>
+                      </div>
+                      <div class="after">
+                        <span>修改后</span>
+                        <div class="ad-card-long" :class="{ open: card.expanded && card.expanded.__diff }">{{ card.preview.diff.after || '（空）' }}</div>
+                      </div>
+                    </div>
+                    <button
+                      v-if="(card.preview.diff.before || '').length > 120 || (card.preview.diff.after || '').length > 120"
+                      type="button"
+                      class="ad-card-toggle"
+                      @click="toggleField(card, '__diff')"
+                    >{{ card.expanded && card.expanded.__diff ? '收起' : '展开全部' }}</button>
+                  </div>
+
+                  <p v-if="card.preview && card.preview.note" class="ad-card-note">{{ card.preview.note }}</p>
+
+                  <div class="ad-card-foot">
+                    <template v-if="cardStatus(card) === 'PENDING'">
+                      <span class="ad-card-hint"><Clock :size="12" :stroke-width="2" /> {{ expiryText(card) }}</span>
+                      <div class="ad-card-actions">
+                        <button type="button" class="btn-cancel" :disabled="card.busy" @click="cancelAction(card)">取消</button>
+                        <button type="button" class="btn-confirm" :disabled="card.busy" @click="confirmAction(card)">
+                          <LoaderCircle v-if="card.busy" :size="13" :stroke-width="2" class="ad-spin" />
+                          {{ card.riskLevel === 'W2' ? '确认修改' : '确认创建' }}
+                        </button>
+                      </div>
+                    </template>
+                    <template v-else-if="cardStatus(card) === 'EXECUTED'">
+                      <span class="ad-card-result ok"><Check :size="13" :stroke-width="2.2" /> {{ card.result && card.result.message || '已执行' }}</span>
+                      <button
+                        v-if="card.result && card.result.link"
+                        type="button"
+                        class="ad-card-link"
+                        @click="openLink(card.result.link.url)"
+                      >{{ card.result.link.label }} <ExternalLink :size="12" :stroke-width="2" /></button>
+                    </template>
+                    <span v-else-if="cardStatus(card) === 'FAILED'" class="ad-card-result fail">
+                      <CircleAlert :size="13" :stroke-width="2" /> 执行失败：{{ card.result && card.result.error || '未知原因' }}
+                    </span>
+                    <span v-else class="ad-card-result muted">{{ statusText(cardStatus(card)) }}</span>
+                  </div>
+                  <p v-if="card.error" class="ad-card-error">{{ card.error }}</p>
+                </div>
+
                 <div v-if="m.notice" class="ad-notice">{{ m.notice }}</div>
-                <div v-if="m.meta" class="ad-meta">{{ m.meta }}</div>
+                <div v-if="m.meta || (m.id && !m.streaming && !m.degraded)" class="ad-meta-row">
+                  <span v-if="m.meta" class="ad-meta">{{ m.meta }}</span>
+                  <span v-if="m.id && !m.streaming && !m.degraded" class="ad-feedback">
+                    <button
+                      type="button"
+                      :class="{ on: m.feedback === 'UP' }"
+                      title="有用"
+                      @click="sendFeedback(m, 'UP')"
+                    ><ThumbsUp :size="13" :stroke-width="1.9" /></button>
+                    <button
+                      type="button"
+                      :class="{ on: m.feedback === 'DOWN' }"
+                      title="没用"
+                      @click="sendFeedback(m, 'DOWN')"
+                    ><ThumbsDown :size="13" :stroke-width="1.9" /></button>
+                  </span>
+                </div>
               </div>
             </div>
           </template>
@@ -236,10 +330,13 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'v
 import {
   Workflow, BookOpen, Network, Wrench, KeyRound, Stethoscope, ArrowUp, SquarePen, X,
   PanelRight, PictureInPicture2, Maximize2, Minimize2, History, Square, LoaderCircle, Check,
-  CircleAlert, Trash2, MessageSquare, Zap
+  CircleAlert, Trash2, MessageSquare, Zap, ThumbsUp, ThumbsDown, ExternalLink, PencilLine, Plus, Clock
 } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
 import { http } from '../api/http'
 import AgentMascot from './AgentMascot.vue'
+
+const router = useRouter()
 
 const open = ref(false)
 const draft = ref('')
@@ -479,12 +576,17 @@ async function openConversation(id) {
     return
   }
   conversationId.value = res.data.id
-  messages.value = (res.data.messages || []).map(fromStoredMessage)
+  const actionsByMessage = {}
+  for (const card of res.data.actions || []) {
+    if (!card.messageId) continue
+    ;(actionsByMessage[card.messageId] ||= []).push(card)
+  }
+  messages.value = (res.data.messages || []).map(m => fromStoredMessage(m, actionsByMessage[m.id] || []))
   view.value = 'chat'
   scrollToBottom()
 }
 
-function fromStoredMessage(m) {
+function fromStoredMessage(m, actions = []) {
   if (m.role === 'user') {
     return { role: 'user', content: m.content || '', html: escapeHtml(m.content || '').replace(/\n/g, '<br>') }
   }
@@ -493,11 +595,14 @@ function fromStoredMessage(m) {
     tools = (JSON.parse(m.toolCalls || '[]') || []).map((t, i) => ({ id: `${m.id}-${i}`, label: t.label, status: t.ok ? 'done' : 'failed' }))
   } catch { /* 忽略损坏的工具记录 */ }
   return {
+    id: m.id,
     role: 'assistant',
     content: m.content || '',
     html: renderMarkdown(m.content || ''),
     degraded: !!m.degraded,
+    feedback: m.feedback || null,
     tools,
+    actions,
     meta: m.degraded ? '' : metaText(m.model, m.latencyMs, (m.promptTokens || 0) + (m.completionTokens || 0))
   }
 }
@@ -607,7 +712,7 @@ async function send(text) {
   view.value = 'chat'
 
   messages.value.push({ role: 'user', content, html: escapeHtml(content).replace(/\n/g, '<br>') })
-  messages.value.push({ role: 'assistant', content: '', html: '', streaming: true, tools: [], notice: '', meta: '' })
+  messages.value.push({ role: 'assistant', content: '', html: '', streaming: true, tools: [], actions: [], notice: '', meta: '' })
   // 取响应式代理，后续修改才会触发界面更新
   const reply = messages.value[messages.value.length - 1]
   draft.value = ''
@@ -625,6 +730,9 @@ async function send(text) {
           conversationId.value = data.conversationId
         } else if (event === 'tool') {
           upsertTool(reply, data)
+        } else if (event === 'action') {
+          reply.actions.push(data)
+          scrollToBottom()
         } else if (event === 'message') {
           reply.content += data.delta || ''
           scheduleRender(reply)
@@ -636,6 +744,7 @@ async function send(text) {
           reply.degraded = !!data.degraded
           if (data.notice) reply.notice = data.notice
           reply.meta = data.degraded ? '' : metaText(data.model, data.latencyMs, (data.promptTokens || 0) + (data.completionTokens || 0))
+          reply.id = data.messageId
           if (data.conversationId) conversationId.value = data.conversationId
         } else if (event === 'error') {
           reply.content = data.message || '请求失败，请稍后重试'
@@ -668,6 +777,64 @@ async function send(text) {
 
 function stop() {
   if (abortCtrl) abortCtrl.abort()
+}
+
+// ==================== 操作卡片 ====================
+// 每 15 秒刷新一次"剩余有效时间"与过期状态（以服务端为准，这里只影响展示）
+const now = ref(Date.now())
+let clockTimer = null
+onMounted(() => { clockTimer = setInterval(() => { now.value = Date.now() }, 15000) })
+onBeforeUnmount(() => clearInterval(clockTimer))
+
+function cardStatus(card) {
+  if (card.status === 'PENDING' && card.expiresAt && new Date(card.expiresAt).getTime() <= now.value) return 'EXPIRED'
+  return card.status || 'PENDING'
+}
+
+function expiryText(card) {
+  if (!card.expiresAt) return '10 分钟内有效'
+  const left = Math.max(0, Math.ceil((new Date(card.expiresAt).getTime() - now.value) / 60000))
+  return left > 0 ? `${left} 分钟内有效` : '即将过期'
+}
+
+function statusText(status) {
+  return { CANCELLED: '已取消', EXPIRED: '已过期，如需执行请让助手重新生成', EXECUTING: '执行中…' }[status] || status
+}
+
+function toggleField(card, key) {
+  card.expanded = { ...(card.expanded || {}), [key]: !(card.expanded && card.expanded[key]) }
+}
+
+async function actOnCard(card, verb) {
+  card.busy = true
+  card.error = ''
+  const res = await http.post(`/api/assistant/actions/${encodeURIComponent(card.id)}/${verb}`)
+  card.busy = false
+  if (res && res.success && res.data) {
+    const { expanded } = card
+    Object.assign(card, res.data, { expanded })
+  } else {
+    card.error = (res && res.message) || '操作失败，请稍后重试'
+  }
+}
+
+const confirmAction = (card) => actOnCard(card, 'confirm')
+const cancelAction = (card) => actOnCard(card, 'cancel')
+
+function openLink(url) {
+  if (!url) return
+  router.push(url).catch(() => {})
+  // 小屏全屏展示时跳转后收起面板，便于查看目标页面
+  if (isNarrow.value || mode.value === 'full') open.value = false
+}
+
+// ==================== 回复反馈 ====================
+async function sendFeedback(m, rating) {
+  const next = m.feedback === rating ? null : rating
+  const prev = m.feedback
+  m.feedback = next
+  const res = await http.post(`/api/assistant/messages/${encodeURIComponent(m.id)}/feedback`, { rating: next })
+  if (!res || !res.success) m.feedback = prev
 }
 </script>
 
@@ -1336,6 +1503,303 @@ function stop() {
 .ad-bubble :deep(th) {
   background: var(--surface-subtle);
   font-weight: 600;
+}
+
+/* ---------- 回复元信息与反馈 ---------- */
+.ad-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ad-feedback {
+  display: inline-flex;
+  gap: 2px;
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+
+.ad-msg:hover .ad-feedback,
+.ad-feedback:has(.on) {
+  opacity: 1;
+}
+
+.ad-feedback button {
+  width: 24px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.ad-feedback button:hover {
+  background: var(--surface-subtle);
+  color: var(--text-primary);
+}
+
+.ad-feedback button.on {
+  color: var(--brand, #d97757);
+  background: var(--brand-soft, rgba(217, 119, 87, 0.1));
+}
+
+/* ---------- 操作卡片 ---------- */
+.ad-card {
+  border: 1px solid var(--brand-line, var(--border-hover));
+  border-radius: 12px;
+  background: var(--bg-card);
+  padding: 12px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.ad-card.status-executed {
+  border-color: var(--border-color);
+}
+
+.ad-card.status-cancelled,
+.ad-card.status-expired {
+  border-color: var(--border-color);
+  opacity: 0.75;
+}
+
+.ad-card.status-failed {
+  border-color: var(--warning, #b7791f);
+}
+
+.ad-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ad-card-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  color: var(--brand, #d97757);
+  background: var(--brand-soft, rgba(217, 119, 87, 0.1));
+}
+
+.ad-card-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ad-card-risk {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--surface-subtle);
+}
+
+.ad-card-risk.W2 {
+  color: var(--warning, #b7791f);
+  background: rgba(183, 121, 31, 0.1);
+}
+
+.ad-card-fields {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  margin: 0;
+}
+
+.ad-card-fields dt {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.ad-card-fields dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.ad-card-long {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 4.8em;
+  overflow: hidden;
+  line-height: 1.6;
+}
+
+.ad-card-long.open {
+  max-height: none;
+}
+
+.ad-card-toggle {
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--brand, #d97757);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ad-card-diff-label {
+  margin-bottom: 6px;
+  color: var(--text-muted);
+}
+
+.ad-card-diff-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ad-card-diff-cols > div {
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+
+.ad-card-diff-cols span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.ad-card-diff-cols .before {
+  background: rgba(192, 57, 43, 0.06);
+  border: 1px solid rgba(192, 57, 43, 0.15);
+}
+
+.ad-card-diff-cols .after {
+  background: rgba(63, 143, 90, 0.07);
+  border: 1px solid rgba(63, 143, 90, 0.18);
+}
+
+.ad-card-note {
+  margin: 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--warning, #b7791f);
+  background: rgba(183, 121, 31, 0.08);
+}
+
+.ad-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 2px;
+}
+
+.ad-card-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.ad-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.ad-card-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.ad-card-actions .btn-cancel {
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.ad-card-actions .btn-confirm {
+  border: none;
+  background: var(--brand-strong, #c15f3c);
+  color: #ffffff;
+}
+
+.ad-card-actions .btn-confirm:hover:not(:disabled) {
+  background: var(--brand-strong-hover, #ad5232);
+}
+
+.ad-card-actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ad-card-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+}
+
+.ad-card-result.ok {
+  color: var(--success, #3f8f5a);
+}
+
+.ad-card-result.fail {
+  color: var(--warning, #b7791f);
+}
+
+.ad-card-result.muted {
+  color: var(--text-muted);
+}
+
+.ad-card-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.ad-card-link:hover {
+  background: var(--surface-subtle);
+}
+
+.ad-card-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--danger, #c0392b);
+}
+
+@media (max-width: 520px) {
+  .ad-card-diff-cols {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ---------- 历史对话 ---------- */
