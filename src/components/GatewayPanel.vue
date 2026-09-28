@@ -87,6 +87,16 @@
             <option v-for="p in readyProviders" :key="'fb-' + p.id" :value="p.id">{{ p.name }}</option>
           </select>
         </label>
+        <label title="平台 AI 助手使用的通道与模型，可选更便宜、工具调用更稳定的模型；专用通道不可用时自动回到默认通道">AI 助手
+          <select v-model="policy.assistantProviderId" @change="policy.assistantModel = ''">
+            <option value="">跟随默认通道</option>
+            <option v-for="p in readyProviders" :key="'as-' + p.id" :value="p.id">{{ p.name }}</option>
+          </select>
+          <select v-if="policy.assistantProviderId" v-model="policy.assistantModel">
+            <option value="">通道默认模型{{ assistantProvider?.defaultModel ? '（' + assistantProvider.defaultModel + '）' : '' }}</option>
+            <option v-for="m in assistantModelOptions" :key="'am-' + m" :value="m">{{ m }}</option>
+          </select>
+        </label>
         <label class="gateway-inline-switch">
           <input v-model="policy.failoverEnabled" type="checkbox">
           <span>自动故障转移 (Failover)</span>
@@ -1043,7 +1053,9 @@ const policy = reactive({
   fallbackProviderId: '',
   failoverEnabled: true,
   timeoutMs: 30000,
-  maxRetries: 1
+  maxRetries: 1,
+  assistantProviderId: '',
+  assistantModel: ''
 })
 const form = reactive({
   id: '', vendor: 'CUSTOM', protocol: 'OPENAI', name: '', baseUrl: '', apiKey: '', apiKeyMasked: '',
@@ -1060,6 +1072,9 @@ const form = reactive({
 })
 
 const providers = computed(() => overview.value.providers || [])
+const assistantProvider = computed(() => providers.value.find(p => p.id === policy.assistantProviderId) || null)
+const assistantModelOptions = computed(() => (assistantProvider.value?.modelList || [])
+  .filter(m => m && m !== assistantProvider.value.defaultModel))
 const readyProviders = computed(() =>
   providers.value.filter((p) => p.enabled && p.configured && p.lastProbeStatus === 'SUCCESS')
 )
@@ -1657,6 +1672,8 @@ async function load() {
     policy.failoverEnabled = p.failoverEnabled !== false
     policy.timeoutMs = p.timeoutMs || 30000
     policy.maxRetries = p.maxRetries == null ? 1 : p.maxRetries
+    policy.assistantProviderId = p.assistantProviderId || ''
+    policy.assistantModel = p.assistantModel || ''
     ensureDefaultProvider()
   }
   if (cat.success) catalog.value = cat.data || []

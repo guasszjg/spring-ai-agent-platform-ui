@@ -7,9 +7,11 @@
       <div class="toast-message">{{ item.message }}</div>
     </div>
   </div>
+  <!-- 调试页按智能体 ID 区分实例：从 /debug/a 跳到 /debug/b（例如点击助手回复中的链接）时重新加载。
+       keep-alive 内只能有一个子节点，注释不要放进去 -->
   <router-view v-slot="{ Component }">
     <keep-alive include="DashboardView">
-      <component :is="Component" />
+      <component :is="Component" :key="route.name === 'debug' ? route.path : undefined" />
     </keep-alive>
   </router-view>
 </template>

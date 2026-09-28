@@ -614,6 +614,9 @@
         </div>
       </div>
     </div>
+
+    <!-- 平台 AI 助手：页面上下文为当前智能体，可以直接问"这个智能体为什么没回复" -->
+    <AssistantDock :launcher-bottom="132" />
   </div>
 </template>
 
@@ -628,6 +631,8 @@ import AgentApiPanel from '../components/AgentApiPanel.vue'
 import ToolGlyph from '../components/ToolGlyph.vue'
 import AgentMascot from '../components/AgentMascot.vue'
 import AgentAvatar from '../components/AgentAvatar.vue'
+import AssistantDock from '../components/AssistantDock.vue'
+import { clearAssistantResource, setAssistantPage, setAssistantResource } from '../composables/useAssistantContext'
 import { User } from 'lucide-vue-next'
 import { FALLBACK_PLATFORM_TOOLS, matchSavedTool, toDebugTool } from '../composables/platformTools'
 
@@ -1320,9 +1325,11 @@ onMounted(async () => {
   document.addEventListener('mousedown', onDocClick)
     const overviewRes = await http.get('/api/model-gateway/active-route')
     if (overviewRes.success) applyGatewayRoute(overviewRes.data)
+  setAssistantPage('debug')
   const res = await http.get(`/api/agents/${route.params.id}`)
   if (res.success && res.data) {
     agent.value = res.data
+    setAssistantResource('AGENT', res.data.id, res.data.name)
     prompt.value = res.data.systemPrompt || ''
     publishedPrompt.value = prompt.value
     applyAgentSettings(res.data)
@@ -1346,7 +1353,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
+  clearAssistantResource()
   document.removeEventListener('mousemove', onMove)
   document.removeEventListener('mouseup', onUp)
   document.removeEventListener('mousedown', onDocClick)
