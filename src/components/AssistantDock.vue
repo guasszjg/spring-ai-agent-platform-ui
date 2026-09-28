@@ -178,7 +178,9 @@
               ref="inputRef"
               v-model="draft"
               rows="1"
-              placeholder="输入你的问题，Enter 发送，Shift+Enter 换行"
+              :placeholder="chatMode === 'CHAT'
+                ? '问答模式：只回答使用问题，不查询平台数据'
+                : '输入你的问题，Enter 发送，Shift+Enter 换行'"
               @focus="focused = true"
               @blur="focused = false"
               @input="autosize"
