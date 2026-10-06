@@ -1089,7 +1089,6 @@ input:checked + .slider-toggle:before {
 .btn-create-user,
 .btn-use-tpl,
 .btn-execute-test,
-.btn-execute-test.btn-shadow-mode,
 .btn-send-play,
 .btn-regen-key,
 .btn-success {
@@ -1131,7 +1130,6 @@ input:checked + .slider-toggle:before {
 .btn-lang.active,
 .btn-sub-tab.active,
 .method-pill.active,
-.mode-switch-btn.active,
 .format-chip.active,
 .endpoint-nav-item.active,
 .subtab-btn.active,
@@ -1199,15 +1197,9 @@ input:checked + .slider-toggle:before {
 .badge-recall-test,
 .param-val-badge,
 .badge-subtab-p3,
-.shadow-badge-main,
-.col-count-tag,
-.engine-indicator-pill,
-.engine-indicator-pill.spring-ai,
-.engine-indicator-pill.dify,
 .result-stat-chip,
 .result-stat-chip.hit-count,
 .result-stat-chip.engine,
-.chunk-score-tag,
 .ocr-status-badge.enabled,
 .btn-offline-badge,
 .table-tag-item,
@@ -1293,7 +1285,6 @@ input:checked + .slider-toggle:before {
 .role-overview-card.card-developer,
 .cost-card.card-blue,
 .cost-card.card-emerald,
-.shadow-col.col-primary,
 .sec-selection-banner,
 .auto-pwd-desc-box,
 .gov-card-tip,
@@ -1410,7 +1401,6 @@ input:checked + .slider-toggle:before {
 .tools-cat-tag.ok {
   color: var(--accent-emerald) !important;
 }
-
 
 /* ==========================================================
    雾蓝主调：让品牌色在关键位置"淡淡地"出现
@@ -1577,8 +1567,7 @@ input[type="range"] {
   font-variant-numeric: tabular-nums;
 }
 
-/* 选项卡片（知识库服务 / 检索方式 / 向量模型） */
-.provider-radio-card,
+/* 选项卡片（检索方式 / 向量模型） */
 .retrieval-card,
 .embedding-model-box {
   background: var(--bg-card) !important;
@@ -1586,36 +1575,30 @@ input[type="range"] {
   box-shadow: none !important;
 }
 
-.provider-radio-card:hover:not(.disabled),
 .retrieval-card:hover {
   border-color: var(--border-hover) !important;
 }
 
-.provider-radio-card.active,
 .retrieval-card.active {
   background: var(--brand-soft) !important;
   border-color: var(--brand-line) !important;
   box-shadow: none !important;
 }
 
-.provider-radio-card i,
 .retrieval-card i,
 .embedding-model-box i {
   color: var(--text-muted) !important;
 }
 
-.provider-radio-card.active i,
 .retrieval-card.active i {
   color: var(--brand) !important;
 }
 
-.provider-radio-desc,
 .retrieval-card-desc {
   color: var(--text-muted) !important;
 }
 
-.tag-recommend,
-.badge-mode-p3 {
+.tag-recommend {
   background: transparent !important;
   border: 1px solid var(--border-color) !important;
   color: var(--text-muted) !important;
@@ -1764,27 +1747,3 @@ input[type="range"] {
   border: none !important;
 }
 
-/* 知识库服务卡片：不可用（Dify 未配置 / 未就绪、编辑时锁定引擎） */
-.provider-radio-card.disabled {
-  cursor: not-allowed !important;
-}
-
-.provider-radio-card.disabled:not(.active) {
-  opacity: 0.55;
-  filter: grayscale(1);
-  background: var(--surface-subtle) !important;
-}
-
-.provider-unavailable {
-  margin-top: 8px;
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--accent-amber);
-}
-
-.provider-unavailable i {
-  margin-top: 2px;
-}

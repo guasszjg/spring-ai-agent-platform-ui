@@ -1045,6 +1045,55 @@
   font-weight: 600;
 }
 
+/* 知识来源：自建 / Dify 二选一 */
+.kb-source-chip {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.kb-source-chip.native {
+  color: var(--brand-text);
+  background: var(--brand-soft);
+  border-color: var(--brand-line);
+}
+
+.kb-source-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+}
+
+.kb-source-option {
+  padding: 5px 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.kb-source-option.active {
+  background: var(--bg-card);
+  color: var(--brand-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.kb-source-option:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* Tools Header & Grid */
 .section-tools-header-right {
   display: flex;

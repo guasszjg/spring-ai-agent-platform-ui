@@ -5,14 +5,14 @@
       <!-- 头部 Hero 工具条 -->
       <div class="kb-hero-toolbar">
         <div>
-          <h2 class="kb-page-title">知识库</h2>
+          <h2 class="kb-page-title">{{ pageTitle }}</h2>
         </div>
         <div class="kb-hero-actions">
-          <button v-if="canSyncDify" class="btn-secondary kb-sync-btn" :disabled="syncing" title="从 Dify 导入或同步已有知识库" @click="syncFromDify">
+          <button v-if="isDifyPage && canSyncDify" class="btn-secondary kb-sync-btn" :disabled="syncing || !difyEngineReady" :title="difyEngineReady ? '从 Dify 导入或同步已有知识库' : difyUnavailableReason" @click="syncFromDify">
             <i class="fa-solid fa-rotate" :class="{ 'fa-spin': syncing }"></i>
             <span>{{ syncing ? '正在从 Dify 同步...' : '从 Dify 一键同步' }}</span>
           </button>
-          <button class="btn-create-agent" @click="openCreateKb">
+          <button class="btn-create-agent" :disabled="isDifyPage && !difyEngineReady" :title="isDifyPage && !difyEngineReady ? difyUnavailableReason : ''" @click="openCreateKb">
             <i class="fa-solid fa-plus"></i>
             <span>新建知识库</span>
           </button>
@@ -41,7 +41,17 @@
           </div>
           <div class="stat-icon-wrapper icon-emerald"><i class="fa-solid fa-comments"></i></div>
         </div>
-        <div class="stat-card">
+        <div v-if="!isDifyPage" class="stat-card">
+          <div class="stat-info">
+            <span class="stat-label">向量模型</span>
+            <span class="stat-value kb-engine-status" :class="{ offline: !activeEmbedding.configured }">
+              {{ activeEmbedding.configured ? '已激活' : '未配置' }}
+            </span>
+            <span class="stat-desc kb-engine-host" :title="activeEmbedding.modelName">{{ activeEmbedding.configured ? activeEmbedding.modelName : '在模型网关中激活后可用' }}</span>
+          </div>
+          <div class="stat-icon-wrapper icon-amber"><i class="fa-solid fa-cube"></i></div>
+        </div>
+        <div v-else class="stat-card">
           <div class="stat-info">
             <span class="stat-label">Dify 引擎</span>
             <span class="stat-value kb-engine-status" :class="{ offline: !difyEngineReady }">
@@ -154,15 +164,15 @@
       <div v-else-if="displayKbList.length === 0" class="kb-empty-state">
         <div class="empty-icon-wrap"><i class="fa-solid fa-book-open"></i></div>
         <h3>{{ scopeFilter === 'mine' ? '暂无我创建的私有知识库' : (scopeFilter === 'system' ? '暂无系统公共知识库' : (searchKeyword ? '未找到符合条件的知识库' : '暂无知识库资产')) }}</h3>
-        <p>{{ scopeFilter === 'mine' ? '您可以点击上方「新建知识库」创建您的专属企业资料库。' : (searchKeyword ? '尝试更换检索词或清空筛选条件。' : (canSyncDify ? '您可以新建本地知识库并自动同步至 Dify 数据集，或者直接从 Dify 一键同步。' : '您可以点击上方「新建知识库」创建您的专属企业资料库。')) }}</p>
+        <p>{{ scopeFilter === 'mine' ? '您可以点击上方「新建知识库」创建您的专属企业资料库。' : (searchKeyword ? '尝试更换检索词或清空筛选条件。' : (isDifyPage ? (difyEngineReady ? '新建的知识库会同步创建到 Dify，也可以从 Dify 一键同步已有知识库。' : difyUnavailableReason) : '您可以点击上方「新建知识库」创建您的专属企业资料库。')) }}</p>
         <div class="empty-actions">
           <button v-if="searchKeyword || scopeFilter !== 'all'" class="btn-secondary" @click="resetToList(true)">
             <i class="fa-solid fa-filter-circle-xmark"></i><span>清空筛选条件并查看全部</span>
           </button>
-          <button class="btn-create-agent" @click="openCreateKb">
+          <button class="btn-create-agent" :disabled="isDifyPage && !difyEngineReady" @click="openCreateKb">
             <i class="fa-solid fa-plus"></i><span>立即创建知识库</span>
           </button>
-          <button v-if="canSyncDify" class="btn-secondary" :disabled="syncing" @click="syncFromDify">
+          <button v-if="isDifyPage && canSyncDify" class="btn-secondary" :disabled="syncing || !difyEngineReady" @click="syncFromDify">
             <i class="fa-solid fa-rotate" :class="{ 'fa-spin': syncing }"></i><span>从 Dify 导入已有数据</span>
           </button>
         </div>
@@ -488,6 +498,7 @@
           <span>召回测试与调试</span>
         </button>
         <button
+          v-if="!isDifyPage"
           class="kb-subtab-btn"
           :class="{ active: activeSubTab === 'cost-governance' }"
           @click="openCostGovernanceTab"
@@ -873,41 +884,18 @@
             <div class="retrieval-title-row">
               <span class="badge-recall-test"><i class="fa-solid fa-crosshairs"></i> 召回调试控制台</span>
               <span class="badge-recall-engine">
-                <i class="fa-solid fa-cube"></i> 当前物理引擎: <strong>{{ testParams.engineOverride || selectedKb?.provider || 'DIFY' }}</strong>
+                <i class="fa-solid fa-cube"></i> 检索引擎: <strong>{{ isDifyPage ? 'Dify' : '平台内置' }}</strong>
               </span>
               <span v-if="activeIndexVersion" class="badge-recall-version">
                 <i class="fa-solid fa-code-branch"></i> 索引快照: <strong>V{{ activeIndexVersion.versionNo }} ({{ activeIndexVersion.status }})</strong>
               </span>
-              <button type="button" class="badge-recall-version btn-offline-badge" title="查看 100% 私有化离线闭环自检报告" @click="openOfflineReadinessModal()">
+              <button v-if="!isDifyPage" type="button" class="badge-recall-version btn-offline-badge" title="查看 100% 私有化离线闭环自检报告" @click="openOfflineReadinessModal()">
                 <i class="fa-solid fa-shield-halved"></i> 离线闭环: <strong style="color: #34d399;">就绪</strong>
               </button>
             </div>
             <p class="retrieval-header-desc">
               在不修改知识库线上持久配置的前提下，快速输入业务提问，验证切片召回质量、相似度得分分布、多路重排效果与端到端检索延迟。
             </p>
-
-            <!-- P3 模式切换: 单引擎标准调试 vs 双引擎影子评测 -->
-            <div class="retrieval-mode-switcher">
-              <button
-                type="button"
-                class="mode-switch-btn"
-                :class="{ active: retrievalMode === 'single' }"
-                @click="retrievalMode = 'single'"
-              >
-                <i class="fa-solid fa-bullseye"></i>
-                <span>标准单引擎调试</span>
-              </button>
-              <button
-                type="button"
-                class="mode-switch-btn"
-                :class="{ active: retrievalMode === 'shadow' }"
-                @click="retrievalMode = 'shadow'"
-              >
-                <i class="fa-solid fa-code-compare"></i>
-                <span>双引擎影子 A/B 评测</span>
-                <span class="badge-mode-p3">推荐</span>
-              </button>
-            </div>
           </div>
           <button type="button" class="btn-toggle-params" @click="showParamDrawer = !showParamDrawer">
             <i class="fa-solid fa-sliders"></i>
@@ -1033,7 +1021,7 @@
             </div>
 
             <!-- 父子分块展开 (P2 增强) -->
-            <div class="param-item">
+            <div v-if="!isDifyPage" class="param-item">
               <div class="param-label-row">
                 <label class="param-label">父子分块展开 (Parent-Child)</label>
                 <span class="param-val-badge" :style="{ color: testParams.expandParent ? '#c084fc' : '#94a3b8' }">
@@ -1054,7 +1042,7 @@
             </div>
 
             <!-- Query 智能改写与降噪 (P2 增强) -->
-            <div class="param-item">
+            <div v-if="!isDifyPage" class="param-item">
               <div class="param-label-row">
                 <label class="param-label">Query 意图改写与降噪</label>
                 <span class="param-val-badge" :style="{ color: testParams.rewriteEnabled ? '#60a5fa' : '#94a3b8' }">
@@ -1075,7 +1063,7 @@
             </div>
 
             <!-- Token 上下文预算上限 (P2 增强 - 修复 F4 缺陷) -->
-            <div class="param-item">
+            <div v-if="!isDifyPage" class="param-item">
               <div class="param-label-row">
                 <label class="param-label">上下文 Token 预算上限 (Budget Pruning)</label>
                 <span class="param-val-badge">{{ testParams.maxContextTokens }} Tokens</span>
@@ -1091,18 +1079,8 @@
               <div class="param-hint">动态计算并按大模型上下文窗口精准装填，废除硬编码截断</div>
             </div>
 
-            <!-- 引擎覆盖 (L3 调试覆盖) -->
-            <div class="param-item">
-              <label class="param-label">检索引擎</label>
-              <select v-model="testParams.engineOverride" class="form-control-styled">
-                <option value="">跟随知识库配置（{{ selectedKb?.provider === 'SPRING_AI' ? '内置引擎' : 'Dify 引擎' }}）</option>
-                <option value="DIFY">强制使用 Dify 引擎</option>
-                <option value="SPRING_AI">强制使用内置引擎</option>
-              </select>
-            </div>
-
             <!-- P4 语义缓存 (Semantic Cache) -->
-            <div class="param-item">
+            <div v-if="!isDifyPage" class="param-item">
               <div class="param-label-row">
                 <label class="param-label">语义缓存加速 (Semantic Cache)</label>
                 <span class="param-val-badge" :style="{ color: testParams.cacheEnabled ? '#10b981' : '#94a3b8' }">
@@ -1133,7 +1111,7 @@
             </div>
 
             <!-- P4 图文跨模态多模态检索 (Chapter 18) -->
-            <div class="param-item">
+            <div v-if="!isDifyPage" class="param-item">
               <div class="param-label-row">
                 <label class="param-label">图文跨模态检索 (Multimodal RAG)</label>
                 <span class="param-val-badge">
@@ -1190,7 +1168,7 @@
             </div>
 
             <!-- P4 GraphRAG 实体多跳图谱检索 (Pilot) -->
-            <div class="param-item">
+            <div v-if="!isDifyPage" class="param-item">
               <div class="param-label-row">
                 <label class="param-label">GraphRAG 实体多跳图谱检索 (Pilot)</label>
                 <span class="param-val-badge" :style="{ color: testParams.graphSearchEnabled ? '#06b6d4' : '#94a3b8' }">
@@ -1245,12 +1223,11 @@
             <button
               type="button"
               class="btn-execute-test"
-              :class="{ 'btn-shadow-mode': retrievalMode === 'shadow' }"
-              :disabled="(testingRetrieval || testingShadow) || !retrievalQuery.trim()"
+              :disabled="testingRetrieval || !retrievalQuery.trim()"
               @click="executeRetrievalTest()"
             >
-              <i :class="(testingRetrieval || testingShadow) ? 'fa-solid fa-spinner fa-spin' : (retrievalMode === 'shadow' ? 'fa-solid fa-bolt' : 'fa-solid fa-paper-plane')"></i>
-              <span>{{ (testingRetrieval || testingShadow) ? '正在执行评测...' : (retrievalMode === 'shadow' ? '执行双引擎影子评测' : '执行检索') }}</span>
+              <i :class="testingRetrieval ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-paper-plane'"></i>
+              <span>{{ testingRetrieval ? '正在检索...' : '执行检索' }}</span>
             </button>
           </div>
 
@@ -1269,9 +1246,7 @@
           </div>
         </div>
 
-        <!-- 检索结果状态汇总栏 -->
-        <!-- 模式 1: 单引擎标准调试结果展示 -->
-        <template v-if="retrievalMode === 'single'">
+        <template v-if="retrievalResult">
           <!-- 检索结果状态汇总栏 -->
           <div v-if="retrievalResult" class="retrieval-result-banner">
             <div class="result-banner-left">
@@ -1461,197 +1436,18 @@
           </div>
         </template>
 
-        <!-- 模式 2: 双引擎影子 A/B 对比评测结果展示 (Phase P3) -->
-        <template v-else-if="retrievalMode === 'shadow' && shadowResult">
-          <div class="shadow-evaluation-container">
-            <!-- 影子评测对比看板 -->
-            <div class="shadow-summary-banner">
-              <div class="shadow-banner-top">
-                <div class="shadow-badge-row">
-                  <span class="shadow-badge-main"><i class="fa-solid fa-code-compare"></i> 双引擎影子流量评测报告</span>
-                  <span class="shadow-query-pill" :title="shadowResult.query">提问: "{{ shadowResult.query }}"</span>
-                </div>
-                <div class="shadow-overlap-box">
-                  <div class="overlap-title">
-                    <span>Jaccard 召回交集重叠率:</span>
-                    <strong class="overlap-val text-emerald">{{ (shadowResult.overlapRatio * 100).toFixed(0) }}%</strong>
-                  </div>
-                  <div class="shadow-track">
-                    <div class="shadow-bar-fill" :style="{ width: Math.min(100, Math.max(0, shadowResult.overlapRatio * 100)) + '%' }"></div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 3 核心对比指标 -->
-              <div class="shadow-metrics-grid">
-                <div class="shadow-metric-card">
-                  <div class="metric-card-header">
-                    <i class="fa-solid fa-stopwatch text-blue"></i>
-                    <span>端到端延迟对比</span>
-                  </div>
-                  <div class="metric-card-body">
-                    <div class="metric-versus-row">
-                      <span>自研: <strong class="text-blue">{{ shadowResult.primaryLatencyMs }} ms</strong></span>
-                      <span class="versus-dot">vs</span>
-                      <span>Dify: <strong>{{ shadowResult.secondaryLatencyMs }} ms</strong></span>
-                    </div>
-                    <span class="shadow-delta-tag" :class="shadowResult.latencyDiffMs <= 0 ? 'faster' : 'slower'">
-                      <i :class="shadowResult.latencyDiffMs <= 0 ? 'fa-solid fa-gauge-high' : 'fa-solid fa-gauge-simple'"></i>
-                      {{ shadowResult.latencyDiffMs <= 0 ? '内置引擎快 ' + Math.abs(shadowResult.latencyDiffMs) + ' ms' : '内置引擎慢 ' + shadowResult.latencyDiffMs + ' ms' }}
-                    </span>
-                  </div>
-                </div>
-
-                <div class="shadow-metric-card">
-                  <div class="metric-card-header">
-                    <i class="fa-solid fa-coins text-purple"></i>
-                    <span>上下文 Token 装填</span>
-                  </div>
-                  <div class="metric-card-body">
-                    <div class="metric-versus-row">
-                      <span>自研: <strong class="text-purple">{{ shadowResult.primaryTokens }}</strong></span>
-                      <span class="versus-dot">vs</span>
-                      <span>Dify: <strong>{{ shadowResult.secondaryTokens }}</strong></span>
-                    </div>
-                    <span class="shadow-delta-tag info">
-                      <i class="fa-solid fa-shield-halved"></i>
-                      {{ shadowResult.primaryTokens <= shadowResult.secondaryTokens ? '预算裁剪节省 ' + Math.max(0, shadowResult.secondaryTokens - shadowResult.primaryTokens) + ' Tokens' : '召回上下文更充实' }}
-                    </span>
-                  </div>
-                </div>
-
-                <div class="shadow-metric-card">
-                  <div class="metric-card-header">
-                    <i class="fa-solid fa-chart-pie text-emerald"></i>
-                    <span>独有召回分布</span>
-                  </div>
-                  <div class="metric-card-body">
-                    <div class="metric-versus-row">
-                      <span>自研独有: <strong>{{ shadowResult.primaryOnlyCount }}</strong> 块</span>
-                      <span class="versus-dot">|</span>
-                      <span>Dify独有: <strong>{{ shadowResult.secondaryOnlyCount }}</strong> 块</span>
-                    </div>
-                    <span class="shadow-delta-tag neutral">
-                      共评测 {{ (shadowResult.primaryChunks?.length || 0) + (shadowResult.secondaryChunks?.length || 0) }} 候选切片
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- 左右双栏并排切片对比 (Side-by-Side Comparison) -->
-            <div class="shadow-compare-grid">
-              <!-- 左栏: 内置引擎 -->
-              <div class="shadow-col col-primary">
-                <div class="shadow-col-header">
-                  <div class="col-title-wrap">
-                    <i class="fa-solid fa-brain text-blue"></i>
-                    <h4>内置引擎</h4>
-                    <span class="col-count-tag">{{ shadowResult.primaryChunks?.length || 0 }} 命中切片</span>
-                  </div>
-                  <span class="engine-indicator-pill spring-ai">主评测路径</span>
-                </div>
-
-                <div v-if="!shadowResult.primaryChunks || shadowResult.primaryChunks.length === 0" class="col-empty-card">
-                  <i class="fa-solid fa-inbox"></i>
-                  <span>内置引擎暂无匹配切片</span>
-                </div>
-
-                <div v-else class="col-chunks-list">
-                  <div
-                    v-for="(chunk, idx) in shadowResult.primaryChunks"
-                    :key="'prim-' + idx"
-                    class="shadow-chunk-item"
-                  >
-                    <div class="chunk-item-top">
-                      <div class="chunk-item-meta">
-                        <span class="chunk-rank-badge rank-1">#{{ idx + 1 }}</span>
-                        <span class="chunk-doc-title" :title="chunk.sourceName">
-                          <i class="fa-solid fa-file-lines"></i> {{ chunk.sourceName || '未命名文档' }}
-                        </span>
-                        <span v-if="chunk.metadata?.parentExpanded" class="tag-parent-expanded" style="background: rgba(168, 85, 247, 0.15); font-size: 11px; padding: 1px 6px; border-radius: 4px;">
-                          <i class="fa-solid fa-diagram-project"></i> 父块展开
-                        </span>
-                      </div>
-                      <div class="chunk-item-stats">
-                        <span class="chunk-score-tag">得分: {{ formatScore(chunk.score) }}</span>
-                        <span v-if="chunk.tokenCount" class="chunk-tokens-tag">{{ chunk.tokenCount }} T</span>
-                        <button type="button" class="btn-copy-small" title="复制文本" @click="copyChunkText(chunk.content)">
-                          <i class="fa-regular fa-clone"></i>
-                        </button>
-                      </div>
-                    </div>
-                    <div class="chunk-item-text">
-                      {{ chunk.content }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 右栏: Dify 托管引擎 -->
-              <div class="shadow-col col-secondary">
-                <div class="shadow-col-header">
-                  <div class="col-title-wrap">
-                    <i class="fa-solid fa-link text-purple"></i>
-                    <h4>Dify 引擎</h4>
-                    <span class="col-count-tag">{{ shadowResult.secondaryChunks?.length || 0 }} 命中切片</span>
-                  </div>
-                  <span class="engine-indicator-pill dify">对照基准路径</span>
-                </div>
-
-                <div v-if="!shadowResult.secondaryChunks || shadowResult.secondaryChunks.length === 0" class="col-empty-card">
-                  <i class="fa-solid fa-inbox"></i>
-                  <span>Dify 引擎暂无匹配切片</span>
-                </div>
-
-                <div v-else class="col-chunks-list">
-                  <div
-                    v-for="(chunk, idx) in shadowResult.secondaryChunks"
-                    :key="'sec-' + idx"
-                    class="shadow-chunk-item"
-                  >
-                    <div class="chunk-item-top">
-                      <div class="chunk-item-meta">
-                        <span class="chunk-rank-badge" :class="'rank-' + Math.min(idx + 1, 3)">#{{ idx + 1 }}</span>
-                        <span class="chunk-doc-title" :title="chunk.sourceName">
-                          <i class="fa-solid fa-file-lines"></i> {{ chunk.sourceName || 'Dify 远端文档' }}
-                        </span>
-                      </div>
-                      <div class="chunk-item-stats">
-                        <span class="chunk-score-tag">得分: {{ formatScore(chunk.score) }}</span>
-                        <span v-if="chunk.tokenCount" class="chunk-tokens-tag">{{ chunk.tokenCount }} T</span>
-                        <button type="button" class="btn-copy-small" title="复制文本" @click="copyChunkText(chunk.content)">
-                          <i class="fa-regular fa-clone"></i>
-                        </button>
-                      </div>
-                    </div>
-                    <div class="chunk-item-text">
-                      {{ chunk.content }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </template>
-
         <!-- 初始空白引导 -->
-        <div v-if="(retrievalMode === 'single' && !retrievalResult) || (retrievalMode === 'shadow' && !shadowResult)" class="retrieval-placeholder-state">
+        <div v-if="!retrievalResult" class="retrieval-placeholder-state">
           <div class="placeholder-icon">
             <i class="fa-solid fa-radar"></i>
           </div>
-          <h3>{{ retrievalMode === 'shadow' ? '准备就绪，输入问题开始双引擎影子 A/B 评测' : '准备就绪，输入问题开始召回测试' }}</h3>
-          <p>
-            {{ retrievalMode === 'shadow'
-              ? '系统会把同一个问题同时发给内置引擎和 Dify 引擎，对比两边的召回重合度、响应耗时和上下文用量。'
-              : '输入您关心的业务问题，点击“执行检索”即可实时查看分块召回效果、得分详情与耗时指标。'
-            }}
-          </p>
+          <h3>准备就绪，输入问题开始召回测试</h3>
+          <p>输入您关心的业务问题，点击“执行检索”即可实时查看分块召回效果、得分详情与耗时指标。</p>
         </div>
       </div>
 
       <!-- TAB 4: 知识库成本与治理看板 -->
-      <div v-show="activeSubTab === 'cost-governance'" class="kb-tab-content cost-governance-tab">
+      <div v-if="!isDifyPage" v-show="activeSubTab === 'cost-governance'" class="kb-tab-content cost-governance-tab">
         <div class="cost-header-banner">
           <div class="cost-banner-info">
             <h3><i class="fa-solid fa-coins text-amber"></i> 知识库成本看板与多格式治理模型</h3>
@@ -1752,7 +1548,7 @@
     <div class="modal-backdrop" :class="{ open: kbModalOpen }">
       <div class="modal-dialog" style="max-width: 680px;">
         <div class="modal-header">
-          <h3>{{ kbForm.id ? '编辑知识库配置' : (kbForm.provider === 'SPRING_AI' ? '新建知识库' : '新建知识库（Dify）') }}</h3>
+          <h3>{{ kbForm.id ? '编辑知识库配置' : (kbForm.provider === 'SPRING_AI' ? '新建自建知识库' : '新建 Dify 知识库') }}</h3>
           <button class="btn-modal-close" @click="kbModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <form @submit.prevent="saveKnowledgeBase">
@@ -1760,47 +1556,6 @@
             <div class="form-group">
               <label class="form-label">知识库名称 *</label>
               <input v-model="kbForm.name" class="form-control-styled" placeholder="例如：产品知识库、售后排障手册..." required>
-            </div>
-
-
-            <div class="form-group">
-              <label class="form-label">知识库引擎 *</label>
-              <div class="provider-radio-cards" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                <div
-                  class="provider-radio-card"
-                  :class="{ active: kbForm.provider === 'SPRING_AI', disabled: !!kbForm.id }"
-                  @click="!kbForm.id && onProviderSelect('SPRING_AI')"
-                >
-                  <div class="provider-radio-title" style="display: flex; align-items: center; justify-content: space-between;">
-                    <span><i class="fa-solid fa-brain"></i> 平台内置引擎</span>
-                    <span class="tag-recommend">推荐</span>
-                  </div>
-                  <div class="provider-radio-desc" style="font-size: 12px; margin-top: 6px; line-height: 1.5;">
-                    由平台直接完成文档切片、向量化与混合检索，数据保存在本地，无需额外部署。
-                  </div>
-                </div>
-
-                <div
-                  class="provider-radio-card"
-                  :class="{ active: kbForm.provider === 'DIFY', disabled: !!kbForm.id || (!kbForm.id && !difyEngineReady) }"
-                  :title="!kbForm.id && !difyEngineReady ? difyUnavailableReason : ''"
-                  @click="!kbForm.id && difyEngineReady && onProviderSelect('DIFY')"
-                >
-                  <div class="provider-radio-title" style="display: flex; align-items: center; justify-content: space-between;">
-                    <span><i class="fa-solid fa-link text-blue"></i> Dify 外部引擎</span>
-                    <span class="tag-recommend">外部</span>
-                  </div>
-                  <div class="provider-radio-desc" style="font-size: 12px; margin-top: 6px; line-height: 1.5;">
-                    对接已部署的 Dify，文档切片与向量索引由 Dify 负责。
-                  </div>
-                  <div v-if="!kbForm.id && !difyEngineReady" class="provider-unavailable">
-                    <i class="fa-solid fa-circle-info"></i> {{ difyUnavailableReason }}
-                  </div>
-                </div>
-              </div>
-              <div v-if="kbForm.id" class="input-hint text-amber" style="margin-top: 6px;">
-                <i class="fa-solid fa-circle-info"></i> 知识库底层引擎类型在创建后不可变更
-              </div>
             </div>
 
             <!-- Embedding 向量模型 -->
@@ -2316,10 +2071,18 @@ const props = defineProps({
   isSuperAdmin: {
     type: Boolean,
     default: false
+  },
+  // 本页管理的知识来源：SPRING_AI 自建知识库 / DIFY Dify 知识库，两者分页面管理、互不混用
+  provider: {
+    type: String,
+    default: 'SPRING_AI'
   }
 })
 
 const { showToast } = useToast()
+
+const isDifyPage = computed(() => props.provider === 'DIFY')
+const pageTitle = computed(() => (isDifyPage.value ? 'Dify 知识库' : '自建知识库'))
 
 const effectiveUser = computed(() => {
   if (props.user && Object.keys(props.user).length > 0) return props.user
@@ -2363,7 +2126,7 @@ function resetToList(forceReload = true) {
   scopeFilter.value = 'all'
   kbPage.value = 1
   if (forceReload) {
-    loadEngineInfo()
+    loadSourceStatus()
     loadKnowledgeBases()
   }
 }
@@ -2392,13 +2155,10 @@ defineExpose({
 })
 
 // ==================== 召回测试与调试状态 (Phase P1 & P2 & P3) ====================
-const retrievalMode = ref('single') // 'single' | 'shadow'
 const showParamDrawer = ref(true)
 const retrievalQuery = ref('')
 const testingRetrieval = ref(false)
-const testingShadow = ref(false)
 const retrievalResult = ref(null)
-const shadowResult = ref(null)
 const costStats = ref(null)
 const loadingCostStats = ref(false)
 const retrievalVersions = ref([])
@@ -2424,7 +2184,6 @@ const testParams = reactive({
   rerankEnabled: true,
   vectorWeight: 0.7,
   keywordWeight: 0.3,
-  engineOverride: '',
   indexVersionId: '',
   expandParent: true,
   rewriteEnabled: false,
@@ -2632,10 +2391,17 @@ async function loadEngineInfo() {
   }
 }
 
+// 顶部状态卡：自建页显示当前向量模型，Dify 页显示 Dify 引擎连通状态
+function loadSourceStatus() {
+  if (isDifyPage.value) loadEngineInfo()
+  else loadActiveEmbedding()
+}
+
 async function loadKnowledgeBases() {
   loadingKb.value = true
   try {
     const res = await http.get('/api/knowledge-bases', {
+      provider: props.provider,
       keyword: searchKeyword.value ? searchKeyword.value.trim() : undefined,
       page: kbPage.value,
       size: kbPageSize.value
@@ -2764,17 +2530,6 @@ function onVectorWeightChange() {
   kbForm.keywordWeight = Math.round((1.0 - kbForm.vectorWeight) * 10) / 10
 }
 
-function onProviderSelect(type) {
-  kbForm.provider = type
-  if (type === 'SPRING_AI') {
-    kbForm.embeddingModel = 'spring-ai-native-1024'
-    kbForm.embeddingProvider = 'spring_ai'
-  } else {
-    kbForm.embeddingModel = 'text-embedding-v3'
-    kbForm.embeddingProvider = 'langgenius/tongyi/tongyi'
-  }
-}
-
 function getEmbeddingModelLabel(kb) {
   if (!kb) return '内置向量模型'
   if (kb.provider === 'SPRING_AI') {
@@ -2787,26 +2542,26 @@ function getEmbeddingModelLabel(kb) {
 }
 
 function openCreateKb() {
+  const dify = isDifyPage.value
   Object.assign(kbForm, {
     id: '',
     name: '',
     description: '',
     avatar: '📚',
-    provider: 'SPRING_AI',
-    embeddingModel: 'spring-ai-native-1024',
-    embeddingProvider: 'spring_ai',
+    provider: props.provider,
+    embeddingModel: dify ? 'text-embedding-v3' : 'spring-ai-native-1024',
+    embeddingProvider: dify ? 'langgenius/tongyi/tongyi' : 'spring_ai',
     searchMethod: 'hybrid_search',
     topK: 3,
     rerankEnabled: true,
     rerankMode: 'weighted_score',
     rerankModel: 'qwen3-rerank',
-    rerankModelProvider: 'spring_ai',
+    rerankModelProvider: dify ? 'langgenius/tongyi/tongyi' : 'spring_ai',
     vectorWeight: 0.7,
     keywordWeight: 0.3
   })
   kbModalOpen.value = true
-  loadActiveEmbedding()
-  loadEngineInfo()
+  loadSourceStatus()
 }
 
 function openEditKb(kb) {
@@ -2906,7 +2661,6 @@ function openKbDetail(kb) {
   docPage.value = 1
   faqPage.value = 1
   retrievalResult.value = null
-  shadowResult.value = null
   costStats.value = null
   retrievalQuery.value = ''
   loadDocuments()
@@ -2929,7 +2683,6 @@ function openRetrievalTestTab() {
     testParams.rerankEnabled = selectedKb.value.rerankEnabled !== undefined ? selectedKb.value.rerankEnabled : true
     testParams.vectorWeight = (selectedKb.value.vectorWeight !== null && selectedKb.value.vectorWeight !== undefined) ? selectedKb.value.vectorWeight : 0.7
     testParams.keywordWeight = (selectedKb.value.keywordWeight !== null && selectedKb.value.keywordWeight !== undefined) ? selectedKb.value.keywordWeight : 0.3
-    testParams.engineOverride = ''
     testParams.expandParent = true
     testParams.rewriteEnabled = false
     testParams.maxContextTokens = 3000
@@ -2986,11 +2739,6 @@ async function executeRetrievalTest(queryText) {
   }
   retrievalQuery.value = q
 
-  // P3: 若当前处于影子对比模式，路由至双引擎对比接口
-  if (retrievalMode.value === 'shadow') {
-    return executeShadowTest(q)
-  }
-
   if (!selectedKb.value) return
 
   showOriginalChildMap.value = new Set()
@@ -3003,7 +2751,6 @@ async function executeRetrievalTest(queryText) {
     rerankEnabled: testParams.rerankEnabled,
     vectorWeight: Number(testParams.vectorWeight) || 0.7,
     keywordWeight: Number(testParams.keywordWeight) || 0.3,
-    engineOverride: testParams.engineOverride || undefined,
     indexVersionId: testParams.indexVersionId || undefined,
     expandParent: testParams.expandParent !== false,
     rewriteEnabled: Boolean(testParams.rewriteEnabled),
@@ -3026,48 +2773,6 @@ async function executeRetrievalTest(queryText) {
     }
   } else {
     showToast(res.message || '召回测试失败', 'error')
-  }
-}
-
-async function executeShadowTest(queryText) {
-  const q = (queryText !== undefined && queryText !== null ? queryText : retrievalQuery.value || '').trim()
-  if (!q) {
-    showToast('请输入用于双引擎影子评测的查询语句', 'warning')
-    return
-  }
-  retrievalQuery.value = q
-  if (!selectedKb.value) return
-
-  testingShadow.value = true
-  const payload = {
-    query: q,
-    topK: Number(testParams.topK) || 5,
-    scoreThreshold: Number(testParams.scoreThreshold) || 0.0,
-    searchMethod: testParams.searchMethod,
-    rerankEnabled: testParams.rerankEnabled,
-    vectorWeight: Number(testParams.vectorWeight) || 0.7,
-    keywordWeight: Number(testParams.keywordWeight) || 0.3,
-    engineOverride: testParams.engineOverride || undefined,
-    expandParent: testParams.expandParent !== false,
-    rewriteEnabled: Boolean(testParams.rewriteEnabled),
-    maxContextTokens: Number(testParams.maxContextTokens) || 3000,
-    cacheEnabled: testParams.cacheEnabled !== false,
-    queryType: testParams.queryType || 'TEXT',
-    queryImageUrl: testParams.queryImageUrl || undefined,
-    injectImagesToLlm: Boolean(testParams.injectImagesToLlm),
-    graphSearchEnabled: Boolean(testParams.graphSearchEnabled)
-  }
-
-  const res = await http.post(`/api/knowledge-bases/${selectedKb.value.id}/shadow-test`, payload)
-  testingShadow.value = false
-
-  if (res.success && res.data) {
-    shadowResult.value = res.data
-    const overlap = Math.round((res.data.overlapRatio || 0) * 100)
-    const diff = res.data.latencyDiffMs || 0
-    showToast(`双引擎影子评测完成: Jaccard 重叠率 ${overlap}%, 延迟差 ${diff} ms`, 'success')
-  } else {
-    showToast(res.message || '双引擎影子评测执行失败', 'error')
   }
 }
 
@@ -3625,13 +3330,57 @@ onMounted(() => {
   searchKeyword.value = ''
   scopeFilter.value = 'all'
   kbPage.value = 1
-  loadEngineInfo()
+  loadSourceStatus()
   loadKnowledgeBases()
   loadViewLayoutPreference()
 })
 </script>
 
 <style scoped>
+/* 列表加载 / 空状态 */
+.kb-loading-state,
+.kb-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 56px 20px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.kb-empty-state .empty-icon-wrap {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--bg-input);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+}
+
+.kb-empty-state h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.kb-empty-state p {
+  margin: 0;
+  max-width: 460px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.kb-empty-state .empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
 .retrieval-test-tab {
   display: flex;
   flex-direction: column;
@@ -4453,413 +4202,6 @@ onMounted(() => {
   background: linear-gradient(135deg, #f59e0b, #d97706);
   color: #fff;
   margin-left: 5px;
-}
-
-.retrieval-mode-switcher {
-  display: inline-flex;
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 4px;
-  gap: 6px;
-  margin-top: 14px;
-}
-
-.mode-switch-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 16px;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  border-radius: 7px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.mode-switch-btn:hover {
-  color: var(--text-primary);
-}
-
-.mode-switch-btn.active {
-  background: var(--bg-card);
-  color: var(--accent-blue);
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.badge-mode-p3 {
-  font-size: 10.5px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(245, 158, 11, 0.12);
-  color: var(--accent-amber);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-}
-
-.btn-execute-test.btn-shadow-mode {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  box-shadow: 0 3px 10px rgba(99, 102, 241, 0.3);
-}
-
-.btn-execute-test.btn-shadow-mode:hover {
-  background: linear-gradient(135deg, #4f46e5, #7c3aed);
-  box-shadow: 0 5px 15px rgba(99, 102, 241, 0.4);
-}
-
-/* 影子评测对比容器 */
-.shadow-evaluation-container {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.shadow-summary-banner {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  padding: 20px 24px;
-  box-shadow: var(--shadow-card);
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.shadow-banner-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 14px;
-}
-
-.shadow-badge-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.shadow-badge-main {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  background: rgba(99, 102, 241, 0.12);
-  border: 1px solid rgba(99, 102, 241, 0.35);
-  color: var(--accent-purple, #8b5cf6);
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.shadow-query-pill {
-  font-size: 12.5px;
-  color: var(--text-secondary);
-  background: var(--bg-input);
-  padding: 4px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--border-color);
-}
-
-.shadow-overlap-box {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  min-width: 220px;
-}
-
-.overlap-title {
-  font-size: 12.5px;
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.overlap-val {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.shadow-track {
-  width: 100%;
-  height: 6px;
-  background: var(--bg-input);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.shadow-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #10b981, #34d399);
-  border-radius: 3px;
-  transition: width 0.4s ease;
-}
-
-.shadow-metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 14px;
-}
-
-.shadow-metric-card {
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.metric-card-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12.5px;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.metric-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.metric-versus-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13.5px;
-  color: var(--text-primary);
-}
-
-.versus-dot {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.shadow-delta-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11.5px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
-  width: fit-content;
-}
-
-.shadow-delta-tag.faster {
-  background: rgba(16, 185, 129, 0.12);
-  color: var(--accent-emerald, #10b981);
-}
-
-.shadow-delta-tag.slower {
-  background: rgba(245, 158, 11, 0.12);
-  color: var(--accent-amber, #f59e0b);
-}
-
-.shadow-delta-tag.info {
-  background: rgba(99, 102, 241, 0.12);
-  color: var(--accent-purple, #8b5cf6);
-}
-
-.shadow-delta-tag.neutral {
-  background: var(--bg-input);
-  color: var(--text-muted);
-}
-
-/* 双栏对比网格 */
-.shadow-compare-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
-
-@media (max-width: 900px) {
-  .shadow-compare-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.shadow-col {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  box-shadow: var(--shadow-card);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.shadow-col.col-primary {
-  border-color: rgba(99, 102, 241, 0.35);
-}
-
-.shadow-col.col-secondary {
-  border-color: rgba(168, 85, 247, 0.3);
-}
-
-.shadow-col-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 14px 20px;
-  background: var(--bg-card-hover);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.col-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.col-title-wrap h4 {
-  margin: 0;
-  font-size: 14px;
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
-.col-count-tag {
-  font-size: 11px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: rgba(59, 130, 246, 0.1);
-  color: var(--accent-blue);
-}
-
-.engine-indicator-pill {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-weight: 500;
-}
-
-.engine-indicator-pill.spring-ai {
-  background: rgba(99, 102, 241, 0.12);
-  color: var(--accent-purple, #8b5cf6);
-  border: 1px solid rgba(99, 102, 241, 0.3);
-}
-
-.engine-indicator-pill.dify {
-  background: rgba(168, 85, 247, 0.12);
-  color: #c084fc;
-  border: 1px solid rgba(168, 85, 247, 0.3);
-}
-
-.col-empty-card {
-  padding: 48px 20px;
-  text-align: center;
-  color: var(--text-muted);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: center;
-  font-size: 13.5px;
-}
-
-.col-chunks-list {
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-height: 650px;
-  overflow-y: auto;
-}
-
-.shadow-chunk-item {
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  transition: all 0.2s ease;
-}
-
-.shadow-chunk-item:hover {
-  border-color: rgba(99, 102, 241, 0.4);
-  background: var(--bg-card-hover);
-}
-
-.chunk-item-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-
-.chunk-item-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  overflow: hidden;
-}
-
-.chunk-doc-title {
-  font-size: 12.5px;
-  color: var(--text-primary);
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 170px;
-}
-
-.chunk-item-stats {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-}
-
-.chunk-score-tag {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--accent-emerald, #10b981);
-  background: rgba(16, 185, 129, 0.1);
-  padding: 1px 6px;
-  border-radius: 4px;
-}
-
-.chunk-tokens-tag {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.btn-copy-small {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 2px;
-  font-size: 12px;
-  transition: color 0.2s;
-}
-
-.btn-copy-small:hover {
-  color: var(--accent-blue);
-}
-
-.chunk-item-text {
-  font-size: 12.5px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 160px;
-  overflow-y: auto;
 }
 
 /* ==================== 成本与治理看板 (Cost & Governance Tab) ==================== */
@@ -5702,8 +5044,6 @@ onMounted(() => {
 [data-theme="light"] .cost-header-banner,
 [data-theme="light"] .cost-card,
 [data-theme="light"] .gov-card,
-[data-theme="light"] .shadow-summary-banner,
-[data-theme="light"] .shadow-col,
 [data-theme="light"] .modal-graph-dialog,
 [data-theme="light"] .modal-offline-dialog {
   background: #ffffff !important;
@@ -5715,19 +5055,15 @@ onMounted(() => {
 [data-theme="light"] .method-pills,
 [data-theme="light"] .param-item,
 [data-theme="light"] .chunk-card-footer,
-[data-theme="light"] .shadow-chunk-item,
-[data-theme="light"] .shadow-metric-card,
 [data-theme="light"] .offline-component-card,
 [data-theme="light"] .graph-triplet-card,
 [data-theme="light"] .chunk-image-card,
-[data-theme="light"] .triplet-source-chunk,
-[data-theme="light"] .retrieval-mode-switcher {
+[data-theme="light"] .triplet-source-chunk {
   background: #f8fafc !important;
   border-color: #e2e8f0 !important;
 }
 
-[data-theme="light"] .chunk-card-header,
-[data-theme="light"] .shadow-col-header {
+[data-theme="light"] .chunk-card-header {
   background: #f1f5f9 !important;
   border-color: #e2e8f0 !important;
 }
@@ -5746,7 +5082,6 @@ onMounted(() => {
 [data-theme="light"] .badge-recall-engine,
 [data-theme="light"] .badge-recall-version,
 [data-theme="light"] .ocr-feature-tag,
-[data-theme="light"] .shadow-query-pill,
 [data-theme="light"] .graph-stat-pill {
   background: #ffffff !important;
   border-color: #e2e8f0 !important;
@@ -5778,7 +5113,6 @@ onMounted(() => {
 [data-theme="light"] .cost-banner-info h3,
 [data-theme="light"] .gov-card-header h4,
 [data-theme="light"] .params-card-title,
-[data-theme="light"] .col-title-wrap h4,
 [data-theme="light"] .graph-modal-title h3,
 [data-theme="light"] .offline-modal-title h3,
 [data-theme="light"] .overview-left h4 {
@@ -5789,7 +5123,6 @@ onMounted(() => {
 [data-theme="light"] .retrieval-header-desc,
 [data-theme="light"] .cost-banner-info p,
 [data-theme="light"] .comp-desc,
-[data-theme="light"] .chunk-item-text,
 [data-theme="light"] .overview-left p,
 [data-theme="light"] .param-label,
 [data-theme="light"] .param-hint,
@@ -5801,8 +5134,6 @@ onMounted(() => {
 [data-theme="light"] .chunk-id-text,
 [data-theme="light"] .weights-scale-labels,
 [data-theme="light"] .sample-label,
-[data-theme="light"] .overlap-title,
-[data-theme="light"] .chunk-tokens-tag,
 [data-theme="light"] .graph-modal-subtitle,
 [data-theme="light"] .offline-modal-subtitle {
   color: #94a3b8 !important;

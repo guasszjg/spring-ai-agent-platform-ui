@@ -3865,41 +3865,6 @@
 }
 
 /* Knowledge Base Retrieval & Embedding Settings Modal Styles */
-.provider-radio-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.provider-radio-card {
-  padding: 12px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-card);
-  cursor: default;
-}
-
-.provider-radio-card.active {
-  border-color: var(--accent-blue);
-  background: rgba(59, 130, 246, 0.04);
-}
-
-.provider-radio-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 3px;
-}
-
-.provider-radio-desc {
-  font-size: 11.5px;
-  color: var(--text-secondary);
-  line-height: 1.4;
-}
-
 .embedding-model-box {
   border-radius: 8px;
   border: 1px solid var(--border-color);

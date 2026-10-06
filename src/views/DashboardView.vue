@@ -523,7 +523,20 @@
       <section v-show="currentTab === 'knowledge'" class="app-subview active">
         <KnowledgeBasePanel
           ref="kbPanelRef"
+          provider="SPRING_AI"
           :active="currentTab === 'knowledge'"
+          :user="user"
+          :current-user="user"
+          :is-super-admin="isSuperAdmin"
+        />
+      </section>
+
+      <!-- Dify 知识库与自建知识库分开管理，接入 Dify 或已有 Dify 知识库时才挂载 -->
+      <section v-if="difyNavVisible || currentTab === 'knowledge-dify'" v-show="currentTab === 'knowledge-dify'" class="app-subview active">
+        <KnowledgeBasePanel
+          ref="kbDifyPanelRef"
+          provider="DIFY"
+          :active="currentTab === 'knowledge-dify'"
           :user="user"
           :current-user="user"
           :is-super-admin="isSuperAdmin"
@@ -794,7 +807,7 @@ import TemplatePicker from '../components/TemplatePicker.vue'
 import AssistantDock from '../components/AssistantDock.vue'
 import { setAssistantPage } from '../composables/useAssistantContext'
 import {
-  LayoutDashboard, Bot, LayoutTemplate, Wrench, BookOpen, Network, Users, ShieldCheck, KeyRound,
+  LayoutDashboard, Bot, LayoutTemplate, Wrench, BookOpen, Link2, Network, Users, ShieldCheck, KeyRound,
   Circle, PanelLeftClose, LogOut, Sun, Moon
 } from 'lucide-vue-next'
 
@@ -804,6 +817,7 @@ const navIcons = {
   templates: LayoutTemplate,
   tools: Wrench,
   knowledge: BookOpen,
+  'knowledge-dify': Link2,
   gateway: Network,
   users: Users,
   roles: ShieldCheck,
@@ -816,7 +830,7 @@ const router = useRouter()
 const route = useRoute()
 const { showToast } = useToast()
 
-const validTabs = ['overview', 'agents', 'templates', 'tools', 'knowledge', 'gateway', 'users', 'roles', 'assistant-eval', 'security', 'open-platform']
+const validTabs = ['overview', 'agents', 'templates', 'tools', 'knowledge', 'knowledge-dify', 'gateway', 'users', 'roles', 'assistant-eval', 'security', 'open-platform']
 // 仅超级管理员可见的模块：导航隐藏，且通过 URL 或点击进入时会被拦回概览
 const superAdminOnlyTabs = ['gateway', 'users', 'roles', 'assistant-eval']
 
@@ -832,6 +846,19 @@ function parseInitialTab() {
 
 const currentTab = ref(parseInitialTab())
 const kbPanelRef = ref(null)
+const kbDifyPanelRef = ref(null)
+
+// 「Dify 知识库」菜单：已接入 Dify，或库里还有 Dify 知识库（引擎下线后仍需能查看、解绑、删除）时显示
+const difyNavVisible = ref(false)
+async function loadDifyNavVisibility() {
+  const engine = await http.get('/api/knowledge-engine')
+  if (engine?.success && engine.data?.configured) {
+    difyNavVisible.value = true
+    return
+  }
+  const list = await http.get('/api/knowledge-bases', { provider: 'DIFY', page: 1, size: 1 })
+  difyNavVisible.value = !!(list?.success && Number(list.data?.total || 0) > 0)
+}
 const templatesPanelRef = ref(null)
 const gatewayPanelRef = ref(null)
 const toolsPanelRef = ref(null)
@@ -945,7 +972,8 @@ const pageTitle = computed(() => {
   if (currentTab.value === 'agents') return '智能体'
   if (currentTab.value === 'templates') return '场景模板'
   if (currentTab.value === 'tools') return '工具'
-  if (currentTab.value === 'knowledge') return '知识库'
+  if (currentTab.value === 'knowledge') return '自建知识库'
+  if (currentTab.value === 'knowledge-dify') return 'Dify 知识库'
   if (currentTab.value === 'gateway') return '模型网关'
   if (currentTab.value === 'users') return '用户'
   if (currentTab.value === 'roles') return '角色与权限'
@@ -1005,10 +1033,16 @@ const navGroups = computed(() => {
       items: [
         {
           id: 'knowledge',
-          name: '知识库',
-          title: '企业私有知识库 (RAG检索)',
+          name: '自建知识库',
+          title: '平台内置引擎：本地切片、向量化与混合检索',
           icon: 'fa-solid fa-book-bookmark'
-        }
+        },
+        ...(difyNavVisible.value ? [{
+          id: 'knowledge-dify',
+          name: 'Dify 知识库',
+          title: '对接外部 Dify：在平台内管理 Dify 知识库',
+          icon: 'fa-solid fa-link'
+        }] : [])
       ]
     }
   ]
@@ -1070,10 +1104,11 @@ function triggerTabRefresh(tabId) {
     templatesPanelRef.value?.resetTemplates?.(true)
   } else if (tabId === 'tools') {
     toolsPanelRef.value?.loadTools?.()
-  } else if (tabId === 'knowledge') {
+  } else if (tabId === 'knowledge' || tabId === 'knowledge-dify') {
+    loadDifyNavVisibility()
     const kbId = queryKbId()
     if (kbId) openKbFromQuery(kbId)
-    else kbPanelRef.value?.resetToList?.(true)
+    else kbPanelOf(tabId)?.resetToList?.(true)
   } else if (tabId === 'gateway') {
     gatewayPanelRef.value?.refreshAll?.()
   } else if (tabId === 'users') {
@@ -1309,12 +1344,27 @@ function queryKbId() {
   return typeof v === 'string' && v ? v : null
 }
 
+function kbPanelOf(tabId) {
+  return tabId === 'knowledge-dify' ? kbDifyPanelRef.value : kbPanelRef.value
+}
+
 let kbOpening = null
 async function openKbFromQuery(id) {
   if (kbOpening === id) return
   kbOpening = id
   try {
-    const opened = await kbPanelRef.value?.openById?.(id)
+    // 先按知识库来源切到对应页面（自建 / Dify），再打开详情
+    const res = await http.get(`/api/knowledge-bases/${encodeURIComponent(id)}`)
+    const kb = res?.success ? res.data : null
+    if (!kb) {
+      showToast('知识库不存在或无权查看', 'error')
+      return
+    }
+    const tab = kb.provider === 'SPRING_AI' ? 'knowledge' : 'knowledge-dify'
+    if (tab === 'knowledge-dify') difyNavVisible.value = true
+    if (currentTab.value !== tab) currentTab.value = tab
+    await nextTick()
+    const opened = await kbPanelOf(tab)?.openById?.(id)
     if (!opened) showToast('知识库不存在或无权查看', 'error')
   } finally {
     kbOpening = null
@@ -1328,7 +1378,7 @@ async function openKbFromQuery(id) {
 watch(() => route.query.kb, () => {
   const id = queryKbId()
   // 切换到知识库页时由 triggerTabRefresh 打开；已在知识库页时直接打开
-  if (id) nextTick(() => { if (currentTab.value === 'knowledge') openKbFromQuery(id) })
+  if (id) nextTick(() => { if (currentTab.value === 'knowledge' || currentTab.value === 'knowledge-dify') openKbFromQuery(id) })
 })
 
 // 助手的页面上下文：切换模块时登记当前页面（知识库详情等资源由各面板登记）
@@ -1641,6 +1691,7 @@ onMounted(() => {
     }
   }).catch(() => {})
 
+  loadDifyNavVisibility()
   enterDashboard()
 })
 
