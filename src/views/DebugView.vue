@@ -171,7 +171,10 @@
         </div>
         <div class="config-card-section">
           <div class="section-header-row">
-            <div class="section-title"><span>知识库</span></div>
+            <div class="section-title">
+              <span>知识库</span>
+              <span v-if="boundSource" class="kb-source-chip" :class="boundSource === 'DIFY' ? 'dify' : 'native'">{{ kbSourceLabel(boundSource) }}</span>
+            </div>
             <div class="section-tools-header-right">
               <span class="tools-count-badge">{{ boundKnowledgeBases.length }} 已关联</span>
               <span class="tools-header-divider">|</span>
@@ -580,10 +583,30 @@
         </div>
         <div class="tool-modal-body">
           <div class="tool-catalog-section">
-            <h4 class="catalog-section-title">已有知识库 (共 {{ knowledgeCatalog.length }} 项)</h4>
-            <p v-if="!knowledgeCatalog.length" class="section-hint">暂无可选知识库，请先在知识库管理页创建或从 Dify 同步。</p>
+            <!-- 知识来源：一个智能体只能使用一种来源，已绑定后另一种来源锁定 -->
+            <div v-if="showSourceSwitch" class="kb-source-switch">
+              <button
+                v-for="opt in KB_SOURCES"
+                :key="opt.value"
+                type="button"
+                class="kb-source-option"
+                :class="{ active: kbSource === opt.value }"
+                :disabled="!!boundSource && boundSource !== opt.value"
+                :title="boundSource && boundSource !== opt.value ? '已绑定' + kbSourceLabel(boundSource) + '，需先全部解绑才能切换' : ''"
+                @click="kbSource = opt.value"
+              >
+                {{ opt.label }}
+              </button>
+            </div>
+            <p v-if="boundSource && showSourceSwitch" class="section-hint">
+              一个智能体只能使用一种知识来源。当前已绑定{{ kbSourceLabel(boundSource) }}，如需切换请先解绑全部知识库。
+            </p>
+            <h4 class="catalog-section-title">{{ kbSourceLabel(kbSource) }} (共 {{ sourceCatalog.length }} 项)</h4>
+            <p v-if="!sourceCatalog.length" class="section-hint">
+              {{ kbSource === 'DIFY' ? '暂无可选的 Dify 知识库，请先在「Dify 知识库」页面创建或同步。' : '暂无可选的自建知识库，请先在「自建知识库」页面创建。' }}
+            </p>
             <div class="tool-catalog-list">
-              <div v-for="kb in knowledgeCatalog" :key="kb.id" class="catalog-item-card">
+              <div v-for="kb in sourceCatalog" :key="kb.id" class="catalog-item-card">
                 <div class="catalog-item-left">
                   <div class="tool-icon icon-orange">
                     <i class="fa-solid fa-book"></i>
@@ -598,7 +621,7 @@
                 <button
                   type="button"
                   class="btn-catalog-add"
-                  :disabled="boundKbIds.includes(kb.id)"
+                  :disabled="boundKbIds.includes(kb.id) || (!!boundSource && boundSource !== kbSourceOf(kb))"
                   @click="bindKnowledgeBase(kb)"
                 >
                   <i :class="boundKbIds.includes(kb.id) ? 'fa-solid fa-check' : 'fa-solid fa-plus'"></i>
@@ -706,6 +729,27 @@ const boundKnowledgeBases = computed(() => {
   return boundKbIds.value
     .map(id => catalog.find(kb => kb.id === id) || { id, name: id, searchMethod: 'hybrid_search', indexingTechnique: 'high_quality' })
 })
+
+// 知识来源：自建知识库与 Dify 知识库分开使用，一个智能体只能绑定其中一种（后端同样校验）
+const KB_SOURCES = [
+  { value: 'SPRING_AI', label: '自建知识库' },
+  { value: 'DIFY', label: 'Dify 知识库' }
+]
+const kbSource = ref('SPRING_AI')
+// 缺失 provider 的历史数据按 Dify 处理，与后端一致
+function kbSourceOf(kb) {
+  return kb?.provider === 'SPRING_AI' ? 'SPRING_AI' : 'DIFY'
+}
+function kbSourceLabel(source) {
+  return source === 'DIFY' ? 'Dify 知识库' : '自建知识库'
+}
+const boundSource = computed(() => {
+  const kb = boundKnowledgeBases.value.find(item => item.provider)
+  return kb ? kbSourceOf(kb) : null
+})
+const sourceCatalog = computed(() => knowledgeCatalog.value.filter(kb => kbSourceOf(kb) === kbSource.value))
+// 没有任何 Dify 知识库时不显示来源切换，界面与只用自建知识库时一致
+const showSourceSwitch = computed(() => boundSource.value === 'DIFY' || knowledgeCatalog.value.some(kb => kbSourceOf(kb) === 'DIFY'))
 
 const toolSettingsModalOpen = ref(false)
 const editingTool = ref(null)
@@ -967,6 +1011,7 @@ async function persistKnowledgeBaseIds() {
 
 async function openAddKnowledgeModal() {
   await loadKnowledgeCatalog()
+  kbSource.value = boundSource.value || 'SPRING_AI'
   addKnowledgeModalOpen.value = true
 }
 

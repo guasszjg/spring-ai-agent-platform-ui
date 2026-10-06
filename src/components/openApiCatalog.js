@@ -264,7 +264,7 @@ export const OPEN_API_GROUPS = [
         method: 'PUT',
         path: '/agents/{id}/knowledge-bases',
         scope: 'agents:bind_kb',
-        description: '覆盖设置该智能体所关联绑定的知识库集合，对话时将统一检索这些知识库。',
+        description: '覆盖设置该智能体所关联绑定的知识库集合，对话时将统一检索这些知识库。同一智能体只能绑定同一来源（自建或 Dify）的知识库，混合绑定返回 400 mixed_knowledge_sources。',
         pathParams: [
           { name: 'id', type: 'string', required: true, default: 'agent_001', description: '智能体 ID' }
         ],
