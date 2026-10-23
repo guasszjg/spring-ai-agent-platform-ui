@@ -141,7 +141,7 @@
           class="btn-publish"
           :disabled="!agent || !promptDirty"
           :title="promptDirty ? '将当前草稿发布为线上系统提示词' : '没有未发布的更改'"
-          @click="publish"
+          @click="openPublishDialog"
         >
           <span>发布上线</span>
         </button>
@@ -152,8 +152,15 @@
       <section class="orchestration-pane" ref="leftPane" :style="leftWidth ? { width: leftWidth + 'px' } : {}">
         <div class="config-card-section prompt-editor-card">
           <div class="section-header-row">
-            <div class="section-title"><span>系统提示词（草稿）</span></div>
-            <button class="btn-section-action" @click="optimizePrompt"><i class="fa-solid fa-wand-magic-sparkles"></i><span>生成</span></button>
+            <div class="section-title">
+              <span>系统提示词（草稿）</span>
+              <span v-if="onlineVersion" class="pv-online-chip" :title="'线上提示词为 v' + onlineVersion.versionNo">线上 v{{ onlineVersion.versionNo }}</span>
+              <span v-if="promptDirty" class="pv-dirty-chip" title="草稿与线上提示词不同，点「发布上线」生成新版本">未发布</span>
+            </div>
+            <div class="pv-header-actions">
+              <button class="btn-section-action" title="查看历史版本、对比与回滚" @click="openVersions"><i class="fa-solid fa-clock-rotate-left"></i><span>版本</span></button>
+              <button class="btn-section-action" @click="optimizePrompt"><i class="fa-solid fa-wand-magic-sparkles"></i><span>生成</span></button>
+            </div>
           </div>
           <textarea v-model="prompt" class="prompt-textarea" placeholder="请输入智能体的角色设定与工作流程..."></textarea>
           <div class="prompt-footer">
@@ -634,6 +641,136 @@
         <div class="tool-modal-footer">
           <span></span>
           <button type="button" class="btn-modal-cancel" @click="addKnowledgeModalOpen = false">完成</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 系统提示词版本：列表、查看、与草稿对比、载入草稿、回滚 -->
+    <div v-if="versionsOpen" class="tool-modal-backdrop" @click.self="versionsOpen = false">
+      <div class="tool-modal-dialog pv-dialog">
+        <div class="tool-modal-header">
+          <div class="tool-modal-title">
+            <i class="fa-solid fa-clock-rotate-left" style="color: var(--accent-blue);"></i>
+            <span>系统提示词版本</span>
+            <span class="pv-count">{{ promptVersions.length }} 个版本</span>
+          </div>
+          <button type="button" class="btn-modal-close" @click="versionsOpen = false">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="pv-body">
+          <div class="pv-list">
+            <div v-if="versionsLoading" class="pv-empty">加载中…</div>
+            <div v-else-if="!promptVersions.length" class="pv-empty">
+              还没有历史版本。<br>修改提示词并「发布上线」后会自动记录版本。
+            </div>
+            <button
+              v-for="v in promptVersions"
+              :key="v.id"
+              type="button"
+              class="pv-item"
+              :class="{ active: selectedVersion && selectedVersion.id === v.id }"
+              @click="selectVersion(v)"
+            >
+              <div class="pv-item-head">
+                <strong>v{{ v.versionNo }}</strong>
+                <span v-if="v.current" class="pv-online-chip">线上</span>
+                <span class="pv-source">{{ v.sourceLabel }}</span>
+              </div>
+              <div v-if="v.note" class="pv-item-note">{{ v.note }}</div>
+              <div class="pv-item-meta">{{ formatVersionTime(v.createdAt) }}<template v-if="v.createdBy"> · {{ v.createdBy }}</template> · {{ v.length }} 字</div>
+            </button>
+          </div>
+          <div class="pv-detail">
+            <template v-if="selectedVersion">
+              <div class="pv-detail-head">
+                <div class="pv-detail-title">
+                  <strong>v{{ selectedVersion.versionNo }}</strong>
+                  <span class="pv-source">{{ selectedVersion.sourceLabel }}</span>
+                  <span class="pv-item-meta">{{ formatVersionTime(selectedVersion.createdAt) }}<template v-if="selectedVersion.createdBy"> · {{ selectedVersion.createdBy }}</template></span>
+                </div>
+                <div class="pv-tabs">
+                  <button type="button" :class="{ on: versionView === 'content' }" @click="versionView = 'content'">内容</button>
+                  <button type="button" :class="{ on: versionView === 'diff' }" @click="versionView = 'diff'">与当前草稿对比</button>
+                </div>
+              </div>
+              <p v-if="selectedVersion.note" class="pv-detail-note">{{ selectedVersion.note }}</p>
+              <pre v-if="versionView === 'content'" class="pv-content">{{ selectedVersion.systemPrompt || '（空）' }}</pre>
+              <div v-else class="pv-diff">
+                <div v-if="versionDiffStats.same" class="pv-empty">与当前草稿完全一致</div>
+                <template v-else>
+                  <div class="pv-diff-legend">
+                    <span class="del">− {{ versionDiffStats.removed }} 行仅在 v{{ selectedVersion.versionNo }}</span>
+                    <span class="add">+ {{ versionDiffStats.added }} 行仅在当前草稿</span>
+                  </div>
+                  <div v-for="(line, i) in versionDiff" :key="i" class="pv-diff-line" :class="line.type">
+                    <span class="pv-diff-mark">{{ line.type === 'add' ? '+' : line.type === 'del' ? '−' : ' ' }}</span>
+                    <span class="pv-diff-text">{{ line.text || ' ' }}</span>
+                  </div>
+                </template>
+              </div>
+            </template>
+            <div v-else-if="!versionsLoading" class="pv-empty">选择左侧的版本查看内容</div>
+          </div>
+        </div>
+        <div class="tool-modal-footer pv-footer">
+          <span class="pv-hint">载入到草稿后可在右侧调试，确认后再发布；回滚会直接把该版本发布为线上提示词，并生成一个新版本。</span>
+          <div class="tool-footer-right">
+            <button type="button" class="btn-modal-cancel" :disabled="!selectedVersion" @click="loadVersionToDraft">载入到草稿</button>
+            <button
+              type="button"
+              class="btn-modal-save"
+              :disabled="!selectedVersion || selectedVersion.current || versionBusy"
+              :title="selectedVersion && selectedVersion.current ? '该版本就是当前线上版本' : ''"
+              @click="openRollbackDialog"
+            >回滚到此版本</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 发布 / 回滚确认：填写版本说明 -->
+    <div v-if="publishDialog.open" class="tool-modal-backdrop" @click.self="publishDialog.open = false">
+      <div class="tool-modal-dialog">
+        <div class="tool-modal-header">
+          <div class="tool-modal-title">
+            <i :class="publishDialog.mode === 'rollback' ? 'fa-solid fa-rotate-left' : 'fa-solid fa-rocket'" style="color: var(--accent-blue);"></i>
+            <span>{{ publishDialog.mode === 'rollback' ? '回滚到 v' + publishDialog.version.versionNo : '发布上线' }}</span>
+          </div>
+          <button type="button" class="btn-modal-close" @click="publishDialog.open = false">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="tool-modal-body">
+          <p class="pv-publish-tip">
+            <template v-if="publishDialog.mode === 'rollback'">
+              将 v{{ publishDialog.version.versionNo }} 的内容发布为线上系统提示词，并记录为新版本 v{{ nextVersionNo }}。
+              <span v-if="promptDirty" class="pv-warn">当前草稿中未发布的修改会被替换。</span>
+            </template>
+            <template v-else>
+              当前草稿将成为线上系统提示词，并记录为版本 v{{ nextVersionNo }}；工具与模型参数一并保存。
+            </template>
+          </p>
+          <div class="tool-form-group">
+            <label class="tool-form-label">版本说明 <span class="label-sub">可选，最多 200 字，例如"补充退货时效规则"</span></label>
+            <input
+              ref="noteInputRef"
+              v-model="publishDialog.note"
+              class="pv-note-input"
+              maxlength="200"
+              placeholder="这次修改了什么"
+              @keydown.enter.prevent="confirmPublishDialog"
+            >
+          </div>
+        </div>
+        <div class="tool-modal-footer">
+          <span></span>
+          <div class="tool-footer-right">
+            <button type="button" class="btn-modal-cancel" @click="publishDialog.open = false">取消</button>
+            <button type="button" class="btn-modal-save" :disabled="versionBusy" @click="confirmPublishDialog">
+              {{ publishDialog.mode === 'rollback' ? '确认回滚' : '确认发布' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1166,11 +1303,13 @@ function optimizePrompt() {
   showToast('提示词已依据 Dify 标准规范结构化生成！', 'success', 2500)
 }
 
-async function publish() {
-  if (!agent.value) return
+async function publish(note) {
+  if (!agent.value) return false
   const currentModel = routedModel.value || agent.value.modelName
   const res = await http.put(`/api/agents/${agent.value.id}`, {
     ...agent.value,
+    promptChangeSource: 'PUBLISH',
+    promptChangeNote: note || undefined,
     modelName: currentModel,
     systemPrompt: prompt.value,
     temperature: Number(appliedSettings.temperature.value),
@@ -1185,9 +1324,166 @@ async function publish() {
       localStorage.setItem(toolsStorageKey(agent.value.id), JSON.stringify(tools))
     }
     showToast('已发布上线，草稿提示词与工具配置已持久化保存', 'success', 2500)
-  } else {
-    showToast(res.message || '发布失败', 'error')
+    loadPromptVersions()
+    return true
   }
+  showToast(res.message || '发布失败', 'error')
+  return false
+}
+
+// ==================== 系统提示词版本 ====================
+const promptVersions = ref([])
+const versionsOpen = ref(false)
+const versionsLoading = ref(false)
+const selectedVersion = ref(null) // 含全文的版本详情
+const versionView = ref('content') // content | diff
+const versionBusy = ref(false)
+const publishDialog = reactive({ open: false, mode: 'publish', note: '', version: null })
+const noteInputRef = ref(null)
+
+const onlineVersion = computed(() => promptVersions.value.find(v => v.current) || null)
+const nextVersionNo = computed(() => {
+  if (promptVersions.value.length) return promptVersions.value[0].versionNo + 1
+  // 还没有版本的旧智能体：首次发布会先补记修改前的提示词为 v1
+  return publishedPrompt.value.trim() ? 2 : 1
+})
+
+async function loadPromptVersions() {
+  if (!agent.value) return
+  const res = await http.get(`/api/agents/${agent.value.id}/prompt-versions`)
+  promptVersions.value = res.success && Array.isArray(res.data) ? res.data : []
+}
+
+async function openVersions() {
+  if (!agent.value) return
+  versionsOpen.value = true
+  versionsLoading.value = true
+  await loadPromptVersions()
+  versionsLoading.value = false
+  const first = onlineVersion.value || promptVersions.value[0]
+  if (first) await selectVersion(first)
+  else selectedVersion.value = null
+}
+
+async function selectVersion(v) {
+  const res = await http.get(`/api/agents/${agent.value.id}/prompt-versions/${v.id}`)
+  if (res.success && res.data) {
+    selectedVersion.value = { ...res.data, current: v.current }
+  } else {
+    showToast(res.message || '读取版本失败', 'error')
+  }
+}
+
+function loadVersionToDraft() {
+  const v = selectedVersion.value
+  if (!v) return
+  if (promptDirty.value && prompt.value !== v.systemPrompt && !confirm('当前草稿有未发布的修改，载入后将被替换，继续吗？')) return
+  prompt.value = v.systemPrompt || ''
+  versionsOpen.value = false
+  showToast(`已将 v${v.versionNo} 载入草稿，调试确认后点「发布上线」`, 'success', 2500)
+}
+
+function openPublishDialog() {
+  if (!agent.value || !promptDirty.value) return
+  Object.assign(publishDialog, { open: true, mode: 'publish', note: '', version: null })
+  nextTick(() => noteInputRef.value && noteInputRef.value.focus())
+}
+
+function openRollbackDialog() {
+  const v = selectedVersion.value
+  if (!v || v.current) return
+  Object.assign(publishDialog, { open: true, mode: 'rollback', note: `回滚到 v${v.versionNo}`, version: v })
+  nextTick(() => noteInputRef.value && noteInputRef.value.select())
+}
+
+async function confirmPublishDialog() {
+  if (versionBusy.value) return
+  versionBusy.value = true
+  try {
+    if (publishDialog.mode === 'rollback') {
+      await rollbackTo(publishDialog.version, publishDialog.note.trim())
+    } else if (await publish(publishDialog.note.trim())) {
+      publishDialog.open = false
+    }
+  } finally {
+    versionBusy.value = false
+  }
+}
+
+// 回滚只改系统提示词：以当前已保存的智能体为基础提交，不带上草稿中的工具与参数修改
+async function rollbackTo(v, note) {
+  const res = await http.put(`/api/agents/${agent.value.id}`, {
+    ...agent.value,
+    systemPrompt: v.systemPrompt || '',
+    promptChangeSource: 'ROLLBACK',
+    promptChangeNote: note || `回滚到 v${v.versionNo}`
+  })
+  if (!res.success) {
+    showToast(res.message || '回滚失败', 'error')
+    return
+  }
+  agent.value = res.data
+  prompt.value = v.systemPrompt || ''
+  publishedPrompt.value = prompt.value
+  publishDialog.open = false
+  await loadPromptVersions()
+  const latest = promptVersions.value[0]
+  if (versionsOpen.value && latest) await selectVersion(latest)
+  showToast(latest ? `已回滚，线上提示词为新版本 v${latest.versionNo}` : '已回滚', 'success', 2500)
+}
+
+// 行级对比：所选版本（旧）→ 当前草稿（新）
+const versionDiff = computed(() => {
+  if (!selectedVersion.value || versionView.value !== 'diff') return []
+  return diffLines(selectedVersion.value.systemPrompt || '', prompt.value || '')
+})
+const versionDiffStats = computed(() => {
+  const lines = versionDiff.value
+  const added = lines.filter(l => l.type === 'add').length
+  const removed = lines.filter(l => l.type === 'del').length
+  return { added, removed, same: added === 0 && removed === 0 }
+})
+
+function diffLines(oldText, newText) {
+  const a = oldText.replace(/\r\n/g, '\n').split('\n')
+  const b = newText.replace(/\r\n/g, '\n').split('\n')
+  const n = a.length
+  const m = b.length
+  // 提示词最多几千字，行数有限；极端情况下退化为整段替换
+  if (n * m > 1000000) {
+    return [...a.map(text => ({ type: 'del', text })), ...b.map(text => ({ type: 'add', text }))]
+  }
+  const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1))
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])
+    }
+  }
+  const out = []
+  let i = 0
+  let j = 0
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      out.push({ type: 'same', text: a[i] })
+      i++
+      j++
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      out.push({ type: 'del', text: a[i++] })
+    } else {
+      out.push({ type: 'add', text: b[j++] })
+    }
+  }
+  while (i < n) out.push({ type: 'del', text: a[i++] })
+  while (j < m) out.push({ type: 'add', text: b[j++] })
+  return out
+}
+
+function formatVersionTime(value) {
+  if (!value) return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return String(value)
+  const pad = (x) => String(x).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 function startDrag(e) {
@@ -1377,6 +1673,7 @@ onMounted(async () => {
     setAssistantResource('AGENT', res.data.id, res.data.name)
     prompt.value = res.data.systemPrompt || ''
     publishedPrompt.value = prompt.value
+    loadPromptVersions()
     applyAgentSettings(res.data)
     loadPersistedSettings(res.data.id)
     await loadPlatformCatalog()
