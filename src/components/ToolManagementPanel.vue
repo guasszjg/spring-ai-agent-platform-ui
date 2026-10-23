@@ -31,6 +31,7 @@
         <input
           v-model="keyword"
           type="search"
+          autocomplete="off"
           placeholder="搜索名称或描述"
         >
       </div>
@@ -280,6 +281,7 @@
                     v-model="form.apiKey"
                     class="tool-form-input tool-key-input"
                     :type="showApiKey ? 'text' : 'password'"
+                    autocomplete="new-password"
                     :placeholder="editing?.hasApiKey ? '已保存（留空不改）' : '可选'"
                     @input="testResult = null"
                   >
@@ -323,6 +325,7 @@
                     v-model="form.apiKey"
                     class="tool-form-input tool-key-input"
                     :type="showApiKey ? 'text' : 'password'"
+                    autocomplete="new-password"
                     :placeholder="editing.hasApiKey ? '已保存（留空不改；输入新 Key 则覆盖）' : 'sk-********************************'"
                     @input="testResult = null"
                   >

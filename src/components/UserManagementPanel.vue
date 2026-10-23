@@ -365,6 +365,7 @@
               <input
                 v-model="createForm.password"
                 :type="showCreatePwd ? 'text' : 'password'"
+                autocomplete="new-password"
                 class="modal-input"
                 placeholder="请输入初始密码 (至少 6 位)"
                 minlength="6"
@@ -476,6 +477,7 @@
                 <input
                   v-model="passwordForm.newPassword"
                   :type="showNewPassword ? 'text' : 'password'"
+                  autocomplete="new-password"
                   class="modal-input"
                   placeholder="请输入新密码 (至少 6 位)"
                   required
@@ -496,6 +498,7 @@
                 <input
                   v-model="passwordForm.confirmPassword"
                   :type="showConfirmPassword ? 'text' : 'password'"
+                  autocomplete="new-password"
                   class="modal-input"
                   placeholder="请再次输入新密码"
                   required

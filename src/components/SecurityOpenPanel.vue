@@ -989,7 +989,7 @@
           </select>
         </div>
         <div class="form-item"><label class="form-label">Base URL</label><input v-model="providerForm.baseUrl" class="modal-input" placeholder="https://partner.example.com"></div>
-        <div class="form-item"><label class="form-label">调用密钥（只写）</label><input v-model="providerForm.credential" class="modal-input" type="password" placeholder="留空表示不修改"></div>
+        <div class="form-item"><label class="form-label">调用密钥（只写）</label><input v-model="providerForm.credential" class="modal-input" type="password" autocomplete="new-password" placeholder="留空表示不修改"></div>
         <div class="form-item"><label class="form-label">创建用户时</label>
           <select v-model="providerForm.onUserCreated" class="form-control-styled">
             <option value="OFF">不自动同步</option>
@@ -1213,7 +1213,7 @@
             <div class="sec-split" style="grid-template-columns: 1fr 1fr; gap: 14px;">
               <div class="form-group-styled">
                 <label>签名秘钥 (Secret，可选)</label>
-                <input v-model="alertModal.webhookSecret" type="password" class="form-control-styled" placeholder="HMAC-SHA256 签名私钥">
+                <input v-model="alertModal.webhookSecret" type="password" autocomplete="new-password" class="form-control-styled" placeholder="HMAC-SHA256 签名私钥">
               </div>
               <div class="form-group-styled">
                 <label>静默防抖时长 (分钟)</label>
