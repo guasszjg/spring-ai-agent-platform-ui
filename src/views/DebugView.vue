@@ -127,7 +127,7 @@
                   <input v-model="settings.extraHeaders.enabled" type="checkbox">
                   <span class="slider-toggle"></span>
                 </label>
-                <input v-model="settings.extraHeaders.value" class="ms-text" type="text" placeholder="额外请求头, Json字符串格式">
+                <input v-model="settings.extraHeaders.value" class="ms-text" type="text" autocomplete="off" placeholder="额外请求头, Json字符串格式">
               </div>
             </div>
             <div class="ms-footer">
@@ -391,6 +391,7 @@
                     v-model="editingToolConfig.apiKey"
                     class="tool-form-input tool-key-input"
                     :type="showApiKey ? 'text' : 'password'"
+                    autocomplete="new-password"
                     :placeholder="bochaDbConfigured ? (bochaDbInherited ? '已自动继承平台共享密钥（如需专属 Key 请输入）' : '已在数据库专属加密保存（如需更换请输入新 Key）') : 'sk-********************************'"
                     @input="testResult = null"
                   >
@@ -540,7 +541,7 @@
           <div class="tool-catalog-section">
             <div class="tool-catalog-search">
               <i class="fa-solid fa-magnifying-glass"></i>
-              <input v-model="toolCatalogKeyword" type="search" placeholder="搜索工具名称、前缀或能力…">
+              <input v-model="toolCatalogKeyword" type="search" autocomplete="off" placeholder="搜索工具名称、前缀或能力…">
             </div>
             <h4 class="catalog-section-title">平台工具目录 ({{ filteredToolCatalog.length }}/{{ standardToolCatalog.length }})</h4>
             <p v-if="!standardToolCatalog.length" class="section-hint">暂无可用工具，请先在左侧「工具管理」中启用。</p>

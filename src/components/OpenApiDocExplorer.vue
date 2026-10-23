@@ -35,6 +35,7 @@
             <input
               v-model="customKeySecret"
               type="password"
+              autocomplete="new-password"
               class="env-input key-secret-input"
               :placeholder="customKeySecret ? '已自动载入密钥明文 (可直接测试)' : (selectedKeyMode === 'custom' ? 'sk-live-xxxxxxxx' : '请粘贴此凭证完整明文 sk-live-...')"
               title="请输入您签发或轮换时保存的完整 API Key 明文 (sk-live-...)"
