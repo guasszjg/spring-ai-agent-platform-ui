@@ -756,6 +756,7 @@
               <button type="button" class="preset-pill" @click="applyEmbPreset('openai')">OpenAI</button>
               <button type="button" class="preset-pill" @click="applyEmbPreset('zhipu')">智谱 AI</button>
               <button type="button" class="preset-pill" @click="applyEmbPreset('ollama')">本地 Ollama (bge-m3)</button>
+              <button type="button" class="preset-pill" @click="applyEmbPreset('header-relay')">Header 鉴权中转 (kinfra)</button>
             </div>
           </div>
 
@@ -784,7 +785,11 @@
           <div class="form-group">
             <label class="form-label">接口地址 (Base URL)</label>
             <input v-model="embForm.baseUrl" class="form-control-styled" placeholder="如 https://dashscope.aliyuncs.com/compatible-mode/v1">
-            <p class="gateway-field-hint">支持标准 OpenAI 兼容的 Base URL，系统将自动调用 <code>/embeddings</code> 端点。</p>
+            <p class="gateway-field-hint">
+              填 OpenAI 兼容的 Base URL 时自动拼接 <code>/embeddings</code>；地址最后一段以 <code>embeddings</code> 结尾时
+              （如 <code>/api/modelConfig/textEmbeddings</code>）视为完整接口地址，原样调用。
+              实际调用：<code>{{ embEndpointPreview }}</code>
+            </p>
           </div>
 
           <div class="form-group">
@@ -801,6 +806,34 @@
               autocomplete="new-password"
               :placeholder="embForm.apiKeyMasked ? '若无需修改密钥，此处留空' : 'sk-...（本地 Ollama 可不填）'"
             >
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">自定义请求头 (可选，加密存储)</label>
+            <div v-for="(h, i) in embForm.headers" :key="i" class="emb-header-row">
+              <input
+                v-model="h.name"
+                class="form-control-styled"
+                placeholder="名称，如 app_id"
+                autocomplete="off"
+                @input="embTestResult = null"
+              >
+              <input
+                v-model="h.value"
+                type="password"
+                class="form-control-styled"
+                autocomplete="new-password"
+                :placeholder="h.saved ? '已加密保存，留空不改' : '值'"
+                @input="embTestResult = null"
+              >
+              <button type="button" class="btn-icon-plain" title="删除" @click="removeEmbHeader(i)">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            <button type="button" class="btn-link-add" :disabled="embForm.headers.length >= 10" @click="addEmbHeader()">
+              <i class="fa-solid fa-plus"></i> 添加请求头
+            </button>
+            <p class="gateway-field-hint">用于不走 <code>Authorization: Bearer</code> 的中转服务，例如 <code>app_id</code> / <code>device_mac</code>。与 API Key 可同时使用，也可只用其一。</p>
           </div>
 
           <div class="form-group">
@@ -1154,10 +1187,37 @@ const embForm = reactive({
   modelName: 'text-embedding-v3',
   dimension: 1024,
   isActive: true,
-  enabled: true
+  enabled: true,
+  headers: [] // { name, value, saved }：saved 表示服务端已保存过该请求头，值留空即保持不变
 })
 
 const activeEmbedding = computed(() => embeddings.value.find((e) => e.isActive))
+
+// 与后端 EmbeddingConfigService.resolveEndpoint 一致：最后一段以 embeddings 结尾时视为完整地址
+const embEndpointPreview = computed(() => {
+  let url = (embForm.baseUrl || '').trim() || 'https://api.openai.com/v1'
+  url = url.replace(/\/+$/, '')
+  const path = url.split('?')[0]
+  const last = path.substring(path.lastIndexOf('/') + 1).toLowerCase()
+  return last.endsWith('embeddings') ? url : url + '/embeddings'
+})
+
+function addEmbHeader(name = '', value = '') {
+  if (embForm.headers.length >= 10) return
+  embForm.headers.push({ name, value, saved: false })
+  embTestResult.value = null
+}
+
+function removeEmbHeader(index) {
+  embForm.headers.splice(index, 1)
+  embTestResult.value = null
+}
+
+function embHeadersPayload() {
+  return embForm.headers
+    .filter(h => h.name.trim() || h.value.trim())
+    .map(h => ({ name: h.name.trim(), value: h.value.trim() }))
+}
 
 function applyEmbPreset(type) {
   if (type === 'qwen') {
@@ -1184,6 +1244,16 @@ function applyEmbPreset(type) {
     embForm.baseUrl = 'http://localhost:11434/v1'
     embForm.modelName = 'bge-m3'
     embForm.dimension = 1024
+  } else if (type === 'header-relay') {
+    // 合作方向量中转：完整接口地址 + app_id / device_mac 请求头鉴权，不需要 API Key
+    embForm.name = '向量中转 kinfra-text-embedding-0.6b'
+    embForm.provider = 'CUSTOM'
+    embForm.baseUrl = 'http://82.157.197.25:9540/api/modelConfig/textEmbeddings'
+    embForm.modelName = 'kinfra-text-embedding-0.6b'
+    embForm.dimension = 1024
+    for (const name of ['app_id', 'device_mac']) {
+      if (!embForm.headers.some(h => h.name.toLowerCase() === name)) addEmbHeader(name)
+    }
   }
   embTestResult.value = null
 }
@@ -1199,7 +1269,8 @@ function openCreateEmbedding() {
     modelName: 'text-embedding-v3',
     dimension: 1024,
     isActive: embeddings.value.length === 0,
-    enabled: true
+    enabled: true,
+    headers: []
   })
   embTestResult.value = null
   embModalOpen.value = true
@@ -1216,7 +1287,8 @@ function openEditEmbedding(item) {
     modelName: item.modelName,
     dimension: item.dimension || 1024,
     isActive: item.isActive,
-    enabled: item.enabled
+    enabled: item.enabled,
+    headers: (item.customHeaderNames || []).map(name => ({ name, value: '', saved: true }))
   })
   embTestResult.value = null
   embModalOpen.value = true
@@ -1233,7 +1305,8 @@ async function testEmbeddingInModal() {
     id: embForm.id || undefined,
     baseUrl: embForm.baseUrl.trim(),
     apiKey: embForm.apiKey.trim(),
-    modelName: embForm.modelName.trim()
+    modelName: embForm.modelName.trim(),
+    customHeaders: embHeadersPayload()
   })
   testingEmb.value = false
   embTestResult.value = {
@@ -1271,7 +1344,8 @@ async function saveEmbedding() {
     modelName: embForm.modelName.trim(),
     dimension: Number(embForm.dimension) || 1024,
     isActive: embForm.isActive,
-    enabled: embForm.enabled
+    enabled: embForm.enabled,
+    customHeaders: embHeadersPayload()
   }
   const res = embForm.id
     ? await http.put(`/api/model-gateway/embeddings/${embForm.id}`, payload)
@@ -2431,6 +2505,42 @@ onMounted(refreshAll)
 .protocol-tab-icon {
   width: 18px;
   height: 18px;
+}
+
+.emb-header-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 32px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.btn-icon-plain {
+  height: 32px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.btn-icon-plain:hover {
+  color: var(--accent-rose, #e11d48);
+  border-color: var(--accent-rose, #e11d48);
+}
+
+.btn-link-add {
+  border: none;
+  background: transparent;
+  color: var(--accent-blue, #3b82f6);
+  font-size: 12.5px;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.btn-link-add:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .gateway-saved-key {
