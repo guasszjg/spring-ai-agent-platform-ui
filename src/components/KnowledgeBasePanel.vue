@@ -1580,6 +1580,7 @@
                     </div>
                     <div class="model-desc">
                       尚未在「模型网关 → 向量模型」中激活任何配置，文档将无法生成语义向量。请先配置并激活一个向量模型。
+                      <router-link v-if="isSuperAdmin" to="/dashboard?tab=gateway-embedding" class="kb-gateway-link" @click="kbModalOpen = false">去配置向量模型 →</router-link>
                     </div>
                   </template>
                 </div>

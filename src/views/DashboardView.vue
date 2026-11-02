@@ -43,9 +43,55 @@
           <div v-show="sidebarCollapsed && gIdx > 0" class="nav-section-divider" :title="group.title"></div>
 
           <!-- Submenu Items -->
+          <template v-for="item in group.items" :key="item.id">
+          <!-- 带二级菜单的入口（模型网关）：展开时在下方列出子页面；侧边栏收起时悬停弹出 -->
+          <div
+            v-if="item.children"
+            class="nav-tree"
+            :class="{ expanded: !sidebarCollapsed && isNavExpanded(item) }"
+            @mouseenter="openFlyout(item, $event)"
+            @mouseleave="scheduleFlyoutClose"
+          >
+            <button
+              class="sidebar-nav-item nav-parent"
+              :class="{
+                active: isChildActive(item) && (sidebarCollapsed || !isNavExpanded(item)),
+                'has-active-child': isChildActive(item)
+              }"
+              :title="sidebarCollapsed ? '' : (item.title || item.name)"
+              :aria-expanded="!sidebarCollapsed && isNavExpanded(item)"
+              @click="handleParentClick(item)"
+            >
+              <span class="nav-item-icon-wrap">
+                <component :is="navIcons[item.id] || Circle" :size="16" :stroke-width="1.75" />
+              </span>
+              <span v-show="!sidebarCollapsed" class="nav-item-name">{{ item.name }}</span>
+              <span
+                v-if="!sidebarCollapsed && !isNavExpanded(item) && childWarnings(item)"
+                class="nav-status-dot is-warn"
+                :title="childWarnings(item) + ' 项需要处理'"
+              ></span>
+              <ChevronDown v-show="!sidebarCollapsed" class="nav-chevron" :size="14" :stroke-width="2" />
+            </button>
+            <div v-show="!sidebarCollapsed" class="nav-children">
+              <div class="nav-children-inner">
+                <button
+                  v-for="child in item.children"
+                  :key="child.id"
+                  class="sidebar-nav-item nav-child"
+                  :class="{ active: currentTab === child.id }"
+                  :title="child.statusText ? child.name + '：' + child.statusText : child.name"
+                  :tabindex="isNavExpanded(item) ? 0 : -1"
+                  @click="handleNavClick(child)"
+                >
+                  <span class="nav-item-name">{{ child.name }}</span>
+                  <span class="nav-status-dot" :class="'is-' + (child.status || 'none')"></span>
+                </button>
+              </div>
+            </div>
+          </div>
           <button
-            v-for="item in group.items"
-            :key="item.id"
+            v-else
             class="sidebar-nav-item"
             :class="{ active: currentTab === item.id }"
             :title="item.title || item.name"
@@ -69,8 +115,32 @@
               {{ item.count }}
             </span>
           </button>
+          </template>
         </div>
       </nav>
+
+      <!-- 侧边栏收起时，悬停二级菜单入口弹出子页面列表 -->
+      <Teleport to="body">
+        <div
+          v-if="flyout"
+          class="nav-flyout"
+          :style="{ top: flyout.top + 'px', left: flyout.left + 'px' }"
+          @mouseenter="cancelFlyoutClose"
+          @mouseleave="scheduleFlyoutClose"
+        >
+          <div class="nav-flyout-title">{{ flyout.item.name }}</div>
+          <button
+            v-for="child in flyoutChildren"
+            :key="child.id"
+            class="nav-flyout-item"
+            :class="{ active: currentTab === child.id }"
+            @click="handleNavClick(child); flyout = null"
+          >
+            <span>{{ child.name }}</span>
+            <span class="nav-status-dot" :class="'is-' + (child.status || 'none')" :title="child.statusText"></span>
+          </button>
+        </div>
+      </Teleport>
 
       <div class="sidebar-footer">
         <div class="sidebar-user-card" :title="user.nickname || user.username || '平台用户'" @click="openProfileModal">
@@ -543,9 +613,14 @@
         />
       </section>
 
-      <section v-show="currentTab === 'gateway'" class="app-subview active">
+      <section v-show="isGatewayTab" class="app-subview active">
         <!-- 仅超管模块：非超管不挂载，避免加载时请求无权限接口 -->
-        <GatewayPanel v-if="isSuperAdmin" ref="gatewayPanelRef" />
+        <GatewayPanel
+          v-if="isSuperAdmin"
+          ref="gatewayPanelRef"
+          :section="gatewaySection"
+          @status="gatewayStatus = $event"
+        />
       </section>
 
       <section v-show="currentTab === 'tools'" class="app-subview active">
@@ -808,8 +883,11 @@ import AssistantDock from '../components/AssistantDock.vue'
 import { setAssistantPage } from '../composables/useAssistantContext'
 import {
   LayoutDashboard, Bot, LayoutTemplate, Wrench, BookOpen, Link2, Network, Users, ShieldCheck, KeyRound,
-  Circle, PanelLeftClose, LogOut, Sun, Moon
+  Circle, PanelLeftClose, LogOut, Sun, Moon, ChevronDown
 } from 'lucide-vue-next'
+import {
+  GATEWAY_SECTIONS, GATEWAY_TAB_PREFIX, GATEWAY_TABS, lastGatewayTab, rememberGatewayTab
+} from '../components/gateway/sections'
 
 const navIcons = {
   overview: LayoutDashboard,
@@ -830,21 +908,23 @@ const router = useRouter()
 const route = useRoute()
 const { showToast } = useToast()
 
-const validTabs = ['overview', 'agents', 'templates', 'tools', 'knowledge', 'knowledge-dify', 'gateway', 'users', 'roles', 'assistant-eval', 'security', 'open-platform']
+const validTabs = ['overview', 'agents', 'templates', 'tools', 'knowledge', 'knowledge-dify', ...GATEWAY_TABS, 'users', 'roles', 'assistant-eval', 'security']
 // 仅超级管理员可见的模块：导航隐藏，且通过 URL 或点击进入时会被拦回概览
-const superAdminOnlyTabs = ['gateway', 'users', 'roles', 'assistant-eval']
+const superAdminOnlyTabs = [...GATEWAY_TABS, 'users', 'roles', 'assistant-eval']
 
-function parseInitialTab() {
-  const raw = route.query.tab
+// 地址里的 tab 转成页面：兼容旧地址（open-platform、模型网关拆分前的 gateway）
+function normalizeTab(raw) {
   const t = Array.isArray(raw) ? raw[0] : raw
   if (t === 'open-platform') return 'security'
-  if (t && validTabs.includes(t)) {
-    return t
-  }
-  return 'overview'
+  if (t === 'gateway') return lastGatewayTab()
+  return t && validTabs.includes(t) ? t : null
 }
 
-const currentTab = ref(parseInitialTab())
+const currentTab = ref(normalizeTab(route.query.tab) || 'overview')
+const isGatewayTab = computed(() => GATEWAY_TABS.includes(currentTab.value))
+const gatewaySection = computed(() => isGatewayTab.value ? currentTab.value.slice(GATEWAY_TAB_PREFIX.length) : 'llm')
+// 模型网关各子页面上报的状态（侧边栏状态点）：{ llm: { state, text }, embedding: ... }
+const gatewayStatus = ref({})
 const kbPanelRef = ref(null)
 const kbDifyPanelRef = ref(null)
 
@@ -974,7 +1054,7 @@ const pageTitle = computed(() => {
   if (currentTab.value === 'tools') return '工具'
   if (currentTab.value === 'knowledge') return '自建知识库'
   if (currentTab.value === 'knowledge-dify') return 'Dify 知识库'
-  if (currentTab.value === 'gateway') return '模型网关'
+  if (isGatewayTab.value) return '模型网关'
   if (currentTab.value === 'users') return '用户'
   if (currentTab.value === 'roles') return '角色与权限'
   if (currentTab.value === 'security') return '开放与安全'
@@ -1054,8 +1134,14 @@ const navGroups = computed(() => {
     govItems.push({
       id: 'gateway',
       name: '模型网关',
-      title: '模型网关',
-      icon: 'fa-solid fa-server'
+      title: '模型网关：大语言模型、向量模型、OCR 与 Dify 引擎',
+      icon: 'fa-solid fa-server',
+      children: GATEWAY_SECTIONS.map((s) => ({
+        id: GATEWAY_TAB_PREFIX + s.key,
+        name: s.title,
+        status: gatewayStatus.value[s.key]?.state,
+        statusText: gatewayStatus.value[s.key]?.text
+      }))
     })
     govItems.push({
       id: 'users',
@@ -1109,8 +1195,8 @@ function triggerTabRefresh(tabId) {
     const kbId = queryKbId()
     if (kbId) openKbFromQuery(kbId)
     else kbPanelOf(tabId)?.resetToList?.(true)
-  } else if (tabId === 'gateway') {
-    gatewayPanelRef.value?.refreshAll?.()
+  } else if (GATEWAY_TABS.includes(tabId)) {
+    gatewayPanelRef.value?.refreshSection?.(tabId.slice(GATEWAY_TAB_PREFIX.length))
   } else if (tabId === 'users') {
     usersPanelRef.value?.resetUsers?.(true)
   } else if (tabId === 'roles') {
@@ -1135,6 +1221,100 @@ function handleNavClick(item) {
     currentTab.value = item.id
   }
 }
+
+// ==================== 二级菜单（模型网关） ====================
+// 展开状态按入口记住；当前页面在某个入口下时自动展开
+const NAV_EXPANDED_KEY = 'navExpanded'
+const navExpanded = ref(loadNavExpanded())
+
+function loadNavExpanded() {
+  try {
+    const list = JSON.parse(localStorage.getItem(NAV_EXPANDED_KEY) || '[]')
+    return Array.isArray(list) ? list : []
+  } catch {
+    return []
+  }
+}
+
+function setNavExpanded(id, expanded) {
+  const next = navExpanded.value.filter((x) => x !== id)
+  if (expanded) next.push(id)
+  navExpanded.value = next
+  try {
+    localStorage.setItem(NAV_EXPANDED_KEY, JSON.stringify(next))
+  } catch {
+    // 写入失败只影响下次打开时的展开状态
+  }
+}
+
+function isNavExpanded(item) {
+  return navExpanded.value.includes(item.id)
+}
+
+function isChildActive(item) {
+  return (item.children || []).some((c) => c.id === currentTab.value)
+}
+
+function childWarnings(item) {
+  return (item.children || []).filter((c) => c.status === 'warn').length
+}
+
+function defaultChildTab(item) {
+  return item.id === 'gateway' ? lastGatewayTab() : item.children[0].id
+}
+
+// 点父级：未展开时展开并进入上次停留的子页面；已展开且正在其中时收起
+function handleParentClick(item) {
+  if (sidebarCollapsed.value) {
+    handleNavClick({ id: defaultChildTab(item) })
+    return
+  }
+  if (isNavExpanded(item) && isChildActive(item)) {
+    setNavExpanded(item.id, false)
+    return
+  }
+  setNavExpanded(item.id, true)
+  if (!isChildActive(item)) handleNavClick({ id: defaultChildTab(item) })
+}
+
+watch(currentTab, (tab) => {
+  if (GATEWAY_TABS.includes(tab)) {
+    rememberGatewayTab(tab)
+    if (!navExpanded.value.includes('gateway')) setNavExpanded('gateway', true)
+  }
+}, { immediate: true })
+
+// 侧边栏收起时的悬停弹出菜单
+const flyout = ref(null)
+let flyoutCloseTimer = null
+const flyoutChildren = computed(() => {
+  if (!flyout.value) return []
+  for (const group of navGroups.value) {
+    const item = group.items.find((i) => i.id === flyout.value.item.id)
+    if (item) return item.children || []
+  }
+  return []
+})
+
+function openFlyout(item, event) {
+  if (!sidebarCollapsed.value) return
+  cancelFlyoutClose()
+  const rect = event.currentTarget.getBoundingClientRect()
+  // 贴着侧边栏右缘弹出（不用入口自身的宽度，收起动画中途悬停也不会压住侧边栏）
+  const sidebar = event.currentTarget.closest('.app-sidebar')?.getBoundingClientRect()
+  flyout.value = { item, top: rect.top, left: (sidebar ? sidebar.right : rect.right) + 8 }
+}
+
+function cancelFlyoutClose() {
+  clearTimeout(flyoutCloseTimer)
+}
+
+function scheduleFlyoutClose() {
+  cancelFlyoutClose()
+  flyoutCloseTimer = setTimeout(() => { flyout.value = null }, 160)
+}
+
+watch(sidebarCollapsed, () => { flyout.value = null })
 
 // Profile & Security Modal
 const profileModalOpen = ref(false)
@@ -1329,13 +1509,16 @@ function goDebug(id) {
 watch(viewMode, (mode) => localStorage.setItem('agentViewMode', mode))
 
 watch(() => route.query.tab, (newTab) => {
-  const tabValue = Array.isArray(newTab) ? newTab[0] : newTab
-  if (!tabValue) return
-  const target = tabValue === 'open-platform' ? 'security' : tabValue
-  if (validTabs.includes(target) && target !== currentTab.value) {
+  const target = normalizeTab(newTab)
+  if (target && target !== currentTab.value) {
     currentTab.value = target
   }
 })
+
+// 旧地址（?tab=gateway 等）进入时，把地址改成实际打开的页面，刷新后仍停在原处
+if (route.query.tab && route.query.tab !== currentTab.value) {
+  router.replace({ query: { ...route.query, tab: currentTab.value } }).catch(() => {})
+}
 
 // 助手回复中的知识库链接（/dashboard?tab=knowledge&kb=ID）：打开对应知识库详情，打开后从地址中去掉 kb
 function queryKbId() {

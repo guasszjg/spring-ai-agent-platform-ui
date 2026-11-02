@@ -27,7 +27,7 @@
           <i :class="theme === 'light' ? 'fa-solid fa-sun' : 'fa-solid fa-moon'"></i>
         </button>
         <router-link
-          to="/dashboard?tab=gateway"
+          to="/dashboard?tab=gateway-llm"
           class="model-selector-pill"
           title="模型已在网关页选定，点击前往修改"
         >
