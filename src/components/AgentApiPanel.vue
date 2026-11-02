@@ -251,7 +251,7 @@
 
           <div class="endpoint-meta-badge">
             <span class="method-tag method-post">POST</span>
-            <code class="meta-endpoint-uri">/api/v1/chat-messages</code>
+            <code class="meta-endpoint-uri">/open/v1/chat-messages</code>
           </div>
         </div>
 
