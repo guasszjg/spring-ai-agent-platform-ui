@@ -1549,7 +1549,7 @@ function createDefaultSettings() {
     frequencyPenalty: { enabled: false, value: 0 },
     responseFormat: { enabled: false, value: 'text' },
     // 上下文记忆保存在智能体上（开放接口也按它走），不走本地缓存
-    memory: { enabled: true, value: 3 },
+    memory: { enabled: false, value: 3 },
     webSearch: { enabled: false },
     thinking: { enabled: false },
     extraHeaders: { enabled: false, value: '' }
@@ -1573,7 +1573,7 @@ function applyAgentSettings(data) {
   appliedSettings.temperature.value = settings.temperature.value
   appliedSettings.maxTokens.value = settings.maxTokens.value
   appliedSettings.topP.value = settings.topP.value
-  const turns = data.memoryTurns ?? 3
+  const turns = data.memoryTurns ?? 0
   settings.memory.enabled = turns > 0
   settings.memory.value = turns > 0 ? turns : 3
   Object.assign(appliedSettings.memory, settings.memory)
