@@ -1,4 +1,41 @@
-// Complete Open API v1 Specification Catalog for Developer Documentation & Live Debugger
+// 开放接口 /open/v1 文档目录：「接入文档」页与在线调试共用。字段、参数与示例须与后端控制器保持一致。
+
+// 统一响应结构：{ success, message, data }
+const ok = (data, message = '操作成功') => JSON.stringify({ success: true, message, data }, null, 2)
+const body = (obj) => JSON.stringify(obj, null, 2)
+
+const MEMORY_TURNS_DESC = '上下文记忆轮数 (0~10)。0 = 关闭，每次只发当前问题，最省 token；需要连续追问时设 2~3，调用对话接口时带回 conversation_id 即可'
+
+const AGENT_SAMPLE = {
+  id: 'agent-2e839a1c',
+  name: '售后技术顾问',
+  avatar: '🤖',
+  category: '产品支持',
+  description: '为客户提供快速售后诊断与排错指南',
+  modelName: 'deepseek-v4-flash',
+  memoryTurns: 0,
+  status: 'RUNNING',
+  isSystem: false,
+  ownerUsername: 'developer',
+  knowledgeBaseIds: ['kb-7f3a91c2'],
+  createdAt: '2026-11-02T10:20:00',
+  updatedAt: '2026-11-02T10:20:00'
+}
+
+const KB_SAMPLE = {
+  id: 'kb-7f3a91c2',
+  name: '广告机产品手册',
+  description: '安装、发布节目、常见故障排查',
+  avatar: '📚',
+  provider: 'SPRING_AI',
+  documentCount: 6,
+  wordCount: 39658,
+  faqCount: 12,
+  enabled: true,
+  searchMethod: 'hybrid_search',
+  topK: 3,
+  scoreThreshold: 0.5
+}
 
 export const OPEN_API_GROUPS = [
   {
@@ -13,41 +50,53 @@ export const OPEN_API_GROUPS = [
         method: 'POST',
         path: '/chat-messages',
         scope: 'chat',
-        description: '向指定智能体发送问答提示词，支持单次同步 JSON 响应与 SSE 流式实时打字机输出，自动注入绑定的私有知识库切片上下文及护栏过滤。',
+        description: '向智能体提问。blocking 返回完整 JSON；streaming 以 SSE 边生成边推送，事件依次为 message（answer 为一段文本，依次拼接）、message_end（含 model、tokens_used、latency_ms），输出命中护栏时为 guardrail，失败时为 error。平台会自动检索智能体绑定的知识库，并做输入 / 输出安全检查。',
         bodyFields: [
-          { name: 'agent_id', type: 'string', required: true, default: 'agent_sample_01', description: '目标调用的智能体 ID (必填，同时兼容 agentId)' },
-          { name: 'message', type: 'string', required: true, default: '你好，请介绍一下企业私有知识库与多智能体协同能力？', description: '用户输入的问题、指令或对话内容文本 (必填，同时兼容 query)' },
-          { name: 'response_mode', type: 'string', required: false, default: 'blocking', description: '响应返回模式: blocking (阻塞返回完整JSON) 或 streaming (SSE流式实时输出)' },
+          { name: 'agent_id', type: 'string', required: false, default: 'agent-2e839a1c', description: '目标智能体 ID 或编码（兼容 agentId）。凭证范围只有一个智能体时可省略' },
+          { name: 'message', type: 'string', required: true, default: '广告机怎么发布节目？', description: '用户问题（兼容 query、prompt、input、content、question）' },
+          { name: 'response_mode', type: 'string', required: false, default: 'blocking', description: 'blocking：返回完整 JSON；streaming：SSE 流式输出（不传时默认 streaming）' },
           { name: 'conversation_id', type: 'string', required: false, default: '', description: '会话 ID。智能体开启上下文记忆 (memoryTurns > 0) 时，传入上一轮返回的 conversation_id 即可接着追问，平台自动带上最近 N 轮问答；同一会话须使用相同的 user。记忆关闭时只用于日志归档' },
-          { name: 'user', type: 'string', required: false, default: 'developer_guass', description: '终端用户唯一标识，用于调用链路与安全审计溯源；上下文记忆只读取同一 user 的会话' }
+          { name: 'user', type: 'string', required: false, default: 'device-SN001', description: '终端用户标识（兼容 end_user），用于审计、用量统计与会话归属；上下文记忆只读取同一 user 的会话' }
         ],
-        exampleBody: JSON.stringify({
-          agent_id: "agent_sample_01",
-          message: "你好，请介绍一下企业私有知识库与多智能体协同能力？",
-          response_mode: "blocking",
-          conversation_id: "",
-          user: "developer_guass"
-        }, null, 2),
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "success",
-          data: {
-            conversationId: "conv_9a2bc1d8",
-            messageId: "msg_88320145",
-            agentId: "agent_sample_01",
-            answer: "您好！本平台支持企业级私有知识库 RAG 混合语义检索与高可用智能体编排...",
-            promptTokens: 145,
-            completionTokens: 86,
-            totalTokens: 231,
-            citations: [
-              {
-                kbId: "kb_enterprise_manual",
-                title: "企业智能体规范.pdf",
-                snippet: "智能体可通过开放接口与外部系统无缝协同..."
-              }
-            ]
-          }
-        }, null, 2)
+        exampleBody: body({
+          agent_id: 'agent-2e839a1c',
+          message: '广告机怎么发布节目？',
+          response_mode: 'blocking',
+          conversation_id: '',
+          user: 'device-SN001'
+        }),
+        exampleResponse: ok({
+          conversation_id: 'conv-5f0c2a9e81d34b7a',
+          message_id: 'msg-1a2b3c4d',
+          reply: '发布节目分三步：1. 在节目管理中选择节目；2. 进入日程安排设置播放时间；3. 选择终端并点击发布。',
+          model: 'deepseek-v4-flash',
+          tool_called: null,
+          tokens_used: 1230,
+          latency_ms: 1520,
+          created_at: 1793600000,
+          request_id: 'req_8f2c1d0e9b7a6c5d'
+        }, 'success')
+      },
+      {
+        id: 'chat-stop',
+        name: '停止生成（暂未实现）',
+        method: 'POST',
+        path: '/chat-messages/{taskId}/stop',
+        scope: 'chat',
+        description: '预留接口，目前固定返回 501 not_supported。需要中途停止时，直接断开流式连接即可，平台会随之停止生成。',
+        pathParams: [
+          { name: 'taskId', type: 'string', required: true, default: 'msg-1a2b3c4d', description: '任务 ID' }
+        ],
+        exampleResponse: JSON.stringify({ success: false, message: '停止生成尚未接入上游取消，taskId=msg-1a2b3c4d', data: { code: 'not_supported' } }, null, 2)
+      },
+      {
+        id: 'status',
+        name: '服务状态',
+        method: 'GET',
+        path: '/status',
+        scope: '任意有效凭证',
+        description: '检查开放接口是否可用、凭证是否有效。',
+        exampleResponse: ok({ version: 'open-v1', status: 'RUNNING', timestamp: 1793600000000 })
       }
     ]
   },
@@ -63,64 +112,20 @@ export const OPEN_API_GROUPS = [
         method: 'GET',
         path: '/agents',
         scope: 'agents:read',
-        description: '分页获取当前凭证具备访问与调用权限的智能体资产清单。',
-        queryParams: [
-          { name: 'page', type: 'integer', required: false, default: '1', description: '页码，从 1 开始' },
-          { name: 'size', type: 'integer', required: false, default: '10', description: '每页记录数 (最大 100)' },
-          { name: 'keyword', type: 'string', required: false, default: '', description: '按智能体名称或标识模糊检索' }
-        ],
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "success",
-          data: {
-            total: 2,
-            page: 1,
-            size: 10,
-            records: [
-              {
-                id: "agent_001",
-                name: "企业智能问答助手",
-                code: "kb_assistant",
-                category: "知识库客服",
-                avatar: "🤖",
-                status: "RUNNING",
-                modelName: "Qwen/Qwen2.5-72B-Instruct",
-                temperature: 0.7,
-                memoryTurns: 0,
-                description: "解答日常公司规章、报销与 IT 支持问题",
-                boundKnowledgeBases: ["kb_hr_rules", "kb_finance"],
-                updatedAt: "2026-09-10T14:20:00"
-              }
-            ]
-          }
-        }, null, 2)
+        description: '返回当前凭证可见的全部智能体（凭证限定了智能体范围时只返回范围内的）。不分页。',
+        exampleResponse: ok([AGENT_SAMPLE])
       },
       {
         id: 'agents-get',
-        name: '获取智能体详情 (脱敏)',
+        name: '获取智能体详情',
         method: 'GET',
         path: '/agents/{id}',
         scope: 'agents:read',
-        description: '获取指定智能体的公开配置。出于企业安全与版权防护考虑，原始系统提示词 (System Prompt) 与第三方凭证已被自动安全脱敏。',
+        description: '获取智能体的公开配置。系统提示词与第三方凭证不会返回。',
         pathParams: [
-          { name: 'id', type: 'string', required: true, default: 'agent_001', description: '智能体唯一 ID' }
+          { name: 'id', type: 'string', required: true, default: 'agent-2e839a1c', description: '智能体 ID' }
         ],
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "success",
-          data: {
-            id: "agent_001",
-            name: "企业智能问答助手",
-            code: "kb_assistant",
-            category: "知识库客服",
-            status: "RUNNING",
-            modelName: "Qwen/Qwen2.5-72B-Instruct",
-            temperature: 0.7,
-            memoryTurns: 0,
-            description: "解答日常公司规章、报销与 IT 支持问题",
-            boundKnowledgeBases: ["kb_hr_rules"]
-          }
-        }, null, 2)
+        exampleResponse: ok(AGENT_SAMPLE)
       },
       {
         id: 'agents-create',
@@ -128,39 +133,28 @@ export const OPEN_API_GROUPS = [
         method: 'POST',
         path: '/agents',
         scope: 'agents:write',
-        description: '通过开放接口在当前开发者租户下注册并创建一个新的智能体。',
+        description: '在凭证所属开发者名下创建智能体。',
         bodyFields: [
-          { name: 'name', type: 'string', required: true, default: '售后技术顾问', description: '智能体显示名称' },
-          { name: 'code', type: 'string', required: true, default: 'tech_support_v1', description: '全局唯一英文/数字代号' },
+          { name: 'name', type: 'string', required: true, default: '售后技术顾问', description: '智能体名称' },
+          { name: 'code', type: 'string', required: false, default: 'tech_support_v1', description: '业务编码，全局唯一（字母、数字、下划线）' },
           { name: 'category', type: 'string', required: false, default: '通用智能', description: '业务分类' },
-          { name: 'modelName', type: 'string', required: false, default: 'Qwen/Qwen2.5-72B-Instruct', description: '调度模型名称' },
-          { name: 'temperature', type: 'number', required: false, default: '0.7', description: '生成温度 (0.0~2.0)' },
-          { name: 'description', type: 'string', required: false, default: '为客户提供快速售后诊断与排错指南', description: '简要介绍' },
-          { name: 'systemPrompt', type: 'string', required: false, default: '你是一名资深技术支持专家，请用专业而亲切的口吻回答问题。', description: '引导提示词' },
-          { name: 'memoryTurns', type: 'integer', required: false, default: '0', description: '上下文记忆轮数 (0~10)。0 = 关闭，每次只发当前问题，最省 token；需要连续追问时设 2~3，调用对话接口时带回 conversation_id 即可' }
+          { name: 'description', type: 'string', required: false, default: '为客户提供快速售后诊断与排错指南', description: '简介' },
+          { name: 'systemPrompt', type: 'string', required: false, default: '你是一名资深技术支持专家，请用专业而亲切的口吻回答问题。', description: '系统提示词' },
+          { name: 'modelName', type: 'string', required: false, default: 'deepseek-v4-flash', description: '指定模型；不填时跟随模型网关的默认通道' },
+          { name: 'temperature', type: 'number', required: false, default: '0.7', description: '采样温度 (0~2)' },
+          { name: 'memoryTurns', type: 'integer', required: false, default: '0', description: MEMORY_TURNS_DESC },
+          { name: 'knowledgeBaseIds', type: 'array[string]', required: false, default: '[]', description: '要绑定的知识库 ID，需要对这些知识库有使用权限' }
         ],
-        exampleBody: JSON.stringify({
-          name: "售后技术顾问",
-          code: "tech_support_v1",
-          category: "产品支持",
-          modelName: "Qwen/Qwen2.5-72B-Instruct",
+        exampleBody: body({
+          name: '售后技术顾问',
+          code: 'tech_support_v1',
+          category: '产品支持',
+          description: '为客户提供快速售后诊断与排错指南',
+          systemPrompt: '你是一名资深技术支持专家，请用专业而亲切的口吻回答问题。',
           temperature: 0.7,
-          description: "为客户提供快速售后诊断与排错指南",
-          systemPrompt: "你是一名资深技术支持专家，请用专业而亲切的口吻回答问题。",
           memoryTurns: 3
-        }, null, 2),
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "智能体创建成功",
-          data: {
-            id: "agent_new_987",
-            name: "售后技术顾问",
-            code: "tech_support_v1",
-            status: "IDLE",
-            modelName: "Qwen/Qwen2.5-72B-Instruct",
-            memoryTurns: 3
-          }
-        }, null, 2)
+        }),
+        exampleResponse: ok({ ...AGENT_SAMPLE, memoryTurns: 3, knowledgeBaseIds: [] }, '创建成功')
       },
       {
         id: 'agents-update',
@@ -168,32 +162,23 @@ export const OPEN_API_GROUPS = [
         method: 'PUT',
         path: '/agents/{id}',
         scope: 'agents:write',
-        description: '更新指定智能体的名称、描述、运行参数及提示词。',
+        description: '只更新传入的字段，未传的保持不变。',
         pathParams: [
-          { name: 'id', type: 'string', required: true, default: 'agent_001', description: '目标智能体 ID' }
+          { name: 'id', type: 'string', required: true, default: 'agent-2e839a1c', description: '智能体 ID' }
         ],
         bodyFields: [
-          { name: 'name', type: 'string', required: false, default: '售后技术顾问(更新)', description: '修改后的名称' },
-          { name: 'temperature', type: 'number', required: false, default: '0.5', description: '修改后的温度' },
-          { name: 'description', type: 'string', required: false, default: '更新后的说明', description: '修改后的简述' },
-          { name: 'memoryTurns', type: 'integer', required: false, default: '0', description: '上下文记忆轮数 (0~10)。0 = 关闭，每次只发当前问题，最省 token；需要连续追问时设 2~3，调用对话接口时带回 conversation_id 即可' }
+          { name: 'name', type: 'string', required: false, default: '售后技术顾问（新版）', description: '名称' },
+          { name: 'description', type: 'string', required: false, default: '优化了诊断流程', description: '简介' },
+          { name: 'systemPrompt', type: 'string', required: false, default: '', description: '系统提示词（修改会记录一个提示词版本）' },
+          { name: 'temperature', type: 'number', required: false, default: '0.5', description: '采样温度 (0~2)' },
+          { name: 'memoryTurns', type: 'integer', required: false, default: '0', description: MEMORY_TURNS_DESC }
         ],
-        exampleBody: JSON.stringify({
-          name: "售后技术顾问(更新)",
+        exampleBody: body({
+          name: '售后技术顾问（新版）',
           temperature: 0.5,
-          description: "优化了诊断流程的高级技术顾问",
           memoryTurns: 0
-        }, null, 2),
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "智能体已更新",
-          data: {
-            id: "agent_001",
-            name: "售后技术顾问(更新)",
-            temperature: 0.5,
-            memoryTurns: 0
-          }
-        }, null, 2)
+        }),
+        exampleResponse: ok({ ...AGENT_SAMPLE, name: '售后技术顾问（新版）' }, '更新成功')
       },
       {
         id: 'agents-delete',
@@ -201,15 +186,11 @@ export const OPEN_API_GROUPS = [
         method: 'DELETE',
         path: '/agents/{id}',
         scope: 'agents:write',
-        description: '永久删除指定的智能体资产。删除前请确认无正在运行的终端任务依赖。',
+        description: '永久删除智能体。删除前请确认没有终端仍在调用它。',
         pathParams: [
-          { name: 'id', type: 'string', required: true, default: 'agent_001', description: '待删除的智能体 ID' }
+          { name: 'id', type: 'string', required: true, default: 'agent-2e839a1c', description: '智能体 ID' }
         ],
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "智能体已删除",
-          data: null
-        }, null, 2)
+        exampleResponse: ok({ id: 'agent-2e839a1c' }, '删除成功')
       },
       {
         id: 'agents-publish',
@@ -217,31 +198,23 @@ export const OPEN_API_GROUPS = [
         method: 'POST',
         path: '/agents/{id}/publish',
         scope: 'agents:write',
-        description: '将智能体状态切换为 RUNNING，允许外部开放 API 和终端调用。',
+        description: '状态改为 RUNNING，允许被对话接口调用。',
         pathParams: [
-          { name: 'id', type: 'string', required: true, default: 'agent_001', description: '智能体 ID' }
+          { name: 'id', type: 'string', required: true, default: 'agent-2e839a1c', description: '智能体 ID' }
         ],
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "智能体已发布上线",
-          data: { id: "agent_001", status: "RUNNING" }
-        }, null, 2)
+        exampleResponse: ok({ ...AGENT_SAMPLE, status: 'RUNNING' }, '状态已变更为 RUNNING')
       },
       {
         id: 'agents-pause',
-        name: '暂停智能体下线',
+        name: '停用智能体',
         method: 'POST',
         path: '/agents/{id}/pause',
         scope: 'agents:write',
-        description: '将智能体状态切换为 IDLE (闲置下线)，暂停外部调用。',
+        description: '状态改为 DISABLED，对话接口调用会返回 agent_not_running。',
         pathParams: [
-          { name: 'id', type: 'string', required: true, default: 'agent_001', description: '智能体 ID' }
+          { name: 'id', type: 'string', required: true, default: 'agent-2e839a1c', description: '智能体 ID' }
         ],
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "智能体已下线暂停",
-          data: { id: "agent_001", status: "IDLE" }
-        }, null, 2)
+        exampleResponse: ok({ ...AGENT_SAMPLE, status: 'DISABLED' }, '状态已变更为 DISABLED')
       },
       {
         id: 'agents-get-kb',
@@ -249,44 +222,29 @@ export const OPEN_API_GROUPS = [
         method: 'GET',
         path: '/agents/{id}/knowledge-bases',
         scope: 'agents:read',
-        description: '获取指定智能体当前已关联绑定的所有私有知识库清单。',
+        description: '返回智能体当前绑定的知识库。',
         pathParams: [
-          { name: 'id', type: 'string', required: true, default: 'agent_001', description: '智能体 ID' }
+          { name: 'id', type: 'string', required: true, default: 'agent-2e839a1c', description: '智能体 ID' }
         ],
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "success",
-          data: [
-            {
-              id: "kb_finance_01",
-              name: "财务与报销规范库",
-              documentCount: 8,
-              description: "包含公司2026最新出差与报销标准"
-            }
-          ]
-        }, null, 2)
+        exampleResponse: ok([
+          { id: 'kb-7f3a91c2', name: '广告机产品手册', avatar: '📚', provider: 'SPRING_AI', documentCount: 6 }
+        ])
       },
       {
         id: 'agents-bind-kb',
-        name: '批量绑定知识库到智能体',
+        name: '设置智能体绑定的知识库',
         method: 'PUT',
         path: '/agents/{id}/knowledge-bases',
         scope: 'agents:bind_kb',
-        description: '覆盖设置该智能体所关联绑定的知识库集合，对话时将统一检索这些知识库。同一智能体只能绑定同一来源（自建或 Dify）的知识库，混合绑定返回 400 mixed_knowledge_sources。',
+        description: '用传入的列表整体替换智能体绑定的知识库，传空数组即解绑全部。同一智能体只能绑定同一来源（自建或 Dify）的知识库，混合绑定返回 400 mixed_knowledge_sources。',
         pathParams: [
-          { name: 'id', type: 'string', required: true, default: 'agent_001', description: '智能体 ID' }
+          { name: 'id', type: 'string', required: true, default: 'agent-2e839a1c', description: '智能体 ID' }
         ],
         bodyFields: [
-          { name: 'knowledgeBaseIds', type: 'array[string]', required: true, default: '[]', description: '待绑定的知识库唯一 ID 数组' }
+          { name: 'knowledge_base_ids', type: 'array[string]', required: true, default: '["kb-7f3a91c2"]', description: '知识库 ID 列表' }
         ],
-        exampleBody: JSON.stringify({
-          knowledgeBaseIds: ["kb_finance_01", "kb_hr_rules"]
-        }, null, 2),
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "知识库绑定更新成功",
-          data: ["kb_finance_01", "kb_hr_rules"]
-        }, null, 2)
+        exampleBody: body({ knowledge_base_ids: ['kb-7f3a91c2'] }),
+        exampleResponse: ok({ knowledge_base_ids: ['kb-7f3a91c2'] }, '知识库绑定更新成功')
       }
     ]
   },
@@ -302,145 +260,234 @@ export const OPEN_API_GROUPS = [
         method: 'GET',
         path: '/knowledge-bases',
         scope: 'kb:read',
-        description: '分页拉取当前租户下的私有知识库集合列表。',
-        queryParams: [
-          { name: 'page', type: 'integer', required: false, default: '1', description: '页码' },
-          { name: 'size', type: 'integer', required: false, default: '10', description: '每页条数' }
+        description: '返回凭证所属开发者可见的知识库（最多 1000 个）。不分页。',
+        exampleResponse: ok([KB_SAMPLE])
+      },
+      {
+        id: 'kb-get',
+        name: '获取知识库详情',
+        method: 'GET',
+        path: '/knowledge-bases/{id}',
+        scope: 'kb:read',
+        description: '获取知识库配置与统计（文档数、字数、FAQ 数等）。',
+        pathParams: [
+          { name: 'id', type: 'string', required: true, default: 'kb-7f3a91c2', description: '知识库 ID' }
         ],
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "success",
-          data: {
-            total: 3,
-            records: [
-              {
-                id: "kb_finance_01",
-                name: "财务报销规范",
-                description: "企业财务报销与差旅标准",
-                docCount: 5,
-                updatedAt: "2026-09-10T12:00:00"
-              }
-            ]
-          }
-        }, null, 2)
+        exampleResponse: ok(KB_SAMPLE)
       },
       {
         id: 'kb-create',
-        name: '创建知识库集合',
+        name: '创建知识库',
         method: 'POST',
         path: '/knowledge-bases',
         scope: 'kb:write',
-        description: '创建一个新的私有知识库，用于存储文档切片与问答对。',
+        description: '自建知识库（SPRING_AI）统一使用模型网关中生效的向量模型；Dify 知识库需要先在模型网关接入 Dify 并测试通过。',
         bodyFields: [
-          { name: 'name', type: 'string', required: true, default: '售后技术案例库', description: '知识库名称' },
-          { name: 'description', type: 'string', required: false, default: '汇总客户典型技术问题与故障诊断方案', description: '知识库简介' },
-          { name: 'embeddingModel', type: 'string', required: false, default: 'BAAI/bge-large-zh-v1.5', description: '向量模型标识' }
+          { name: 'name', type: 'string', required: true, default: '广告机产品手册', description: '知识库名称' },
+          { name: 'description', type: 'string', required: false, default: '安装、发布节目、常见故障排查', description: '简介' },
+          { name: 'provider', type: 'string', required: false, default: 'SPRING_AI', description: 'SPRING_AI（自建，默认）或 DIFY' },
+          { name: 'searchMethod', type: 'string', required: false, default: 'hybrid_search', description: '检索方式：hybrid_search（混合，默认）、semantic_search（向量）、full_text_search（关键词）' },
+          { name: 'topK', type: 'integer', required: false, default: '3', description: '每次召回的切片数' },
+          { name: 'scoreThreshold', type: 'number', required: false, default: '0.5', description: '相似度阈值 (0~1)' }
         ],
-        exampleBody: JSON.stringify({
-          name: "售后技术案例库",
-          description: "汇总客户典型技术问题与故障诊断方案",
-          embeddingModel: "BAAI/bge-large-zh-v1.5"
-        }, null, 2),
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "知识库创建成功",
-          data: {
-            id: "kb_tech_support",
-            name: "售后技术案例库"
-          }
-        }, null, 2)
+        exampleBody: body({
+          name: '广告机产品手册',
+          description: '安装、发布节目、常见故障排查',
+          provider: 'SPRING_AI'
+        }),
+        exampleResponse: ok({ ...KB_SAMPLE, documentCount: 0, wordCount: 0, faqCount: 0 }, '创建成功')
+      },
+      {
+        id: 'kb-update',
+        name: '修改知识库配置',
+        method: 'PUT',
+        path: '/knowledge-bases/{id}',
+        scope: 'kb:write',
+        description: '只更新传入的字段。',
+        pathParams: [
+          { name: 'id', type: 'string', required: true, default: 'kb-7f3a91c2', description: '知识库 ID' }
+        ],
+        bodyFields: [
+          { name: 'name', type: 'string', required: false, default: '广告机产品手册（2026 版）', description: '名称' },
+          { name: 'description', type: 'string', required: false, default: '', description: '简介' },
+          { name: 'enabled', type: 'boolean', required: false, default: 'true', description: '是否启用' },
+          { name: 'searchMethod', type: 'string', required: false, default: 'hybrid_search', description: '检索方式' },
+          { name: 'topK', type: 'integer', required: false, default: '3', description: '召回切片数' },
+          { name: 'scoreThreshold', type: 'number', required: false, default: '0.5', description: '相似度阈值 (0~1)' },
+          { name: 'vectorWeight', type: 'number', required: false, default: '0.7', description: '混合检索中向量得分权重' },
+          { name: 'keywordWeight', type: 'number', required: false, default: '0.3', description: '混合检索中关键词得分权重' }
+        ],
+        exampleBody: body({ name: '广告机产品手册（2026 版）', topK: 4 }),
+        exampleResponse: ok({ ...KB_SAMPLE, name: '广告机产品手册（2026 版）', topK: 4 }, '更新成功')
+      },
+      {
+        id: 'kb-delete',
+        name: '删除知识库',
+        method: 'DELETE',
+        path: '/knowledge-bases/{id}',
+        scope: 'kb:write',
+        description: '删除知识库及其文档、切片和 FAQ。',
+        pathParams: [
+          { name: 'id', type: 'string', required: true, default: 'kb-7f3a91c2', description: '知识库 ID' }
+        ],
+        exampleResponse: ok({ id: 'kb-7f3a91c2' }, '删除成功')
       },
       {
         id: 'kb-upload-doc',
-        name: '上传切片文档 (Multipart)',
+        name: '上传文档 (Multipart)',
         method: 'POST',
         path: '/knowledge-bases/{id}/documents',
         scope: 'kb:write',
         isMultipart: true,
-        description: '上传原文档文件并自动执行文本清洗、智能切片与向量化存储，支持 PDF/TXT/MD/DOCX 格式。',
+        description: '上传一个文件，平台自动解析、切片并向量化。单个文件不超过 15 MB；支持 PDF、DOCX、XLSX、XLS、CSV、HTML、HTM、TXT、MD、MDX、MARKDOWN、VTT、PROPERTIES。扫描版 PDF 需要在模型网关配置 OCR。',
         pathParams: [
-          { name: 'id', type: 'string', required: true, default: 'kb_finance_01', description: '知识库 ID' }
+          { name: 'id', type: 'string', required: true, default: 'kb-7f3a91c2', description: '知识库 ID' }
         ],
         bodyFields: [
-          { name: 'file', type: 'file', required: true, default: '', description: '上传的文档原文件二进制流 (最大 50MB)' },
-          { name: 'chunkSize', type: 'integer', required: false, default: '500', description: '分块大小 (字符数)' },
-          { name: 'overlapSize', type: 'integer', required: false, default: '50', description: '重叠字数 (防止上下文断层)' }
+          { name: 'file', type: 'file', required: true, default: '', description: '文档文件（表单字段名 file）' }
         ],
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "文档切片入库成功",
-          data: {
-            documentId: "doc_88991122",
-            fileName: "enterprise_rules_2026.pdf",
-            chunksCount: 42,
-            vectorized: true
-          }
-        }, null, 2)
+        exampleResponse: ok([
+          { id: 'doc-3c9e17ab', name: '广告机使用手册.pdf', wordCount: 39658, indexingStatus: 'completed' }
+        ], '上传成功')
+      },
+      {
+        id: 'kb-list-docs',
+        name: '查询知识库文档',
+        method: 'GET',
+        path: '/knowledge-bases/{id}/documents',
+        scope: 'kb:read',
+        description: '分页查询知识库中的文档及索引状态。',
+        pathParams: [
+          { name: 'id', type: 'string', required: true, default: 'kb-7f3a91c2', description: '知识库 ID' }
+        ],
+        queryParams: [
+          { name: 'page', type: 'integer', required: false, default: '1', description: '页码' },
+          { name: 'size', type: 'integer', required: false, default: '20', description: '每页条数' }
+        ],
+        exampleResponse: ok({
+          total: 1,
+          page: 1,
+          size: 20,
+          records: [{ id: 'doc-3c9e17ab', name: '广告机使用手册.pdf', wordCount: 39658, indexingStatus: 'completed' }]
+        })
+      },
+      {
+        id: 'kb-delete-doc',
+        name: '删除文档',
+        method: 'DELETE',
+        path: '/knowledge-bases/{id}/documents/{docId}',
+        scope: 'kb:write',
+        description: '删除文档及其切片。',
+        pathParams: [
+          { name: 'id', type: 'string', required: true, default: 'kb-7f3a91c2', description: '知识库 ID' },
+          { name: 'docId', type: 'string', required: true, default: 'doc-3c9e17ab', description: '文档 ID' }
+        ],
+        exampleResponse: ok({ doc_id: 'doc-3c9e17ab' }, '文档删除成功')
       },
       {
         id: 'kb-retrieve',
-        name: '语义检索召回测试',
+        name: '检索召回测试',
         method: 'POST',
         path: '/knowledge-bases/{id}/retrieve',
         scope: 'kb:read',
-        description: '向指定知识库发送自然语言问题，执行语义向量相似度计算并召回相关切片。',
+        description: '用一个问题检索知识库，返回召回的切片及得分，用于验证知识库效果。检索方式与阈值使用知识库自身的配置。',
         pathParams: [
-          { name: 'id', type: 'string', required: true, default: 'kb_finance_01', description: '知识库 ID' }
+          { name: 'id', type: 'string', required: true, default: 'kb-7f3a91c2', description: '知识库 ID' }
         ],
         bodyFields: [
-          { name: 'query', type: 'string', required: true, default: '出差住宿费发票遗失如何报销？', description: '检索词或测试问题' },
-          { name: 'topK', type: 'integer', required: false, default: '3', description: '召回最相关的切片条数 (1~20)' },
-          { name: 'similarityThreshold', type: 'number', required: false, default: '0.6', description: '最低相似度过滤门槛 (0.0~1.0)' }
+          { name: 'query', type: 'string', required: true, default: '广告机怎么发布节目？', description: '检索问题' },
+          { name: 'top_k', type: 'integer', required: false, default: '3', description: '返回的切片数' }
         ],
-        exampleBody: JSON.stringify({
-          query: "出差住宿费发票遗失如何报销？",
-          topK: 3,
-          similarityThreshold: 0.6
-        }, null, 2),
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "success",
-          data: [
-            {
-              chunkId: "chk_001",
-              score: 0.892,
-              content: "第四条 住宿费发票如遇特殊情况遗失，需由入住酒店开具加盖公章的结账流水单...",
-              metadata: { source: "2026财务制度.pdf", page: 12 }
-            },
-            {
-              chunkId: "chk_002",
-              score: 0.781,
-              content: "第十条 差旅报销审批流说明：经部门主管核准后提交财务中心...",
-              metadata: { source: "2026财务制度.pdf", page: 15 }
-            }
-          ]
-        }, null, 2)
+        exampleBody: body({ query: '广告机怎么发布节目？', top_k: 3 }),
+        exampleResponse: ok([
+          {
+            chunkId: 'chk-91a0',
+            documentId: 'doc-3c9e17ab',
+            sourceName: '广告机使用手册.pdf',
+            pageNumber: 12,
+            content: '选择节目后进入日程安排页：先设定开始与结束时间……',
+            score: 0.86,
+            vectorScore: 0.82,
+            keywordScore: 0.64,
+            matchType: 'HYBRID'
+          }
+        ])
+      },
+      {
+        id: 'kb-list-faqs',
+        name: '查询问答对 (FAQ)',
+        method: 'GET',
+        path: '/knowledge-bases/{id}/faqs',
+        scope: 'kb:read',
+        description: '分页查询知识库中的问答对。',
+        pathParams: [
+          { name: 'id', type: 'string', required: true, default: 'kb-7f3a91c2', description: '知识库 ID' }
+        ],
+        queryParams: [
+          { name: 'page', type: 'integer', required: false, default: '1', description: '页码' },
+          { name: 'size', type: 'integer', required: false, default: '20', description: '每页条数' }
+        ],
+        exampleResponse: ok({
+          total: 1,
+          page: 1,
+          size: 20,
+          records: [{ id: 'faq-5d21', question: '开机黑屏怎么办？', answer: '请先检查电源适配器……', category: '故障排查', enabled: true }]
+        })
       },
       {
         id: 'kb-add-faq',
-        name: '录入精准问答对 (FAQ)',
+        name: '录入问答对 (FAQ)',
         method: 'POST',
         path: '/knowledge-bases/{id}/faqs',
         scope: 'kb:write',
-        description: '向知识库直接录入精准问答对，提高特定业务场景下的命中精度与回答确定性。',
+        description: '录入固定问题的标准答案，比上传文档命中更准。',
         pathParams: [
-          { name: 'id', type: 'string', required: true, default: 'kb_finance_01', description: '知识库 ID' }
+          { name: 'id', type: 'string', required: true, default: 'kb-7f3a91c2', description: '知识库 ID' }
         ],
         bodyFields: [
-          { name: 'question', type: 'string', required: true, default: '日常办公用品如何申领？', description: '标准问题' },
-          { name: 'answer', type: 'string', required: true, default: '每周三下午可在 OA 提交申领工单，审批通过后至行政部 302 领取。', description: '标准答案' },
-          { name: 'tags', type: 'array[string]', required: false, default: '["行政", "物资"]', description: '问答对标签' }
+          { name: 'question', type: 'string', required: true, default: '开机黑屏怎么办？', description: '标准问题' },
+          { name: 'answer', type: 'string', required: true, default: '请先检查电源适配器是否接好，再长按电源键 3 秒重启。', description: '标准答案' },
+          { name: 'category', type: 'string', required: false, default: '故障排查', description: '分类（默认「通用问答」）' }
         ],
-        exampleBody: JSON.stringify({
-          question: "日常办公用品如何申领？",
-          answer: "每周三下午可在 OA 提交申领工单，审批通过后至行政部 302 领取。",
-          tags: ["行政", "物资"]
-        }, null, 2),
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "FAQ 保存成功",
-          data: { id: "faq_99112", question: "日常办公用品如何申领？" }
-        }, null, 2)
+        exampleBody: body({
+          question: '开机黑屏怎么办？',
+          answer: '请先检查电源适配器是否接好，再长按电源键 3 秒重启。',
+          category: '故障排查'
+        }),
+        exampleResponse: ok({ id: 'faq-5d21', question: '开机黑屏怎么办？', answer: '请先检查电源适配器是否接好，再长按电源键 3 秒重启。', category: '故障排查', enabled: true }, '创建问答成功')
+      },
+      {
+        id: 'kb-update-faq',
+        name: '修改问答对 (FAQ)',
+        method: 'PUT',
+        path: '/knowledge-bases/{id}/faqs/{faqId}',
+        scope: 'kb:write',
+        description: '只更新传入的字段；enabled=false 可临时停用该问答对。',
+        pathParams: [
+          { name: 'id', type: 'string', required: true, default: 'kb-7f3a91c2', description: '知识库 ID' },
+          { name: 'faqId', type: 'string', required: true, default: 'faq-5d21', description: '问答对 ID' }
+        ],
+        bodyFields: [
+          { name: 'question', type: 'string', required: false, default: '', description: '标准问题' },
+          { name: 'answer', type: 'string', required: false, default: '请检查电源适配器与电源线，仍不亮请联系售后。', description: '标准答案' },
+          { name: 'category', type: 'string', required: false, default: '', description: '分类' },
+          { name: 'enabled', type: 'boolean', required: false, default: 'true', description: '是否启用' }
+        ],
+        exampleBody: body({ answer: '请检查电源适配器与电源线，仍不亮请联系售后。' }),
+        exampleResponse: ok({ id: 'faq-5d21', question: '开机黑屏怎么办？', answer: '请检查电源适配器与电源线，仍不亮请联系售后。', category: '故障排查', enabled: true }, '更新问答成功')
+      },
+      {
+        id: 'kb-delete-faq',
+        name: '删除问答对 (FAQ)',
+        method: 'DELETE',
+        path: '/knowledge-bases/{id}/faqs/{faqId}',
+        scope: 'kb:write',
+        description: '删除问答对。',
+        pathParams: [
+          { name: 'id', type: 'string', required: true, default: 'kb-7f3a91c2', description: '知识库 ID' },
+          { name: 'faqId', type: 'string', required: true, default: 'faq-5d21', description: '问答对 ID' }
+        ],
+        exampleResponse: ok({ faq_id: 'faq-5d21' }, '删除问答成功')
       }
     ]
   },
@@ -452,70 +499,55 @@ export const OPEN_API_GROUPS = [
     endpoints: [
       {
         id: 'conv-list',
-        name: '查询历史会话列表',
+        name: '查询会话列表',
         method: 'GET',
         path: '/conversations',
         scope: 'conversations:read',
-        description: '分页获取当前凭证或开发者账号的历史会话记录列表。',
+        description: '查询凭证范围内智能体的会话，可按智能体和终端用户筛选。不分页。',
         queryParams: [
-          { name: 'page', type: 'integer', required: false, default: '1', description: '页码' },
-          { name: 'size', type: 'integer', required: false, default: '10', description: '每页条数' },
-          { name: 'agentId', type: 'string', required: false, default: '', description: '按智能体 ID 筛选' }
+          { name: 'agent_id', type: 'string', required: false, default: '', description: '按智能体 ID 筛选' },
+          { name: 'end_user', type: 'string', required: false, default: '', description: '按终端用户（对话时传的 user）筛选' }
         ],
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "success",
-          data: {
-            total: 15,
-            records: [
-              {
-                id: "conv_a8b9c1d2",
-                title: "关于差旅报销标准的咨询",
-                agentId: "agent_001",
-                createdAt: "2026-09-10T11:20:00",
-                messageCount: 6
-              }
-            ]
+        exampleResponse: ok([
+          {
+            id: 'conv-5f0c2a9e81d34b7a',
+            agentId: 'agent-2e839a1c',
+            title: '广告机怎么发布节目？',
+            account: 'device-SN001',
+            messageCount: 4,
+            lastModel: 'deepseek-v4-flash',
+            totalTokens: 2480,
+            createdAt: '2026-11-02T10:20:00',
+            updatedAt: '2026-11-02T10:21:30'
           }
-        }, null, 2)
+        ])
       },
       {
         id: 'conv-messages',
-        name: '获取会话消息历史',
+        name: '获取会话消息',
         method: 'GET',
         path: '/conversations/{id}/messages',
         scope: 'conversations:read',
-        description: '按时间正序拉取指定会话下的全部问答消息上下文。',
+        description: '按时间正序返回会话中的全部消息。',
         pathParams: [
-          { name: 'id', type: 'string', required: true, default: 'conv_a8b9c1d2', description: '会话 ID' }
+          { name: 'id', type: 'string', required: true, default: 'conv-5f0c2a9e81d34b7a', description: '会话 ID' }
         ],
-        queryParams: [
-          { name: 'limit', type: 'integer', required: false, default: '50', description: '最大消息条数' }
-        ],
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "success",
-          data: [
-            { id: "msg_01", role: "USER", content: "出差住宿上限是多少？", createdAt: "2026-09-10T11:20:01" },
-            { id: "msg_02", role: "ASSISTANT", content: "一线城市上限为每晚 500 元。", createdAt: "2026-09-10T11:20:03" }
-          ]
-        }, null, 2)
+        exampleResponse: ok([
+          { id: 'm-01', conversationId: 'conv-5f0c2a9e81d34b7a', role: 'user', content: '广告机怎么发布节目？', createdAt: '2026-11-02T10:20:00' },
+          { id: 'm-02', conversationId: 'conv-5f0c2a9e81d34b7a', role: 'assistant', content: '发布节目分三步……', model: 'deepseek-v4-flash', latencyMs: 1520, tokensUsed: 1230, createdAt: '2026-11-02T10:20:01' }
+        ])
       },
       {
         id: 'conv-delete',
-        name: '删除会话及历史消息',
+        name: '删除会话',
         method: 'DELETE',
         path: '/conversations/{id}',
-        scope: 'conversations:read',
-        description: '删除指定的会话以及会话中的所有历史消息。',
+        scope: 'chat 或 conversations:read',
+        description: '删除会话及其全部消息。',
         pathParams: [
-          { name: 'id', type: 'string', required: true, default: 'conv_a8b9c1d2', description: '会话 ID' }
+          { name: 'id', type: 'string', required: true, default: 'conv-5f0c2a9e81d34b7a', description: '会话 ID' }
         ],
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "会话已删除",
-          data: null
-        }, null, 2)
+        exampleResponse: ok({ id: 'conv-5f0c2a9e81d34b7a' }, '会话已删除')
       }
     ]
   },
@@ -527,172 +559,158 @@ export const OPEN_API_GROUPS = [
     endpoints: [
       {
         id: 'usage-summary',
-        name: '查询用量指标概览',
+        name: '查询用量概览',
         method: 'GET',
         path: '/usage/summary',
         scope: 'usage:read',
-        description: '查询指定时间段内当前租户或凭证的累计调用量、对话数、Token 消耗、拦截数等事实汇总。',
+        description: '指定日期范围内凭证所属开发者的调用量、对话数、Token 消耗、拦截与错误数汇总。',
         queryParams: [
-          { name: 'from', type: 'string', required: false, default: '2026-08-11', description: '起始日期 (YYYY-MM-DD)' },
-          { name: 'to', type: 'string', required: false, default: '2026-09-10', description: '截止日期 (YYYY-MM-DD)' }
+          { name: 'from', type: 'string', required: false, default: '2026-10-01', description: '起始日期 (YYYY-MM-DD)' },
+          { name: 'to', type: 'string', required: false, default: '2026-10-31', description: '截止日期 (YYYY-MM-DD)' }
         ],
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "success",
-          data: {
-            calls: 1420,
-            chatCalls: 980,
-            messages: 1960,
-            promptTokens: 284000,
-            completionTokens: 142500,
-            denied: 12,
-            errors: 2,
-            latencySumMs: 512000,
-            from: "2026-08-11",
-            to: "2026-09-10"
-          }
-        }, null, 2)
+        exampleResponse: ok({
+          calls: 1420,
+          chatCalls: 980,
+          messages: 1960,
+          promptTokens: 284000,
+          completionTokens: 142500,
+          denied: 12,
+          errors: 2,
+          latencySumMs: 512000,
+          from: '2026-10-01',
+          to: '2026-10-31'
+        })
       },
       {
         id: 'usage-daily',
-        name: '按日多维事实用量清单',
+        name: '按日用量明细',
         method: 'GET',
         path: '/usage/daily',
         scope: 'usage:read',
-        description: '拉取按日期、智能体、凭证、终端细分聚合的多维日级事实用量列表。',
+        description: '按日期、智能体、凭证、终端细分的日级用量。',
         queryParams: [
-          { name: 'from', type: 'string', required: false, default: '2026-09-01', description: '起始日期 (YYYY-MM-DD)' },
-          { name: 'to', type: 'string', required: false, default: '2026-09-10', description: '截止日期 (YYYY-MM-DD)' }
+          { name: 'from', type: 'string', required: false, default: '2026-10-25', description: '起始日期 (YYYY-MM-DD)' },
+          { name: 'to', type: 'string', required: false, default: '2026-10-31', description: '截止日期 (YYYY-MM-DD)' }
         ],
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "success",
-          data: [
-            {
-              statDate: "2026-09-10",
-              agentId: "agent_001",
-              apiKeyId: "key_9921",
-              clientCredentialId: "DEV-SN-001",
-              calls: 120,
-              chatCalls: 100,
-              messages: 200,
-              promptTokens: 25000,
-              completionTokens: 14000,
-              denied: 1,
-              errors: 0,
-              latencySumMs: 42000
-            }
-          ]
-        }, null, 2)
+        exampleResponse: ok([
+          {
+            statDate: '2026-10-31',
+            agentId: 'agent-2e839a1c',
+            apiKeyId: 'oak-1f2e3d4c5b6a7980',
+            clientCredentialId: 'cli-01',
+            calls: 120,
+            chatCalls: 100,
+            messages: 200,
+            promptTokens: 25000,
+            completionTokens: 14000,
+            denied: 1,
+            errors: 0,
+            latencySumMs: 42000
+          }
+        ])
       },
       {
         id: 'audit-events',
-        name: '检索安全审计事件流',
+        name: '查询安全审计事件',
         method: 'GET',
         path: '/audit/events',
         scope: 'usage:read',
-        description: '检索租户发生的安全审计事件记录流，支持按结果状态筛选。',
+        description: '查询凭证所属开发者的安全审计事件，可按结果筛选。',
         queryParams: [
-          { name: 'from', type: 'string', required: false, default: '', description: '起始日期' },
-          { name: 'to', type: 'string', required: false, default: '', description: '截止日期' },
-          { name: 'result', type: 'string', required: false, default: '', description: '过滤结果: SUCCESS 或 DENIED' }
+          { name: 'from', type: 'string', required: false, default: '', description: '起始日期 (YYYY-MM-DD)' },
+          { name: 'to', type: 'string', required: false, default: '', description: '截止日期 (YYYY-MM-DD)' },
+          { name: 'result', type: 'string', required: false, default: '', description: '结果筛选，如 SUCCESS、DENIED、BLOCKED' }
         ],
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "success",
-          data: [
-            {
-              id: "ev_887711",
-              occurredAt: "2026-09-10T14:32:10",
-              action: "OPEN_CHAT",
-              result: "DENIED",
-              reasonCode: "sensitive_content",
-              resourceType: "AGENT",
-              resourceId: "agent_001"
-            }
-          ]
-        }, null, 2)
+        exampleResponse: ok([
+          {
+            id: 'ev_887711',
+            occurredAt: '2026-10-31T14:32:10',
+            action: 'chat.denied',
+            result: 'DENIED',
+            reasonCode: 'agent_out_of_scope',
+            resourceType: 'AGENT',
+            resourceId: 'agent-2e839a1c'
+          }
+        ])
       }
     ]
   },
   {
     id: 'account',
-    name: '外部对接与通知 (Account)',
+    name: '账号与外部身份 (Account)',
     icon: 'fa-solid fa-link',
     iconColor: '#f43f5e',
     endpoints: [
       {
         id: 'account-info',
-        name: '查询当前调用者账号信息',
+        name: '查询凭证所属账号',
         method: 'GET',
         path: '/account',
         scope: 'account:read',
-        description: '查看当前 API Key 归属的开发者身份、所属租户组织及授权 Scope 清单。',
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "success",
-          data: {
-            userId: "usr_developer_01",
-            username: "developer",
-            role: "DEVELOPER",
-            keyScopes: ["chat", "agents:read", "kb:read", "usage:read"]
-          }
-        }, null, 2)
+        description: '返回凭证所属开发者的账号信息及已绑定的外部身份。',
+        exampleResponse: ok({
+          id: 'u-developer',
+          username: 'developer',
+          nickname: '开发者',
+          role: 'DEVELOPER',
+          status: 'ACTIVE',
+          identities: []
+        })
+      },
+      {
+        id: 'account-identities',
+        name: '查询已绑定的外部身份',
+        method: 'GET',
+        path: '/account/identities',
+        scope: 'account:read',
+        description: '按绑定时间倒序返回外部身份。',
+        exampleResponse: ok([
+          { id: 'eid-01', providerCode: 'iot_platform', externalId: 'ext_user_88992', displayName: '物联网网关-终端操作员', bindSource: 'INBOUND_API', status: 'ACTIVE', boundAt: '2026-10-31T09:00:00' }
+        ])
       },
       {
         id: 'account-bind',
-        name: '入站外部账号绑定',
+        name: '绑定外部身份',
         method: 'POST',
-        path: '/account/bind-identity',
+        path: '/account/identities',
         scope: 'account:write',
-        description: '将外部第三方应用或设备平台用户唯一标识与当前开发者账户完成入站绑定。',
+        description: '把外部系统的用户标识绑定到凭证所属开发者账号。同一外部身份只能绑定一次，重复绑定返回 409 identity_conflict。',
         bodyFields: [
-          { name: 'providerCode', type: 'string', required: true, default: 'iot_platform', description: '外部通道编码' },
-          { name: 'externalId', type: 'string', required: true, default: 'ext_user_88992', description: '外部系统用户唯一标识' },
-          { name: 'displayName', type: 'string', required: false, default: '物联网网关-终端操作员', description: '外部显示名称' }
+          { name: 'provider_code', type: 'string', required: true, default: 'iot_platform', description: '外部系统编码' },
+          { name: 'external_id', type: 'string', required: true, default: 'ext_user_88992', description: '外部系统中的用户唯一标识' },
+          { name: 'display_name', type: 'string', required: false, default: '物联网网关-终端操作员', description: '显示名称，不填时使用 external_id' }
         ],
-        exampleBody: JSON.stringify({
-          providerCode: "iot_platform",
-          externalId: "ext_user_88992",
-          displayName: "物联网网关-终端操作员"
-        }, null, 2),
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "外部账号绑定已记录",
-          data: {
-            id: "id_ext_01",
-            providerCode: "iot_platform",
-            externalId: "ext_user_88992",
-            status: "ACTIVE"
-          }
-        }, null, 2)
+        exampleBody: body({
+          provider_code: 'iot_platform',
+          external_id: 'ext_user_88992',
+          display_name: '物联网网关-终端操作员'
+        }),
+        exampleResponse: ok({ id: 'eid-01', providerCode: 'iot_platform', externalId: 'ext_user_88992', displayName: '物联网网关-终端操作员', bindSource: 'INBOUND_API', status: 'ACTIVE' }, '绑定成功')
+      },
+      {
+        id: 'account-unbind',
+        name: '解绑外部身份',
+        method: 'DELETE',
+        path: '/account/identities/{id}',
+        scope: 'account:write',
+        description: '解绑一个外部身份，只能解绑自己账号下的。',
+        pathParams: [
+          { name: 'id', type: 'string', required: true, default: 'eid-01', description: '外部身份记录 ID（绑定接口返回的 id）' }
+        ],
+        exampleResponse: ok({ id: 'eid-01' }, '解绑成功')
       },
       {
         id: 'account-webhook',
-        name: '接收外部系统 Webhook 通知',
+        name: '外部身份同步回调（预留）',
         method: 'POST',
-        path: '/account/webhook',
-        scope: '公开接收',
-        description: '接收外部第三方系统推送的事件通知，支持在请求头携带 X-Signature 密钥验签。',
-        bodyFields: [
-          { name: 'event', type: 'string', required: true, default: 'device.status_changed', description: '事件名称' },
-          { name: 'timestamp', type: 'integer', required: true, default: '1725964800', description: '事件时间戳' },
-          { name: 'payload', type: 'object', required: true, default: '{}', description: '事件自定义载荷' }
+        path: '/webhooks/identity/{providerCode}',
+        scope: '任意有效凭证',
+        description: '预留接口：目前只回执，不做任何处理。',
+        pathParams: [
+          { name: 'providerCode', type: 'string', required: true, default: 'iot_platform', description: '外部系统编码' }
         ],
-        exampleBody: JSON.stringify({
-          event: "device.status_changed",
-          timestamp: 1725964800,
-          payload: {
-            deviceId: "DEV-SN-001",
-            status: "ONLINE",
-            ip: "192.168.1.10"
-          }
-        }, null, 2),
-        exampleResponse: JSON.stringify({
-          code: 200,
-          message: "Webhook processed successfully",
-          data: { received: true }
-        }, null, 2)
+        exampleBody: body({ event: 'user.updated', external_id: 'ext_user_88992' }),
+        exampleResponse: ok({ provider: 'iot_platform', status: 'PROCESSED' }, 'Webhook received')
       }
     ]
   }
