@@ -108,11 +108,53 @@
             <i class="fa-regular fa-copy"></i>
           </button>
         </div>
-        <div class="card-footer-tip tip-warn">
+        <div class="card-footer-tip" :class="{ 'tip-warn': !primaryCredential && !sessionPlaintext }">
           <i class="fa-solid fa-shield-halved"></i>
-          <span>{{ keyPrefixHint }} · 推荐到侧栏「开放与安全 → 开放凭证」签发，接口前缀 /open/v1</span>
+          <span>{{ keyPrefixHint }}</span>
+          <button
+            v-if="credentials.length"
+            type="button"
+            class="btn-cred-toggle"
+            @click="credentialsOpen = !credentialsOpen"
+          >
+            共 {{ credentials.length }} 条凭证可调用
+            <i class="fa-solid" :class="credentialsOpen ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+          </button>
         </div>
       </div>
+    </div>
+
+    <!-- 能调用当前智能体的全部开放凭证（专属 + 不限智能体） -->
+    <div v-if="credentialsOpen && credentials.length" class="cred-list-card">
+      <div class="cred-list-head">
+        <span>能调用此智能体的开放凭证</span>
+        <router-link to="/dashboard?tab=security&sec=keys" class="cred-manage-link">
+          去「开放凭证」管理 <i class="fa-solid fa-arrow-right"></i>
+        </router-link>
+      </div>
+      <table class="cred-table">
+        <thead>
+          <tr>
+            <th>名称</th>
+            <th>前缀</th>
+            <th>范围</th>
+            <th>状态</th>
+            <th>最近使用</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="c in credentials" :key="c.id" :class="{ 'cred-primary': primaryCredential && c.id === primaryCredential.id }">
+            <td>
+              <span class="cred-name">{{ c.name }}</span>
+              <span v-if="primaryCredential && c.id === primaryCredential.id" class="cred-tag">当前显示</span>
+            </td>
+            <td><code>{{ c.keyPrefix }}…</code></td>
+            <td>{{ c.binding === 'DEDICATED' ? '仅此智能体' : '全部智能体' }}</td>
+            <td><span class="cred-status" :class="'st-' + credentialState(c).tone">{{ credentialState(c).label }}</span></td>
+            <td class="cred-muted">{{ c.lastUsedAt ? formatTime(c.lastUsedAt) : '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     <!-- Main Content Layout: Sidebar + Detail Pane -->
@@ -209,7 +251,7 @@
 
           <div class="endpoint-meta-badge">
             <span class="method-tag method-post">POST</span>
-            <code class="meta-endpoint-uri">/api/v1/chat-messages</code>
+            <code class="meta-endpoint-uri">/open/v1/chat-messages</code>
           </div>
         </div>
 
@@ -685,7 +727,7 @@
         <div class="tool-modal-header">
           <div class="tool-modal-title">
             <i class="fa-solid fa-triangle-exclamation" style="color: var(--accent-amber);"></i>
-            <span>确认重新生成 API Key？</span>
+            <span>{{ rotateTarget ? '确认轮换 API Key？' : '确认签发 API Key？' }}</span>
           </div>
           <button type="button" class="btn-modal-close" @click="regenModalOpen = false">
             <i class="fa-solid fa-xmark"></i>
@@ -693,13 +735,16 @@
         </div>
         <div class="tool-modal-body">
           <div class="regen-warning-card">
-            <p>
-              重新生成后，<b>旧的 API Key 将立即失效并永久销毁</b>。
-              所有当前正在使用该 Key 接入的外部自动化服务、应用系统等将全部无法访问，必须手动替换为新 Key。
+            <p v-if="rotateTarget">
+              将轮换「{{ rotateTarget.name }}」：<b>新 Key 立即生效，旧 Key 24 小时内仍可使用</b>，之后自动失效。
+              请在宽限期内把接入方替换为新 Key。
             </p>
-            <div class="regen-current-key-row">
-              <span class="label">当前密钥：</span>
-              <code>{{ sessionPlaintext || boundKeyPrefix || '尚未签发明文' }}</code>
+            <p v-else>
+              当前没有专属于此智能体的启用凭证，将签发一条<b>只能调用当前智能体</b>的对话凭证。其他凭证不受影响。
+            </p>
+            <div v-if="rotateTarget" class="regen-current-key-row">
+              <span class="label">将被轮换：</span>
+              <code>{{ rotateTarget.keyPrefix }}…</code>
             </div>
           </div>
         </div>
@@ -713,7 +758,7 @@
           >
             <i v-if="regening" class="fa-solid fa-circle-notch fa-spin"></i>
             <i v-else class="fa-solid fa-arrows-rotate"></i>
-            <span>{{ regening ? '生成中...' : '确认重置并生成' }}</span>
+            <span>{{ regening ? '处理中...' : (rotateTarget ? '确认轮换' : '确认签发') }}</span>
           </button>
         </div>
       </div>
@@ -775,15 +820,38 @@ watch(() => props.agent?.id, () => {
   loadBoundKey()
 })
 
-async function loadBoundKey() {
-  sessionPlaintext.value = ''
-  boundKeyPrefix.value = ''
+async function loadBoundKey(keepPlaintext = false) {
+  if (!keepPlaintext) sessionPlaintext.value = ''
+  credentials.value = []
   if (!props.agent?.id) return
-  const res = await http.get('/api/open-api-keys')
-  if (!res.success) return
-  const match = (res.data || []).find(k => (k.agentScope || []).includes(props.agent.id) && k.status === 'ACTIVE')
-    || (res.data || []).find(k => (k.scopes || []).includes('chat') && k.status === 'ACTIVE')
-  if (match) boundKeyPrefix.value = match.keyPrefix
+  const res = await http.get(`/api/agents/${props.agent.id}/credentials`)
+  if (res.success) credentials.value = res.data || []
+}
+
+// 卡片上显示的凭证：优先专属于此智能体的启用凭证，其次不限智能体的；都没有就不显示（不再拿别的智能体的凭证凑数）
+const primaryCredential = computed(() => {
+  const usable = credentials.value.filter(c => c.usable && c.status === 'ACTIVE')
+  return usable.find(c => c.binding === 'DEDICATED') || usable.find(c => c.binding === 'ALL_AGENTS') || null
+})
+
+// 「重新生成」会轮换的凭证：专属于此智能体的启用凭证；没有时改为签发新凭证
+const rotateTarget = computed(() =>
+  credentials.value.find(c => c.binding === 'DEDICATED' && c.status === 'ACTIVE' && c.usable) || null)
+
+function credentialState(c) {
+  if (c.status === 'ROTATING') {
+    if (!c.usable) return { label: '已失效', tone: 'off' }
+    const hours = Math.max(1, Math.ceil((new Date(c.graceExpiresAt) - Date.now()) / 3600000))
+    return { label: `轮换中 · ${hours} 小时后失效`, tone: 'warn' }
+  }
+  if (c.status === 'DISABLED') return { label: '已停用', tone: 'off' }
+  if (!c.usable) return { label: '已过期', tone: 'off' }
+  return { label: '启用', tone: 'ok' }
+}
+
+function formatTime(value) {
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('zh-CN', { hour12: false })
 }
 
 const effectiveChannel = computed(() => {
@@ -833,7 +901,9 @@ const apiBaseUrl = computed(() => {
 })
 
 const sessionPlaintext = ref('')
-const boundKeyPrefix = ref('')
+const credentials = ref([])
+const credentialsOpen = ref(false)
+const boundKeyPrefix = computed(() => primaryCredential.value?.keyPrefix || '')
 
 const maskedKey = computed(() => {
   if (sessionPlaintext.value) {
@@ -846,8 +916,9 @@ const maskedKey = computed(() => {
 
 const keyPrefixHint = computed(() => {
   if (sessionPlaintext.value) return '本次签发的明文仍在本页，关闭后消失'
-  if (boundKeyPrefix.value) return '已绑定凭证 ' + boundKeyPrefix.value
-  return '尚未签发，请点击重新生成'
+  const c = primaryCredential.value
+  if (c) return `当前显示「${c.name}」· ${c.binding === 'DEDICATED' ? '仅此智能体' : '全部智能体'}`
+  return '还没有能调用此智能体的启用凭证，点击右上角签发'
 })
 
 const statusLabel = computed(() => {
@@ -1038,8 +1109,8 @@ async function confirmRegenerateKey() {
     if (res.success && (res.data?.plaintext || res.data?.apiKey)) {
       const plaintext = res.data.plaintext || res.data.apiKey
       sessionPlaintext.value = plaintext
-      boundKeyPrefix.value = res.data?.key?.keyPrefix || plaintext.substring(0, 16)
-      showToast('新凭证已签发，明文仅显示这一次', 'success', 2500)
+      await loadBoundKey(true)
+      showToast(res.message || '新凭证已签发，明文仅显示这一次', 'success', 3000)
       emit('agent-updated', { ...props.agent })
       regenModalOpen.value = false
     } else {
@@ -1437,6 +1508,105 @@ async function executePlaygroundRequest() {
 .card-footer-tip.tip-warn {
   color: var(--accent-amber);
 }
+
+.btn-cred-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent-blue);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-cred-toggle:hover {
+  text-decoration: underline;
+}
+
+/* 能调用此智能体的凭证列表 */
+.cred-list-card {
+  margin-top: -8px;
+  margin-bottom: 20px;
+  padding: 14px 18px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--bg-card);
+}
+
+.cred-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cred-manage-link {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-blue);
+  text-decoration: none;
+}
+
+.cred-manage-link:hover {
+  text-decoration: underline;
+}
+
+.cred-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.cred-table th {
+  text-align: left;
+  font-weight: 500;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.cred-table td {
+  padding: 8px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.cred-table tr:last-child td {
+  border-bottom: none;
+}
+
+.cred-table code {
+  font-size: 12px;
+}
+
+.cred-name {
+  color: var(--text-primary);
+}
+
+.cred-tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  background: var(--surface-active, rgba(59, 130, 246, 0.12));
+  color: var(--active-fg, var(--accent-blue));
+}
+
+.cred-muted {
+  color: var(--text-muted);
+}
+
+.cred-status.st-ok { color: var(--accent-emerald); }
+.cred-status.st-warn { color: var(--accent-amber); }
+.cred-status.st-off { color: var(--text-muted); }
 
 /* Split Layout */
 .api-main-layout {
