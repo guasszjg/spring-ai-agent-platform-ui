@@ -123,13 +123,14 @@
                 <div class="ms-label">联网搜索 <i class="fa-regular fa-circle-question" title="打开后允许模型检索网络（需供应商支持）"></i></div>
                 <span class="ms-flag">{{ settings.webSearch.enabled ? '已开启' : '已关闭' }}</span>
               </div>
-              <div class="ms-row ms-row-choice">
-                <label class="switch ms-switch">
-                  <input v-model="settings.thinking.enabled" type="checkbox">
-                  <span class="slider-toggle"></span>
-                </label>
-                <div class="ms-label">思考模式 <i class="fa-regular fa-circle-question" title="DeepSeek V4 默认会思考。关闭后会显式关掉思考，只返回最终答案。"></i></div>
-                <span class="ms-flag">{{ settings.thinking.enabled ? '已开启' : '已关闭' }}</span>
+              <div class="ms-row">
+                <span class="ms-switch-spacer"></span>
+                <div class="ms-label">思考模式 <i class="fa-regular fa-circle-question" title="保存到智能体，调试与线上调用都按此设置。跟随模型默认：不传思考参数（DeepSeek V4 默认会思考）；关闭：回答更快、更省 token；开启：复杂问题更严谨，但更慢。部分中转通道可能不支持开关。"></i></div>
+                <select v-model="settings.thinking.value" class="ms-select">
+                  <option value="AUTO">跟随模型默认</option>
+                  <option value="OFF">关闭</option>
+                  <option value="ON">开启</option>
+                </select>
               </div>
               <div class="ms-row ms-row-headers">
                 <label class="switch ms-switch">
@@ -341,7 +342,7 @@
           <div v-if="sending" class="chat-msg-row chat-msg-bot">
             <div class="msg-avatar msg-avatar-bot"><AgentMascot :size="22" animated /></div>
             <div class="msg-content-wrapper">
-              <div class="msg-bubble"><i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent-blue);"></i> {{ appliedSettings.thinking.enabled ? '思考中...' : '生成中...' }}</div>
+              <div class="msg-bubble"><i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent-blue);"></i> {{ appliedSettings.thinking.value === 'ON' ? '思考中...' : '生成中...' }}</div>
             </div>
           </div>
         </div>
@@ -1340,6 +1341,7 @@ async function publish(note) {
     topP: Number(appliedSettings.topP.value),
     maxTokens: Number(appliedSettings.maxTokens.value),
     memoryTurns: memoryTurns.value,
+    thinkingMode: appliedSettings.thinking.value,
     toolsConfig: JSON.stringify(tools)
   })
   if (res.success) {
@@ -1551,7 +1553,8 @@ function createDefaultSettings() {
     // 上下文记忆保存在智能体上（开放接口也按它走），不走本地缓存
     memory: { enabled: false, value: 3 },
     webSearch: { enabled: false },
-    thinking: { enabled: false },
+    // 思考模式保存在智能体上（AUTO / ON / OFF），线上调用也按它走，不走本地缓存
+    thinking: { value: 'AUTO' },
     extraHeaders: { enabled: false, value: '' }
   }
 }
@@ -1577,13 +1580,15 @@ function applyAgentSettings(data) {
   settings.memory.enabled = turns > 0
   settings.memory.value = turns > 0 ? turns : 3
   Object.assign(appliedSettings.memory, settings.memory)
+  settings.thinking.value = data.thinkingMode || 'AUTO'
+  appliedSettings.thinking.value = settings.thinking.value
 }
 
 function loadPersistedSettings(agentId) {
   try {
     const raw = localStorage.getItem(settingsKey(agentId))
     if (!raw) return
-    const { memory, ...parsed } = JSON.parse(raw)
+    const { memory, thinking, ...parsed } = JSON.parse(raw)
     copySettings(parsed, appliedSettings)
     copySettings(parsed, settings)
   } catch {
@@ -1603,9 +1608,11 @@ function openSettings() {
 
 function buildGeneration(source) {
   const generation = {
-    thinking: !!source.thinking.enabled,
     webSearch: !!source.webSearch.enabled
   }
+  // 跟随模型默认时不传，与线上调用一致
+  if (source.thinking.value === 'ON') generation.thinking = true
+  if (source.thinking.value === 'OFF') generation.thinking = false
   if (source.temperature.enabled) generation.temperature = Number(source.temperature.value)
   if (source.maxTokens.enabled) generation.maxTokens = Number(source.maxTokens.value)
   if (source.topP.enabled) generation.topP = Number(source.topP.value)
@@ -1639,12 +1646,13 @@ async function saveModelSettings() {
       temperature: Number(appliedSettings.temperature.value),
       topP: Number(appliedSettings.topP.value),
       maxTokens: Number(appliedSettings.maxTokens.value),
-      memoryTurns: memoryTurns.value
+      memoryTurns: memoryTurns.value,
+      thinkingMode: appliedSettings.thinking.value
     })
     if (res?.success && res.data) agent.value = res.data
   }
   settingsOpen.value = false
-  showToast(appliedSettings.thinking.enabled ? '模型设置已保存' : '模型设置已保存，已关闭思考模式', 'success', 2200)
+  showToast('模型设置已保存', 'success', 2200)
 }
 
 function loadPersistedTools(agentData) {
