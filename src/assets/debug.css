@@ -1886,6 +1886,48 @@ input:checked + .slider-toggle:before {
   border-color: var(--accent-blue);
 }
 
+.preview-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 上下文记忆状态，点击打开模型设置 */
+.memory-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.memory-chip i {
+  font-size: 11px;
+  color: var(--accent-blue);
+}
+
+.memory-chip.off i {
+  color: var(--text-muted);
+}
+
+.memory-chip:hover {
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+
+.ms-memory-flag {
+  min-width: 52px;
+}
+
 .chat-history-scroll {
   flex: 1;
   overflow-y: auto;

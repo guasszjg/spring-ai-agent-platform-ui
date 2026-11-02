@@ -106,6 +106,15 @@
                   <option value="json_object">JSON</option>
                 </select>
               </div>
+              <div class="ms-row">
+                <label class="switch ms-switch">
+                  <input v-model="settings.memory.enabled" type="checkbox">
+                  <span class="slider-toggle"></span>
+                </label>
+                <div class="ms-label">上下文记忆 <i class="fa-regular fa-circle-question" title="每次对话带上最近几轮问答，用户可以接着追问。关闭后每次只发当前问题，最省 token，适合一问一答的场景。调试页面与开放接口都按此设置。"></i></div>
+                <input v-model.number="settings.memory.value" class="ms-range" type="range" min="1" max="10" step="1" :disabled="!settings.memory.enabled">
+                <span class="ms-flag ms-memory-flag">{{ settings.memory.enabled ? settings.memory.value + ' 轮' : '已关闭' }}</span>
+              </div>
               <div class="ms-row ms-row-choice">
                 <label class="switch ms-switch">
                   <input v-model="settings.webSearch.enabled" type="checkbox">
@@ -294,7 +303,19 @@
             <h3 class="preview-title">调试预览</h3>
             <p class="preview-hint">{{ promptDirty ? '正在使用未发布的草稿提示词' : '正在使用已发布的系统提示词' }}</p>
           </div>
-          <button class="btn-icon-round" @click="resetChat"><i class="fa-solid fa-rotate-right"></i></button>
+          <div class="preview-header-actions">
+            <button
+              type="button"
+              class="memory-chip"
+              :class="{ off: !memoryTurns }"
+              :title="memoryTurns ? `每次带上最近 ${memoryTurns} 轮问答，点击调整` : '上下文记忆已关闭，每次只发当前问题，点击调整'"
+              @click="openSettings"
+            >
+              <i class="fa-solid fa-clock-rotate-left"></i>
+              {{ memoryTurns ? `记忆 ${memoryTurns} 轮` : '无记忆' }}
+            </button>
+            <button class="btn-icon-round" title="清空对话" @click="resetChat"><i class="fa-solid fa-rotate-right"></i></button>
+          </div>
         </div>
         <div class="chat-history-scroll" ref="streamRef">
           <div v-if="!messages.length && !sending" class="chat-empty chat-empty-mascot">
@@ -1250,6 +1271,8 @@ async function sendChat() {
   if (!agent.value || !inputText.value.trim() || sending.value) return
   const text = inputText.value.trim()
   inputText.value = ''
+  // 只带本次问题之前的最近 N 轮（本次问题单独作为 message 发送）
+  const priorHistory = memoryTurns.value ? history.value.slice(-memoryTurns.value * 2) : []
   messages.value.push({ role: 'user', html: escapeHtml(text) })
   history.value.push({ role: 'user', content: text })
   sending.value = true
@@ -1266,7 +1289,7 @@ async function sendChat() {
   const res = await http.post(`/api/agents/${agent.value.id}/messages`, {
     message: text,
     prompt: prompt.value,
-    history: history.value.slice(-6),
+    history: priorHistory,
     generation: buildGeneration(appliedSettings),
     conversationId: conversationId.value || undefined,
     account: user.username || user.nickname || undefined,
@@ -1316,6 +1339,7 @@ async function publish(note) {
     temperature: Number(appliedSettings.temperature.value),
     topP: Number(appliedSettings.topP.value),
     maxTokens: Number(appliedSettings.maxTokens.value),
+    memoryTurns: memoryTurns.value,
     toolsConfig: JSON.stringify(tools)
   })
   if (res.success) {
@@ -1524,6 +1548,8 @@ function createDefaultSettings() {
     n: { enabled: false, value: 0 },
     frequencyPenalty: { enabled: false, value: 0 },
     responseFormat: { enabled: false, value: 'text' },
+    // 上下文记忆保存在智能体上（开放接口也按它走），不走本地缓存
+    memory: { enabled: false, value: 3 },
     webSearch: { enabled: false },
     thinking: { enabled: false },
     extraHeaders: { enabled: false, value: '' }
@@ -1547,18 +1573,32 @@ function applyAgentSettings(data) {
   appliedSettings.temperature.value = settings.temperature.value
   appliedSettings.maxTokens.value = settings.maxTokens.value
   appliedSettings.topP.value = settings.topP.value
+  const turns = data.memoryTurns ?? 0
+  settings.memory.enabled = turns > 0
+  settings.memory.value = turns > 0 ? turns : 3
+  Object.assign(appliedSettings.memory, settings.memory)
 }
 
 function loadPersistedSettings(agentId) {
   try {
     const raw = localStorage.getItem(settingsKey(agentId))
     if (!raw) return
-    const parsed = JSON.parse(raw)
+    const { memory, ...parsed } = JSON.parse(raw)
     copySettings(parsed, appliedSettings)
     copySettings(parsed, settings)
   } catch {
     // ignore broken local cache
   }
+}
+
+// 当前生效的记忆轮数，0 = 关闭
+const memoryTurns = computed(() => appliedSettings.memory.enabled
+  ? Math.min(10, Math.max(1, Number(appliedSettings.memory.value) || 3))
+  : 0)
+
+function openSettings() {
+  if (pageTab.value !== 'orchestrate') pageTab.value = 'orchestrate'
+  if (!settingsOpen.value) toggleSettings()
 }
 
 function buildGeneration(source) {
@@ -1594,12 +1634,14 @@ async function saveModelSettings() {
   copySettings(settings, appliedSettings)
   if (agent.value?.id) {
     localStorage.setItem(settingsKey(agent.value.id), JSON.stringify(appliedSettings))
-    await http.put(`/api/agents/${agent.value.id}`, {
+    const res = await http.put(`/api/agents/${agent.value.id}`, {
       ...agent.value,
       temperature: Number(appliedSettings.temperature.value),
       topP: Number(appliedSettings.topP.value),
-      maxTokens: Number(appliedSettings.maxTokens.value)
+      maxTokens: Number(appliedSettings.maxTokens.value),
+      memoryTurns: memoryTurns.value
     })
+    if (res?.success && res.data) agent.value = res.data
   }
   settingsOpen.value = false
   showToast(appliedSettings.thinking.enabled ? '模型设置已保存' : '模型设置已保存，已关闭思考模式', 'success', 2200)
