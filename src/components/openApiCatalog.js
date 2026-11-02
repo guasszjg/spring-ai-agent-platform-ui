@@ -18,8 +18,8 @@ export const OPEN_API_GROUPS = [
           { name: 'agent_id', type: 'string', required: true, default: 'agent_sample_01', description: '目标调用的智能体 ID (必填，同时兼容 agentId)' },
           { name: 'message', type: 'string', required: true, default: '你好，请介绍一下企业私有知识库与多智能体协同能力？', description: '用户输入的问题、指令或对话内容文本 (必填，同时兼容 query)' },
           { name: 'response_mode', type: 'string', required: false, default: 'blocking', description: '响应返回模式: blocking (阻塞返回完整JSON) 或 streaming (SSE流式实时输出)' },
-          { name: 'conversation_id', type: 'string', required: false, default: '', description: '会话 ID。需要多轮连续对话时传入上一轮返回的 conversation_id' },
-          { name: 'user', type: 'string', required: false, default: 'developer_guass', description: '终端用户唯一标识，用于调用链路与安全审计溯源' }
+          { name: 'conversation_id', type: 'string', required: false, default: '', description: '会话 ID。智能体开启上下文记忆 (memoryTurns > 0) 时，传入上一轮返回的 conversation_id 即可接着追问，平台自动带上最近 N 轮问答；同一会话须使用相同的 user。记忆关闭时只用于日志归档' },
+          { name: 'user', type: 'string', required: false, default: 'developer_guass', description: '终端用户唯一标识，用于调用链路与安全审计溯源；上下文记忆只读取同一 user 的会话' }
         ],
         exampleBody: JSON.stringify({
           agent_id: "agent_sample_01",
@@ -86,6 +86,7 @@ export const OPEN_API_GROUPS = [
                 status: "RUNNING",
                 modelName: "Qwen/Qwen2.5-72B-Instruct",
                 temperature: 0.7,
+                memoryTurns: 0,
                 description: "解答日常公司规章、报销与 IT 支持问题",
                 boundKnowledgeBases: ["kb_hr_rules", "kb_finance"],
                 updatedAt: "2026-09-10T14:20:00"
@@ -115,6 +116,7 @@ export const OPEN_API_GROUPS = [
             status: "RUNNING",
             modelName: "Qwen/Qwen2.5-72B-Instruct",
             temperature: 0.7,
+            memoryTurns: 0,
             description: "解答日常公司规章、报销与 IT 支持问题",
             boundKnowledgeBases: ["kb_hr_rules"]
           }
@@ -134,7 +136,8 @@ export const OPEN_API_GROUPS = [
           { name: 'modelName', type: 'string', required: false, default: 'Qwen/Qwen2.5-72B-Instruct', description: '调度模型名称' },
           { name: 'temperature', type: 'number', required: false, default: '0.7', description: '生成温度 (0.0~2.0)' },
           { name: 'description', type: 'string', required: false, default: '为客户提供快速售后诊断与排错指南', description: '简要介绍' },
-          { name: 'systemPrompt', type: 'string', required: false, default: '你是一名资深技术支持专家，请用专业而亲切的口吻回答问题。', description: '引导提示词' }
+          { name: 'systemPrompt', type: 'string', required: false, default: '你是一名资深技术支持专家，请用专业而亲切的口吻回答问题。', description: '引导提示词' },
+          { name: 'memoryTurns', type: 'integer', required: false, default: '0', description: '上下文记忆轮数 (0~10)。0 = 关闭，每次只发当前问题，最省 token；需要连续追问时设 2~3，调用对话接口时带回 conversation_id 即可' }
         ],
         exampleBody: JSON.stringify({
           name: "售后技术顾问",
@@ -143,7 +146,8 @@ export const OPEN_API_GROUPS = [
           modelName: "Qwen/Qwen2.5-72B-Instruct",
           temperature: 0.7,
           description: "为客户提供快速售后诊断与排错指南",
-          systemPrompt: "你是一名资深技术支持专家，请用专业而亲切的口吻回答问题。"
+          systemPrompt: "你是一名资深技术支持专家，请用专业而亲切的口吻回答问题。",
+          memoryTurns: 3
         }, null, 2),
         exampleResponse: JSON.stringify({
           code: 200,
@@ -153,7 +157,8 @@ export const OPEN_API_GROUPS = [
             name: "售后技术顾问",
             code: "tech_support_v1",
             status: "IDLE",
-            modelName: "Qwen/Qwen2.5-72B-Instruct"
+            modelName: "Qwen/Qwen2.5-72B-Instruct",
+            memoryTurns: 3
           }
         }, null, 2)
       },
@@ -170,12 +175,14 @@ export const OPEN_API_GROUPS = [
         bodyFields: [
           { name: 'name', type: 'string', required: false, default: '售后技术顾问(更新)', description: '修改后的名称' },
           { name: 'temperature', type: 'number', required: false, default: '0.5', description: '修改后的温度' },
-          { name: 'description', type: 'string', required: false, default: '更新后的说明', description: '修改后的简述' }
+          { name: 'description', type: 'string', required: false, default: '更新后的说明', description: '修改后的简述' },
+          { name: 'memoryTurns', type: 'integer', required: false, default: '0', description: '上下文记忆轮数 (0~10)。0 = 关闭，每次只发当前问题，最省 token；需要连续追问时设 2~3，调用对话接口时带回 conversation_id 即可' }
         ],
         exampleBody: JSON.stringify({
           name: "售后技术顾问(更新)",
           temperature: 0.5,
-          description: "优化了诊断流程的高级技术顾问"
+          description: "优化了诊断流程的高级技术顾问",
+          memoryTurns: 0
         }, null, 2),
         exampleResponse: JSON.stringify({
           code: 200,
@@ -183,7 +190,8 @@ export const OPEN_API_GROUPS = [
           data: {
             id: "agent_001",
             name: "售后技术顾问(更新)",
-            temperature: 0.5
+            temperature: 0.5,
+            memoryTurns: 0
           }
         }, null, 2)
       },
