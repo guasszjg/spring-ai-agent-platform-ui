@@ -59,7 +59,7 @@
             {{ effectiveRouteLabel }}
           </span>
           <router-link
-            to="/dashboard?tab=gateway"
+            to="/dashboard?tab=gateway-llm"
             class="btn-icon-action"
             title="点击前往网关修改模型路由"
           >
