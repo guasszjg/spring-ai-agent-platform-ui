@@ -11,11 +11,14 @@
       <path d="M6.661 4.854l-.014 8.568-2.921-5.847-1.488-3.048a.106.106 0 01.022-.124.11.11 0 01.037-.024c1.57-.602 3.025-.444 4.364.475z" fill="#A5CCFF"/>
       <path d="M3.726 7.575l2.921 5.847.161 2.05a.114.114 0 01-.01.055l-.012.027L.02 8.821a.07.07 0 01.001-.1C1.064 7.747 2.3 7.365 3.726 7.576z" fill="#A5CCFF" fill-opacity=".647"/>
     </svg>
+    <img v-else-if="customIcon === 'deepseek'" :src="logoDeepseek" alt="DeepSeek" class="deepseek-icon-img">
     <i v-else :class="icon || 'fa-solid fa-puzzle-piece'"></i>
   </div>
 </template>
 
 <script setup>
+import logoDeepseek from '../assets/vendors/deepseek-color.svg'
+
 defineProps({
   icon: { type: String, default: '' },
   iconClass: { type: String, default: 'icon-orange' },

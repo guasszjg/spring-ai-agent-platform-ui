@@ -967,7 +967,8 @@ table th {
 .icon-blue-tool,
 .icon-purple-tool,
 .icon-emerald-tool,
-.icon-bocha-badge {
+.icon-bocha-badge,
+.icon-deepseek-badge {
   background: var(--surface-active) !important;
   color: var(--text-secondary) !important;
   border: none !important;

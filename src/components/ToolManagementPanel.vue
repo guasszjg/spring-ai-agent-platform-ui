@@ -308,6 +308,60 @@
               </div>
             </div>
           </template>
+          <template v-else-if="isDeepSeek(editing)">
+            <div class="tool-form-group">
+              <div class="tool-label-row">
+                <label class="tool-form-label">
+                  <span>DeepSeek API Key</span>
+                  <span v-if="editing.hasApiKey" class="badge-saved-encrypted">
+                    <i class="fa-solid fa-shield-halved"></i> 已单独保存
+                  </span>
+                  <span v-else class="label-sub">选填：不填则使用「模型网关」中 DeepSeek 通道的 Key</span>
+                </label>
+              </div>
+              <div class="tool-key-input-row">
+                <div class="tool-input-wrapper">
+                  <input
+                    v-model="form.apiKey"
+                    class="tool-form-input tool-key-input"
+                    :type="showApiKey ? 'text' : 'password'"
+                    autocomplete="new-password"
+                    :placeholder="editing.hasApiKey ? '已保存（留空不改；输入新 Key 则覆盖）' : '留空即可，自动使用模型网关的 DeepSeek Key'"
+                    @input="testResult = null"
+                  >
+                  <button type="button" class="btn-key-eye" @click="showApiKey = !showApiKey">
+                    <i :class="showApiKey ? 'fa-regular fa-eye-slash' : 'fa-regular fa-eye'"></i>
+                  </button>
+                </div>
+                <button type="button" class="btn-tool-test" :disabled="testing" @click="testConnection">
+                  <i :class="testing ? 'fa-solid fa-circle-notch fa-spin' : 'fa-solid fa-bolt'"></i>
+                  <span>{{ testing ? '测试中...' : '测试连接' }}</span>
+                </button>
+              </div>
+              <div
+                v-if="testResult"
+                class="tool-test-banner"
+                :class="testResult.success ? 'test-banner-success' : 'test-banner-error'"
+              >
+                <div class="test-banner-left">
+                  <i :class="testResult.success ? 'fa-solid fa-circle-check' : 'fa-solid fa-triangle-exclamation'"></i>
+                  <div class="test-banner-text">
+                    <div class="test-banner-msg">{{ testResult.message }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="tool-form-group">
+              <label class="tool-form-label">
+                <span>最大检索结果数</span>
+                <span class="label-sub">({{ form.count }} 条；条数越多，交给模型的内容越长、Token 越多)</span>
+              </label>
+              <div class="tool-range-row">
+                <input v-model.number="form.count" type="range" min="1" max="10" class="tool-range-slider">
+                <input v-model.number="form.count" type="number" min="1" max="10" class="tool-form-input tool-range-num">
+              </div>
+            </div>
+          </template>
           <template v-else-if="isBocha(editing)">
             <div class="tool-form-group">
               <div class="tool-label-row">
@@ -485,11 +539,18 @@ const editorTip = computed(() => {
   if (isBocha(editing.value)) {
     return '必填：Bocha API Key。保存后所有智能体问天气、新闻时共用这一把密钥。'
   }
+  if (isDeepSeek(editing.value)) {
+    return 'DeepSeek 官方搜索接口，按次计费（约 0.005 元/次）。默认使用模型网关里 DeepSeek 通道的 Key，无需另外申请。'
+  }
   return '这里设置平台默认时区和时间格式。模型没指定时区时，按这个默认值执行。'
 })
 
 function isBocha(tool) {
   return !!tool && (tool.customIcon === 'bocha' || tool.prefix === 'bocha' || tool.code === 'bocha_web_search')
+}
+
+function isDeepSeek(tool) {
+  return !!tool && (tool.customIcon === 'deepseek' || tool.code === 'deepseek_web_search')
 }
 
 function isHttp(tool) {
@@ -502,6 +563,9 @@ function configPreview(tool) {
     const method = tool.config?.method || 'POST'
     const url = tool.config?.url || '未填写地址'
     return `${method} · ${url}`
+  }
+  if (isDeepSeek(tool)) {
+    return `${tool.hasApiKey ? '使用单独保存的 Key' : '使用模型网关的 DeepSeek Key'} · 返回 ${tool.config?.count || 5} 条`
   }
   if (isBocha(tool)) {
     const count = tool.config?.count || 5
@@ -566,7 +630,7 @@ async function loadTools() {
     }
   } catch (e) {
     paginateLocal(FALLBACK_PLATFORM_TOOLS)
-    showToast('加载工具目录失败，已回退内置 6 个工具', 'warning')
+    showToast('加载工具目录失败，已回退内置工具列表', 'warning')
   } finally {
     loading.value = false
   }
@@ -733,7 +797,9 @@ function buildPayload() {
     description: form.description,
     config: isBocha(editing.value)
       ? { count: form.count, freshness: form.freshness, summary: form.summary }
-      : { timezone: form.timezone, format: form.format }
+      : isDeepSeek(editing.value)
+        ? { count: form.count }
+        : { timezone: form.timezone, format: form.format }
   }
   if (form.apiKey && form.apiKey.trim()) {
     payload.apiKey = form.apiKey.trim()

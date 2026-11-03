@@ -255,6 +255,7 @@
                       <path d="M3.726 7.575l2.921 5.847.161 2.05a.114.114 0 01-.01.055l-.012.027L.02 8.821a.07.07 0 01.001-.1C1.064 7.747 2.3 7.365 3.726 7.576z" fill="#A5CCFF" fill-opacity=".647"/>
                     </svg>
                   </template>
+                  <img v-else-if="tool.customIcon === 'deepseek'" :src="logoDeepseek" alt="DeepSeek" class="deepseek-icon-img">
                   <i v-else :class="tool.icon"></i>
                 </div>
                 <div class="tool-info-text">
@@ -384,6 +385,7 @@
                   <path d="M3.726 7.575l2.921 5.847.161 2.05a.114.114 0 01-.01.055l-.012.027L.02 8.821a.07.07 0 01.001-.1C1.064 7.747 2.3 7.365 3.726 7.576z" fill="#A5CCFF" fill-opacity=".647"/>
                 </svg>
               </template>
+              <img v-else-if="editingTool?.customIcon === 'deepseek'" :src="logoDeepseek" alt="DeepSeek" class="deepseek-icon-img">
               <i v-else :class="editingTool?.icon"></i>
             </div>
             <span>配置工具 - {{ editingTool?.prefix }} {{ editingTool?.title }}</span>
@@ -500,6 +502,18 @@
                 <input v-model="editingToolConfig.summary" type="checkbox">
                 <span class="slider-toggle"></span>
               </label>
+            </div>
+          </template>
+
+          <template v-else-if="editingTool?.customIcon === 'deepseek'">
+            <div class="tool-form-group">
+              <div class="tool-ds-note">
+                <i class="fa-solid fa-key"></i>
+                <div>
+                  <div>无需单独配置 Key：默认使用「模型网关」中 DeepSeek 通道的 Key，按次计费（约 0.005 元/次）。</div>
+                  <div class="label-sub">如需单独的 Key 或调整返回条数，请到「工具管理 → DeepSeek 联网搜索」统一设置。</div>
+                </div>
+              </div>
             </div>
           </template>
 
@@ -818,6 +832,7 @@ import AssistantDock from '../components/AssistantDock.vue'
 import { clearAssistantResource, setAssistantPage, setAssistantResource } from '../composables/useAssistantContext'
 import { User } from 'lucide-vue-next'
 import { FALLBACK_PLATFORM_TOOLS, matchSavedTool, toDebugTool } from '../composables/platformTools'
+import logoDeepseek from '../assets/vendors/deepseek-color.svg'
 
 const route = useRoute()
 const { showToast } = useToast()
