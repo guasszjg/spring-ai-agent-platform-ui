@@ -353,6 +353,9 @@
             <div class="msg-content-wrapper">
               <div v-if="msg.tool" class="msg-tool-chip"><i class="fa-solid fa-circle-check" style="color: var(--accent-emerald);"></i> 工具调用: {{ msg.tool }}</div>
               <div class="msg-bubble" v-html="msg.html"></div>
+              <div v-if="msg.streaming && streamWaitSec" class="msg-stream-wait">
+                <i class="fa-solid fa-circle-notch fa-spin"></i> 等待模型继续输出… {{ streamWaitSec }}s（模型可能在思考、联网搜索，或通道繁忙排队中）
+              </div>
               <div v-if="msg.meta" class="msg-meta-info">
                 <span><i class="fa-solid fa-microchip"></i> {{ msg.meta.model }}</span>
                 <span v-if="msg.meta.firstTokenMs != null" title="从发送到看到第一个字"><i class="fa-solid fa-bolt"></i> 首字 {{ msg.meta.firstTokenMs }}ms</span>
@@ -364,7 +367,7 @@
           <div v-if="sending && !streamingActive" class="chat-msg-row chat-msg-bot">
             <div class="msg-avatar msg-avatar-bot"><AgentMascot :size="22" animated /></div>
             <div class="msg-content-wrapper">
-              <div class="msg-bubble"><i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent-blue);"></i> {{ appliedSettings.thinking.value === 'ON' ? '思考中...' : '生成中...' }}</div>
+              <div class="msg-bubble"><i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent-blue);"></i> {{ appliedSettings.thinking.value !== 'OFF' ? '思考中...' : '生成中...' }}<span v-if="streamWaitSec" class="msg-wait-sec"> {{ streamWaitSec }}s</span></div>
             </div>
           </div>
         </div>
@@ -1397,6 +1400,8 @@ const streamMode = ref((() => {
   try { return localStorage.getItem(STREAM_MODE_KEY) !== 'false' } catch { return true }
 })())
 const streamingActive = ref(false)
+// 流式输出时距上一次收到内容的秒数（≥3 秒才显示），让用户知道还在等，而不是卡死
+const streamWaitSec = ref(0)
 
 function toggleStreamMode() {
   streamMode.value = !streamMode.value
@@ -1420,16 +1425,25 @@ async function sendStreaming(payload) {
 
   const ensureMessage = () => {
     if (!msg) {
-      messages.value.push({ role: 'assistant', html: '', tool: null, meta: null })
+      messages.value.push({ role: 'assistant', html: '', tool: null, meta: null, streaming: true })
       msg = messages.value[messages.value.length - 1]
       streamingActive.value = true
     }
     return msg
   }
 
+  let lastOutputAt = started
+  streamWaitSec.value = 0
+  const waitTimer = setInterval(() => {
+    const sec = Math.floor((performance.now() - lastOutputAt) / 1000)
+    streamWaitSec.value = sec >= 3 ? sec : 0
+  }, 500)
+
   const res = await http.stream(`/api/agents/${agent.value.id}/messages/stream`, payload, {
     onEvent: (event, data) => {
       if (event === 'message') {
+        lastOutputAt = performance.now()
+        streamWaitSec.value = 0
         if (firstTokenMs == null) firstTokenMs = Math.round(performance.now() - started)
         answer += data?.answer || ''
         ensureMessage().html = formatHtml(answer, false)
@@ -1454,6 +1468,9 @@ async function sendStreaming(payload) {
     }
   })
 
+  clearInterval(waitTimer)
+  streamWaitSec.value = 0
+  if (msg) msg.streaming = false
   sending.value = false
   streamingActive.value = false
   if (!finished) {

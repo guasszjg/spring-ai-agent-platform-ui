@@ -2489,3 +2489,18 @@ input:checked + .slider-toggle:before {
   opacity: 0.6;
   cursor: default;
 }
+
+/* 流式输出等待提示 */
+.msg-stream-wait {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.msg-stream-wait i {
+  margin-right: 4px;
+  color: var(--accent-blue);
+}
+.msg-wait-sec {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
