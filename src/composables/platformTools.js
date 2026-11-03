@@ -35,6 +35,22 @@ export function categoryLabel(category) {
 
 export const FALLBACK_PLATFORM_TOOLS = [
   {
+    id: 'tool-deepseek-web-search',
+    code: 'deepseek_web_search',
+    name: 'DeepSeek 联网搜索',
+    title: 'DeepSeek Search',
+    prefix: 'deepseek',
+    category: 'SEARCH',
+    icon: 'fa-solid fa-magnifying-glass',
+    iconClass: 'icon-deepseek-badge',
+    customIcon: 'deepseek',
+    help: 'DeepSeek 官方搜索接口，默认使用模型网关里 DeepSeek 通道的 Key，按次计费（约 0.005 元/次）',
+    description: 'DeepSeek 联网搜索。当用户询问最新时事、实时天气、新闻事件、实时数据或任何需要获取最新互联网真实信息的场景时调用。',
+    config: { count: 5 },
+    enabled: true,
+    builtin: true
+  },
+  {
     id: 'tool-time-convert-timezone',
     code: 'time_convert_timezone',
     name: '时区转换',

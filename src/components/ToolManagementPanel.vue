@@ -25,6 +25,29 @@
       </div>
     </div>
 
+    <div class="tools-settings-bar">
+      <div class="tools-setting-item">
+        <label class="tools-setting-label" for="max-tool-rounds">单次回答最多调用工具轮数</label>
+        <select
+          id="max-tool-rounds"
+          v-model.number="maxToolRounds"
+          class="tools-setting-select"
+          :disabled="!isSuperAdmin || savingRounds"
+          :title="isSuperAdmin ? '' : '仅超级管理员可修改'"
+          @change="saveMaxToolRounds"
+        >
+          <option v-for="n in roundOptions" :key="n" :value="n">{{ n }} 轮{{ n === defaultRounds ? '（默认）' : '' }}</option>
+        </select>
+        <span class="tools-setting-hint">
+          只限制模型回答<b>一个问题</b>时反复调用工具，不限制提问次数；到上限后模型会根据已查到的资料直接作答。
+        </span>
+      </div>
+      <div class="tools-usage-total" title="本月全部工具的成功调用次数与预估费用（按各工具单价计算）">
+        <i class="fa-solid fa-chart-column"></i>
+        本月调用 <b>{{ monthTotalCalls }}</b> 次 · 预估 <b>¥{{ monthTotalCost }}</b>
+      </div>
+    </div>
+
     <div class="tools-mgmt-toolbar">
       <div class="tools-search-box">
         <i class="fa-solid fa-magnifying-glass"></i>
@@ -87,6 +110,17 @@
           </div>
         </div>
         <div class="tools-mgmt-preview">{{ configPreview(tool) }}</div>
+        <button type="button" class="tools-usage-line" title="查看调用统计" @click.stop="openUsage(tool)">
+          <i class="fa-solid fa-chart-simple"></i>
+          <span>本月 <b>{{ usageOf(tool).month }}</b> 次</span>
+          <span class="tools-usage-sep"></span>
+          <span>今日 {{ usageOf(tool).today }}</span>
+          <template v-if="Number(tool.unitPrice) > 0">
+            <span class="tools-usage-sep"></span>
+            <span>预估 ¥{{ formatMoney(usageOf(tool).monthCost) }}</span>
+          </template>
+          <i class="fa-solid fa-chevron-right tools-usage-more"></i>
+        </button>
         <div class="tools-mgmt-card-foot">
           <div class="tools-mgmt-tags">
             <span class="tools-cat-tag">{{ categoryLabel(tool.category) }}</span>
@@ -135,6 +169,7 @@
             <th style="min-width: 220px;">工具</th>
             <th style="min-width: 100px;">分类</th>
             <th style="min-width: 220px;">当前配置</th>
+            <th style="min-width: 130px;">本月调用</th>
             <th style="min-width: 90px;">状态</th>
             <th style="min-width: 200px; text-align:right;">操作</th>
           </tr>
@@ -155,6 +190,11 @@
             </td>
             <td>
               <span class="tools-mgmt-preview">{{ configPreview(tool) }}</span>
+            </td>
+            <td>
+              <button type="button" class="tools-usage-link" title="查看调用统计" @click="openUsage(tool)">
+                {{ usageOf(tool).month }} 次<template v-if="Number(tool.unitPrice) > 0"> · ¥{{ formatMoney(usageOf(tool).monthCost) }}</template>
+              </button>
             </td>
             <td>
               <div class="badge-status" :class="tool.enabled ? 'badge-success' : 'badge-warning'">
@@ -225,6 +265,62 @@
         </button>
       </div>
     </section>
+
+    <div v-if="usageOpen" class="tool-modal-backdrop" @click.self="usageOpen = false">
+      <div class="tool-modal-dialog tools-usage-dialog">
+        <div class="tool-modal-header">
+          <div class="tool-modal-title">
+            <ToolGlyph :icon="usageTool?.icon" :icon-class="usageTool?.iconClass" :custom-icon="usageTool?.customIcon" />
+            <span>调用统计 · {{ usageTool?.title }}</span>
+          </div>
+          <button type="button" class="btn-modal-close" @click="usageOpen = false">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="tool-modal-body">
+          <div v-if="usageLoading" class="tools-mgmt-empty"><i class="fa-solid fa-circle-notch fa-spin"></i><span>加载中…</span></div>
+          <template v-else-if="usageDetail">
+            <div class="usage-stat-grid">
+              <div class="usage-stat"><span>今日</span><b>{{ usageDetail.today }}</b></div>
+              <div class="usage-stat"><span>本月</span><b>{{ usageDetail.month }}</b></div>
+              <div class="usage-stat"><span>累计</span><b>{{ usageDetail.total }}</b></div>
+              <div class="usage-stat"><span>本月成功率</span><b>{{ formatRate(usageDetail.monthSuccessRate) }}</b></div>
+              <div class="usage-stat"><span>平均耗时</span><b>{{ usageDetail.monthAvgLatencyMs == null ? '—' : usageDetail.monthAvgLatencyMs + ' ms' }}</b></div>
+              <div class="usage-stat">
+                <span>本月预估费用</span>
+                <b>¥{{ formatMoney(usageDetail.monthCost) }}</b>
+                <small>单价 {{ Number(usageDetail.unitPrice) > 0 ? '¥' + Number(usageDetail.unitPrice) + '/次' : '未设置' }}</small>
+              </div>
+            </div>
+
+            <div class="usage-section-title">近 14 天每日调用</div>
+            <div class="usage-bars">
+              <div v-for="d in usageDetail.daily" :key="d.date" class="usage-bar-col" :title="`${d.date}：${d.calls} 次`">
+                <div class="usage-bar-track">
+                  <div class="usage-bar-fill" :style="{ height: barHeight(d.calls) }"></div>
+                </div>
+                <span class="usage-bar-label">{{ d.date.slice(5) }}</span>
+              </div>
+            </div>
+
+            <div class="usage-section-title">本月按智能体</div>
+            <div v-if="!usageDetail.byAgent.length" class="usage-empty">本月还没有调用</div>
+            <table v-else class="usage-agent-table">
+              <thead><tr><th>智能体</th><th>调用</th><th>失败</th><th>预估费用</th></tr></thead>
+              <tbody>
+                <tr v-for="row in usageDetail.byAgent" :key="row.agentId">
+                  <td>{{ row.agentName }}</td>
+                  <td>{{ row.calls }}</td>
+                  <td :class="{ 'usage-fail': row.failures > 0 }">{{ row.failures }}</td>
+                  <td>¥{{ formatMoney(row.cost) }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="usage-note">失败的调用（如 Key 无效、余额不足、网络异常）一般不计费，预估费用只按成功次数计算。</p>
+          </template>
+        </div>
+      </div>
+    </div>
 
     <div v-if="editorOpen" class="tool-modal-backdrop" @click.self="editorOpen = false">
       <div class="tool-modal-dialog">
@@ -305,6 +401,60 @@
                     <div class="test-banner-msg">{{ testResult.message }}</div>
                   </div>
                 </div>
+              </div>
+            </div>
+          </template>
+          <template v-else-if="isDeepSeek(editing)">
+            <div class="tool-form-group">
+              <div class="tool-label-row">
+                <label class="tool-form-label">
+                  <span>DeepSeek API Key</span>
+                  <span v-if="editing.hasApiKey" class="badge-saved-encrypted">
+                    <i class="fa-solid fa-shield-halved"></i> 已单独保存
+                  </span>
+                  <span v-else class="label-sub">选填：不填则使用「模型网关」中 DeepSeek 通道的 Key</span>
+                </label>
+              </div>
+              <div class="tool-key-input-row">
+                <div class="tool-input-wrapper">
+                  <input
+                    v-model="form.apiKey"
+                    class="tool-form-input tool-key-input"
+                    :type="showApiKey ? 'text' : 'password'"
+                    autocomplete="new-password"
+                    :placeholder="editing.hasApiKey ? '已保存（留空不改；输入新 Key 则覆盖）' : '留空即可，自动使用模型网关的 DeepSeek Key'"
+                    @input="testResult = null"
+                  >
+                  <button type="button" class="btn-key-eye" @click="showApiKey = !showApiKey">
+                    <i :class="showApiKey ? 'fa-regular fa-eye-slash' : 'fa-regular fa-eye'"></i>
+                  </button>
+                </div>
+                <button type="button" class="btn-tool-test" :disabled="testing" @click="testConnection">
+                  <i :class="testing ? 'fa-solid fa-circle-notch fa-spin' : 'fa-solid fa-bolt'"></i>
+                  <span>{{ testing ? '测试中...' : '测试连接' }}</span>
+                </button>
+              </div>
+              <div
+                v-if="testResult"
+                class="tool-test-banner"
+                :class="testResult.success ? 'test-banner-success' : 'test-banner-error'"
+              >
+                <div class="test-banner-left">
+                  <i :class="testResult.success ? 'fa-solid fa-circle-check' : 'fa-solid fa-triangle-exclamation'"></i>
+                  <div class="test-banner-text">
+                    <div class="test-banner-msg">{{ testResult.message }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="tool-form-group">
+              <label class="tool-form-label">
+                <span>最大检索结果数</span>
+                <span class="label-sub">({{ form.count }} 条；条数越多，交给模型的内容越长、Token 越多)</span>
+              </label>
+              <div class="tool-range-row">
+                <input v-model.number="form.count" type="range" min="1" max="10" class="tool-range-slider">
+                <input v-model.number="form.count" type="number" min="1" max="10" class="tool-form-input tool-range-num">
               </div>
             </div>
           </template>
@@ -405,6 +555,13 @@
           </template>
           <div class="tool-form-group">
             <label class="tool-form-label">
+              <span>单价（元/次）</span>
+              <span class="label-sub">用于估算费用；免费或自研工具填 0</span>
+            </label>
+            <input v-model="form.unitPrice" type="number" min="0" step="0.001" class="tool-form-input" placeholder="0">
+          </div>
+          <div class="tool-form-group">
+            <label class="tool-form-label">
               <span>工具提示词描述</span>
               <span class="label-sub">指引模型何时调用本工具</span>
             </label>
@@ -430,7 +587,8 @@ import { categoryLabel, FALLBACK_PLATFORM_TOOLS, freshnessLabel, timezoneLabel }
 import ToolGlyph from './ToolGlyph.vue'
 
 const props = defineProps({
-  canManage: { type: Boolean, default: true }
+  canManage: { type: Boolean, default: true },
+  isSuperAdmin: { type: Boolean, default: false }
 })
 
 const { showToast } = useToast()
@@ -464,8 +622,87 @@ const form = reactive({
   description: '',
   method: 'POST',
   url: '',
-  timeoutSeconds: 8
+  timeoutSeconds: 8,
+  unitPrice: ''
 })
+
+// ==================== 调用统计与轮数设置 ====================
+const usageRows = ref([])
+const usageOpen = ref(false)
+const usageLoading = ref(false)
+const usageTool = ref(null)
+const usageDetail = ref(null)
+const maxToolRounds = ref(5)
+const defaultRounds = ref(5)
+const roundOptions = ref([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+const savingRounds = ref(false)
+const EMPTY_USAGE = { today: 0, month: 0, total: 0, monthCost: 0 }
+
+const monthTotalCalls = computed(() => usageRows.value.reduce((sum, r) => sum + (r.month || 0), 0))
+const monthTotalCost = computed(() => formatMoney(usageRows.value.reduce((sum, r) => sum + Number(r.monthCost || 0), 0)))
+
+function usageOf(tool) {
+  return usageRows.value.find(r => r.toolId === tool.id || r.toolCode === tool.code) || EMPTY_USAGE
+}
+
+function formatMoney(value) {
+  return Number(value || 0).toFixed(2)
+}
+
+function formatRate(rate) {
+  return rate == null ? '—' : `${(rate * 100).toFixed(1)}%`
+}
+
+function barHeight(calls) {
+  const max = Math.max(1, ...(usageDetail.value?.daily || []).map(d => d.calls))
+  return calls ? `${Math.max(6, Math.round(calls / max * 100))}%` : '0'
+}
+
+async function loadUsage() {
+  try {
+    const res = await http.get('/api/platform-tools/usage')
+    if (res.success && Array.isArray(res.data)) usageRows.value = res.data
+  } catch {}
+}
+
+async function loadSettings() {
+  try {
+    const res = await http.get('/api/platform-tools/settings')
+    if (res.success && res.data) {
+      maxToolRounds.value = res.data.maxToolRounds
+      defaultRounds.value = res.data.default
+      const options = []
+      for (let n = res.data.min; n <= res.data.max; n++) options.push(n)
+      roundOptions.value = options
+    }
+  } catch {}
+}
+
+async function saveMaxToolRounds() {
+  savingRounds.value = true
+  const res = await http.put('/api/platform-tools/settings', { maxToolRounds: maxToolRounds.value })
+  savingRounds.value = false
+  if (res.success) {
+    showToast(res.message || '已保存', 'success', 2000)
+  } else {
+    showToast(res.message || '保存失败', 'error')
+    await loadSettings()
+  }
+}
+
+async function openUsage(tool) {
+  usageTool.value = tool
+  usageDetail.value = null
+  usageOpen.value = true
+  usageLoading.value = true
+  try {
+    const res = await http.get(`/api/platform-tools/${tool.id}/usage`)
+    if (res.success) usageDetail.value = res.data
+    else showToast(res.message || '加载统计失败', 'error')
+  } finally {
+    usageLoading.value = false
+  }
+}
 
 const categoryChips = [
   { id: 'ALL', label: '全部' },
@@ -485,11 +722,18 @@ const editorTip = computed(() => {
   if (isBocha(editing.value)) {
     return '必填：Bocha API Key。保存后所有智能体问天气、新闻时共用这一把密钥。'
   }
+  if (isDeepSeek(editing.value)) {
+    return 'DeepSeek 官方搜索接口，按次计费（约 0.005 元/次）。默认使用模型网关里 DeepSeek 通道的 Key，无需另外申请。'
+  }
   return '这里设置平台默认时区和时间格式。模型没指定时区时，按这个默认值执行。'
 })
 
 function isBocha(tool) {
   return !!tool && (tool.customIcon === 'bocha' || tool.prefix === 'bocha' || tool.code === 'bocha_web_search')
+}
+
+function isDeepSeek(tool) {
+  return !!tool && (tool.customIcon === 'deepseek' || tool.code === 'deepseek_web_search')
 }
 
 function isHttp(tool) {
@@ -502,6 +746,9 @@ function configPreview(tool) {
     const method = tool.config?.method || 'POST'
     const url = tool.config?.url || '未填写地址'
     return `${method} · ${url}`
+  }
+  if (isDeepSeek(tool)) {
+    return `${tool.hasApiKey ? '使用单独保存的 Key' : '使用模型网关的 DeepSeek Key'} · 返回 ${tool.config?.count || 5} 条`
   }
   if (isBocha(tool)) {
     const count = tool.config?.count || 5
@@ -566,7 +813,7 @@ async function loadTools() {
     }
   } catch (e) {
     paginateLocal(FALLBACK_PLATFORM_TOOLS)
-    showToast('加载工具目录失败，已回退内置 6 个工具', 'warning')
+    showToast('加载工具目录失败，已回退内置工具列表', 'warning')
   } finally {
     loading.value = false
   }
@@ -591,7 +838,7 @@ function paginateLocal(source) {
 }
 
 async function reloadAll() {
-  await Promise.all([loadTools(), loadStats()])
+  await Promise.all([loadTools(), loadStats(), loadUsage(), loadSettings()])
 }
 
 function changePage(delta) {
@@ -654,6 +901,7 @@ function resetForm() {
   form.method = 'POST'
   form.url = ''
   form.timeoutSeconds = 8
+  form.unitPrice = ''
 }
 
 function openCreate() {
@@ -689,6 +937,7 @@ function openEditor(tool) {
   form.method = tool.config?.method || 'POST'
   form.url = tool.config?.url || ''
   form.timeoutSeconds = Number(tool.config?.timeoutSeconds || 8)
+  form.unitPrice = tool.unitPrice == null ? '' : Number(tool.unitPrice)
   editorOpen.value = true
 }
 
@@ -712,7 +961,20 @@ async function testConnection() {
   }
 }
 
+function unitPricePayload() {
+  if (form.unitPrice === '' || form.unitPrice == null) return undefined
+  const price = Number(form.unitPrice)
+  return Number.isFinite(price) && price >= 0 ? price : undefined
+}
+
 function buildPayload() {
+  const payload = buildConfigPayload()
+  const price = unitPricePayload()
+  if (price !== undefined) payload.unitPrice = price
+  return payload
+}
+
+function buildConfigPayload() {
   if (creating.value || isHttp(editing.value)) {
     const payload = {
       name: form.name.trim(),
@@ -733,7 +995,9 @@ function buildPayload() {
     description: form.description,
     config: isBocha(editing.value)
       ? { count: form.count, freshness: form.freshness, summary: form.summary }
-      : { timezone: form.timezone, format: form.format }
+      : isDeepSeek(editing.value)
+        ? { count: form.count }
+        : { timezone: form.timezone, format: form.format }
   }
   if (form.apiKey && form.apiKey.trim()) {
     payload.apiKey = form.apiKey.trim()
@@ -789,3 +1053,221 @@ onMounted(() => {
   reloadAll()
 })
 </script>
+
+<style scoped>
+.tools-settings-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-card);
+}
+
+.tools-setting-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.tools-setting-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.tools-setting-select {
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12.5px;
+}
+
+.tools-setting-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tools-usage-total {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.tools-usage-total b {
+  color: var(--text-primary);
+}
+
+.tools-usage-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-subtle, transparent);
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tools-usage-line:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+
+.tools-usage-line b {
+  color: var(--text-primary);
+}
+
+.tools-usage-sep {
+  width: 1px;
+  height: 10px;
+  background: var(--border-color);
+}
+
+.tools-usage-more {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.tools-usage-link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--accent-blue);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.tools-usage-dialog {
+  max-width: 640px;
+}
+
+.usage-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.usage-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.usage-stat span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.usage-stat b {
+  font-size: 18px;
+  color: var(--text-primary);
+}
+
+.usage-stat small {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.usage-section-title {
+  margin: 18px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.usage-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 110px;
+}
+
+.usage-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+}
+
+.usage-bar-track {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.usage-bar-fill {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  background: var(--brand, var(--accent-blue));
+  opacity: 0.85;
+}
+
+.usage-bar-label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.usage-agent-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.usage-agent-table th,
+.usage-agent-table td {
+  padding: 7px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.usage-agent-table th {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.usage-fail {
+  color: var(--accent-amber);
+}
+
+.usage-empty,
+.usage-note {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.usage-note {
+  margin-top: 12px;
+}
+
+@media (max-width: 720px) {
+  .usage-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+</style>

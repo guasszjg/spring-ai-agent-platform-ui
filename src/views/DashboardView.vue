@@ -624,7 +624,7 @@
       </section>
 
       <section v-show="currentTab === 'tools'" class="app-subview active">
-        <ToolManagementPanel ref="toolsPanelRef" :can-manage="!isViewer" />
+        <ToolManagementPanel ref="toolsPanelRef" :can-manage="!isViewer" :is-super-admin="isSuperAdmin" />
       </section>
 
       <section v-show="currentTab === 'users'" class="app-subview active">
