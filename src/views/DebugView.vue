@@ -309,6 +309,16 @@
             <button
               type="button"
               class="memory-chip"
+              :class="{ off: !streamMode }"
+              :title="streamMode ? '流式输出：回答边生成边显示（与广告机终端的流式接口一致），点击切换为非流式' : '非流式：等回答全部生成后一次显示，点击切换为流式'"
+              @click="toggleStreamMode"
+            >
+              <i class="fa-solid fa-bolt"></i>
+              {{ streamMode ? '流式' : '非流式' }}
+            </button>
+            <button
+              type="button"
+              class="memory-chip"
               :class="{ off: !memoryTurns }"
               :title="memoryTurns ? `每次带上最近 ${memoryTurns} 轮问答，点击调整` : '上下文记忆已关闭，每次只发当前问题，点击调整'"
               @click="openSettings"
@@ -335,12 +345,13 @@
               <div class="msg-bubble" v-html="msg.html"></div>
               <div v-if="msg.meta" class="msg-meta-info">
                 <span><i class="fa-solid fa-microchip"></i> {{ msg.meta.model }}</span>
-                <span><i class="fa-regular fa-clock"></i> {{ msg.meta.latencyMs }}ms</span>
+                <span v-if="msg.meta.firstTokenMs != null" title="从发送到看到第一个字"><i class="fa-solid fa-bolt"></i> 首字 {{ msg.meta.firstTokenMs }}ms</span>
+                <span title="从发送到回答全部完成"><i class="fa-regular fa-clock"></i> {{ msg.meta.latencyMs }}ms</span>
                 <span><i class="fa-solid fa-ticket"></i> {{ msg.meta.tokensUsed }} Tokens</span>
               </div>
             </div>
           </div>
-          <div v-if="sending" class="chat-msg-row chat-msg-bot">
+          <div v-if="sending && !streamingActive" class="chat-msg-row chat-msg-bot">
             <div class="msg-avatar msg-avatar-bot"><AgentMascot :size="22" animated /></div>
             <div class="msg-content-wrapper">
               <div class="msg-bubble"><i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent-blue);"></i> {{ appliedSettings.thinking.value === 'ON' ? '思考中...' : '生成中...' }}</div>
@@ -1302,7 +1313,7 @@ async function sendChat() {
   const enabledToolNames = tools.filter(t => t.enabled).map(t => t.name)
   const bochaApiKey = tools.find(t => t.customIcon === 'bocha')?.config?.apiKey || localStorage.getItem(GLOBAL_BOCHA_KEY) || undefined
 
-  const res = await http.post(`/api/agents/${agent.value.id}/messages`, {
+  const payload = {
     message: text,
     prompt: prompt.value,
     history: priorHistory,
@@ -1313,7 +1324,13 @@ async function sendChat() {
     toolConfigs: {
       bochaApiKey
     }
-  })
+  }
+  if (streamMode.value) {
+    await sendStreaming(payload)
+    return
+  }
+
+  const res = await http.post(`/api/agents/${agent.value.id}/messages`, payload)
   sending.value = false
   if (res.success && res.data) {
     if (res.data.conversationId) conversationId.value = res.data.conversationId
@@ -1332,6 +1349,82 @@ async function sendChat() {
   }
   await nextTick()
   if (streamRef.value) streamRef.value.scrollTop = streamRef.value.scrollHeight
+}
+
+// 流式输出：回答边生成边显示；开关按浏览器记住，默认开启
+const STREAM_MODE_KEY = 'debug-stream-mode'
+const streamMode = ref((() => {
+  try { return localStorage.getItem(STREAM_MODE_KEY) !== 'false' } catch { return true }
+})())
+const streamingActive = ref(false)
+
+function toggleStreamMode() {
+  streamMode.value = !streamMode.value
+  try { localStorage.setItem(STREAM_MODE_KEY, String(streamMode.value)) } catch {}
+  showToast(streamMode.value ? '已切换为流式输出' : '已切换为非流式输出', 'success', 1600)
+}
+
+function scrollToBottom() {
+  nextTick(() => {
+    if (streamRef.value) streamRef.value.scrollTop = streamRef.value.scrollHeight
+  })
+}
+
+async function sendStreaming(payload) {
+  const started = performance.now()
+  let msg = null
+  let answer = ''
+  let firstTokenMs = null
+  let finished = false
+  let errorMessage = ''
+
+  const ensureMessage = () => {
+    if (!msg) {
+      messages.value.push({ role: 'assistant', html: '', tool: null, meta: null })
+      msg = messages.value[messages.value.length - 1]
+      streamingActive.value = true
+    }
+    return msg
+  }
+
+  const res = await http.stream(`/api/agents/${agent.value.id}/messages/stream`, payload, {
+    onEvent: (event, data) => {
+      if (event === 'message') {
+        if (firstTokenMs == null) firstTokenMs = Math.round(performance.now() - started)
+        answer += data?.answer || ''
+        ensureMessage().html = formatHtml(answer, false)
+        scrollToBottom()
+      } else if (event === 'message_end') {
+        const reply = data?.reply || answer
+        const m = ensureMessage()
+        m.html = formatHtml(reply, false)
+        m.tool = data?.toolCalled || null
+        m.meta = {
+          model: data?.model || routedModel.value,
+          latencyMs: data?.latencyMs ?? Math.round(performance.now() - started),
+          tokensUsed: data?.tokensUsed ?? 0,
+          firstTokenMs
+        }
+        if (data?.conversationId) conversationId.value = data.conversationId
+        history.value.push({ role: 'assistant', content: reply })
+        finished = true
+      } else if (event === 'error') {
+        errorMessage = data?.message || '对话异常'
+      }
+    }
+  })
+
+  sending.value = false
+  streamingActive.value = false
+  if (!finished) {
+    const reason = errorMessage || res.message || '连接中断，请重试'
+    if (msg && answer) {
+      msg.html = formatHtml(answer, false) + `<div class="msg-stream-error">（输出中断：${escapeHtml(reason)}）</div>`
+    } else {
+      messages.value.push({ role: 'assistant', html: `对话异常: ${escapeHtml(reason)}` })
+    }
+  }
+  scrollToBottom()
 }
 
 function optimizePrompt() {

@@ -2437,3 +2437,9 @@ input:checked + .slider-toggle:before {
     border-bottom: 1px solid var(--border-color);
   }
 }
+
+.msg-stream-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--accent-amber);
+}
