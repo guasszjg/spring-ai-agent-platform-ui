@@ -125,11 +125,11 @@
               </div>
               <div class="ms-row">
                 <span class="ms-switch-spacer"></span>
-                <div class="ms-label">思考模式 <i class="fa-regular fa-circle-question" title="保存到智能体，调试与线上调用都按此设置。跟随模型默认：不传思考参数（DeepSeek V4 默认会思考）；关闭：回答更快、更省 token；开启：复杂问题更严谨，但更慢。部分中转通道可能不支持开关。"></i></div>
+                <div class="ms-label">思考模式 <i class="fa-regular fa-circle-question" title="保存到智能体，调试与线上调用都按此设置。新建智能体默认关闭。跟随模型默认：不传思考参数（DeepSeek V4 默认会思考）；关闭：回答更快、更省 token；开启：复杂问题更严谨，但更慢。部分中转通道可能不支持开关。"></i></div>
                 <select v-model="settings.thinking.value" class="ms-select">
-                  <option value="AUTO">跟随模型默认</option>
-                  <option value="OFF">关闭</option>
+                  <option value="OFF">关闭（默认）</option>
                   <option value="ON">开启</option>
+                  <option value="AUTO">跟随模型默认</option>
                 </select>
               </div>
               <div class="ms-row ms-row-headers">
@@ -1719,7 +1719,7 @@ function createDefaultSettings() {
     memory: { enabled: false, value: 3 },
     webSearch: { enabled: false },
     // 思考模式保存在智能体上（AUTO / ON / OFF），线上调用也按它走，不走本地缓存
-    thinking: { value: 'AUTO' },
+    thinking: { value: 'OFF' },
     extraHeaders: { enabled: false, value: '' }
   }
 }
@@ -1745,7 +1745,7 @@ function applyAgentSettings(data) {
   settings.memory.enabled = turns > 0
   settings.memory.value = turns > 0 ? turns : 3
   Object.assign(appliedSettings.memory, settings.memory)
-  settings.thinking.value = data.thinkingMode || 'AUTO'
+  settings.thinking.value = data.thinkingMode || 'OFF'
   appliedSettings.thinking.value = settings.thinking.value
 }
 
