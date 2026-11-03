@@ -337,10 +337,11 @@
                 'test-btn-fail': testResult && !testResult.success
               }"
               :disabled="testing"
+              :title="testResult ? (testResult.success ? '上次测试通过，点击重新测试' : '上次测试失败，点击重新测试') : '测试连通性并拉取模型列表'"
               @click="testInModal"
             >
               <i :class="testing ? 'fa-solid fa-spinner fa-spin' : (testResult ? (testResult.success ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark') : 'fa-solid fa-plug-circle-check')"></i>
-              <span>{{ testing ? '测试中...' : (testResult ? (testResult.success ? '测试通过' : '测试失败') : '测试连通性') }}</span>
+              <span>{{ testing ? '测试中...' : (testResult ? '重新测试' : '测试连通性') }}</span>
             </button>
             <button type="submit" class="btn-create-agent" :disabled="saving">{{ saving ? '保存中...' : '保存' }}</button>
           </div>
