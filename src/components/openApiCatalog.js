@@ -14,7 +14,7 @@ const AGENT_SAMPLE = {
   avatar: '🤖',
   category: '产品支持',
   description: '为客户提供快速售后诊断与排错指南',
-  modelName: 'deepseek-v4-flash',
+  modelName: 'deepseek-flash',
   memoryTurns: 0,
   thinkingMode: 'OFF',
   status: 'RUNNING',
@@ -72,7 +72,7 @@ export const OPEN_API_GROUPS = [
           conversation_id: 'conv-5f0c2a9e81d34b7a',
           message_id: 'msg-1a2b3c4d',
           reply: '发布节目分三步：1. 在节目管理中选择节目；2. 进入日程安排设置播放时间；3. 选择终端并点击发布。',
-          model: 'deepseek-v4-flash',
+          model: 'deepseek-flash',
           tool_called: null,
           tokens_used: 1230,
           latency_ms: 1520,
@@ -143,7 +143,7 @@ export const OPEN_API_GROUPS = [
           { name: 'category', type: 'string', required: false, default: '通用智能', description: '业务分类' },
           { name: 'description', type: 'string', required: false, default: '为客户提供快速售后诊断与排错指南', description: '简介' },
           { name: 'systemPrompt', type: 'string', required: false, default: '你是一名资深技术支持专家，请用专业而亲切的口吻回答问题。', description: '系统提示词' },
-          { name: 'modelName', type: 'string', required: false, default: 'deepseek-v4-flash', description: '指定模型；不填时跟随模型网关的默认通道' },
+          { name: 'modelName', type: 'string', required: false, default: 'deepseek-flash', description: '指定模型；不填时跟随模型网关的默认通道' },
           { name: 'temperature', type: 'number', required: false, default: '0.7', description: '采样温度 (0~2)' },
           { name: 'memoryTurns', type: 'integer', required: false, default: '0', description: MEMORY_TURNS_DESC },
           { name: 'thinkingMode', type: 'string', required: false, default: 'OFF', description: THINKING_MODE_DESC },
@@ -521,7 +521,7 @@ export const OPEN_API_GROUPS = [
             title: '广告机怎么发布节目？',
             account: 'device-SN001',
             messageCount: 4,
-            lastModel: 'deepseek-v4-flash',
+            lastModel: 'deepseek-flash',
             totalTokens: 2480,
             createdAt: '2026-11-02T10:20:00',
             updatedAt: '2026-11-02T10:21:30'
@@ -540,7 +540,7 @@ export const OPEN_API_GROUPS = [
         ],
         exampleResponse: ok([
           { id: 'm-01', conversationId: 'conv-5f0c2a9e81d34b7a', role: 'user', content: '广告机怎么发布节目？', createdAt: '2026-11-02T10:20:00' },
-          { id: 'm-02', conversationId: 'conv-5f0c2a9e81d34b7a', role: 'assistant', content: '发布节目分三步……', model: 'deepseek-v4-flash', latencyMs: 1520, tokensUsed: 1230, createdAt: '2026-11-02T10:20:01' }
+          { id: 'm-02', conversationId: 'conv-5f0c2a9e81d34b7a', role: 'assistant', content: '发布节目分三步……', model: 'deepseek-flash', latencyMs: 1520, tokensUsed: 1230, createdAt: '2026-11-02T10:20:01' }
         ])
       },
       {

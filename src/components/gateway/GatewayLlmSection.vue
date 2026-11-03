@@ -229,7 +229,7 @@
                     v-model="form.defaultModel"
                     list="openAiModelOptions"
                     class="form-control-styled"
-                    placeholder="如 deepseek-v4-flash，可自由输入或从下拉选择"
+                    placeholder="如 deepseek-flash，可自由输入或从下拉选择"
                     required
                   >
                   <datalist id="openAiModelOptions">
@@ -584,7 +584,7 @@ function loadSampleOpenAiHeaders() {
     "app_id": "0JO1CFNCJ3",
     "device_mac": "66666"
   }, null, 2)
-  form.defaultModel = 'deepseek-v4-flash'
+  form.defaultModel = 'deepseek-flash'
   form.apiKey = ''
   form.openAiWebSearch = true
   showToast('已载入第三方 (鱼亮) Header 鉴权与联网搜索示例', 'info', 2000)
