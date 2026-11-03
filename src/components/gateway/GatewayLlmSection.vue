@@ -745,12 +745,15 @@ async function testInModal() {
   }
 
   const payload = {
+    // 编辑已有通道且没重新填 Key 时，后端按通道 ID 取已保存的密钥
+    providerId: form.id || undefined,
     vendor: form.vendor,
     protocol: form.protocol,
     baseUrl: form.baseUrl.trim(),
     apiKey: form.apiKey.trim(),
     apiKeyMasked: form.apiKeyMasked,
     model: form.defaultModel.trim(),
+    defaultModel: form.defaultModel.trim(),
     timeoutMs: form.timeoutMs,
     customConfig: form.protocol === 'CUSTOM_HTTP'
       ? JSON.stringify({
