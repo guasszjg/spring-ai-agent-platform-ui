@@ -160,6 +160,16 @@
 
     <main v-show="pageTab === 'orchestrate'" class="debug-main-layout" ref="layoutRef">
       <section class="orchestration-pane" ref="leftPane" :style="leftWidth ? { width: leftWidth + 'px' } : {}">
+        <div v-if="agent && !canEditAgent" class="readonly-agent-banner">
+          <i class="fa-solid fa-lock"></i>
+          <div class="readonly-agent-text">
+            <strong>{{ agent.isSystem ? '系统公共智能体' : '其他账号的智能体' }}，当前账号只能调试，修改不会保存</strong>
+            <span>工具、提示词、模型设置的改动只在本次调试中生效，离开页面后恢复原样。复制一份即可自由修改并保存（会带上当前的工具配置）。</span>
+          </div>
+          <button type="button" class="readonly-agent-copy" :disabled="copyingAgent" @click="copyToMyAgent">
+            <i class="fa-regular fa-copy"></i> {{ copyingAgent ? '复制中…' : '复制为我的智能体' }}
+          </button>
+        </div>
         <div class="config-card-section prompt-editor-card">
           <div class="section-header-row">
             <div class="section-title">
@@ -852,6 +862,40 @@ const timeVar = '{{system_time}}'
 const pageTab = ref('orchestrate')
 const agent = ref(null)
 
+// 与后端 ResourceAuthorizationService.canManageAgent 一致：超管可改全部；系统公共智能体只有超管能改；其余只能改自己的
+const currentUser = (() => {
+  try { return JSON.parse(localStorage.getItem('user') || '{}') } catch { return {} }
+})()
+const canEditAgent = computed(() => {
+  const a = agent.value
+  if (!a) return false
+  const role = currentUser.role
+  if (role === 'SUPER_ADMIN' || role === 'System Admin' || currentUser.username === 'admin') return true
+  if (role === 'VIEWER' || a.isSystem) return false
+  if (a.ownerId && currentUser.id) return a.ownerId === currentUser.id
+  if (a.ownerUsername && currentUser.username) return a.ownerUsername === currentUser.username
+  return false
+})
+const copyingAgent = ref(false)
+
+async function copyToMyAgent() {
+  if (!agent.value?.id || copyingAgent.value) return
+  copyingAgent.value = true
+  try {
+    const res = await http.post(`/api/agents/${agent.value.id}/copy`)
+    if (!res.success || !res.data?.id) {
+      showToast(res.message || '复制智能体失败', 'error')
+      return
+    }
+    // 把当前页面上调整过的工具带到副本上
+    await http.put(`/api/agents/${res.data.id}`, { ...res.data, toolsConfig: JSON.stringify(tools) })
+    showToast(`已复制为「${res.data.name}」，正在打开…`, 'success', 1800)
+    window.location.assign(`/debug/${res.data.id}`)
+  } finally {
+    copyingAgent.value = false
+  }
+}
+
 function onAgentUpdated(updatedAgent) {
   if (updatedAgent) {
     agent.value = { ...agent.value, ...updatedAgent }
@@ -1102,9 +1146,12 @@ function syncToolsConfig() {
   const toolsConfig = JSON.stringify(tools)
   localStorage.setItem(toolsStorageKey(agent.value.id), toolsConfig)
   agent.value.toolsConfig = toolsConfig
+  if (!canEditAgent.value) return // 只读智能体：改动只在本次调试中生效（页面顶部有提示）
   http.put(`/api/agents/${agent.value.id}`, {
     ...agent.value,
     toolsConfig
+  }).then(res => {
+    if (res && res.success === false) showToast(res.message || '工具配置保存失败', 'error', 4000)
   }).catch(err => console.warn('Auto sync toolsConfig failed:', err))
 }
 
