@@ -6,7 +6,7 @@ const body = (obj) => JSON.stringify(obj, null, 2)
 
 const MEMORY_TURNS_DESC = '上下文记忆轮数 (0~10)。0 = 关闭，每次只发当前问题，最省 token；需要连续追问时设 2~3，调用对话接口时带回 conversation_id 即可'
 
-const THINKING_MODE_DESC = '思考模式：AUTO 跟随模型默认（默认，不传思考参数）；OFF 关闭思考，回答更快、更省 token；ON 开启思考。部分中转通道可能不支持开关'
+const THINKING_MODE_DESC = '思考模式：OFF 关闭思考（默认），回答更快、更省 token；ON 开启思考，复杂问题更严谨但更慢；AUTO 跟随模型默认（不传思考参数）。部分中转通道可能不支持开关'
 
 const AGENT_SAMPLE = {
   id: 'agent-2e839a1c',
@@ -16,7 +16,7 @@ const AGENT_SAMPLE = {
   description: '为客户提供快速售后诊断与排错指南',
   modelName: 'deepseek-v4-flash',
   memoryTurns: 0,
-  thinkingMode: 'AUTO',
+  thinkingMode: 'OFF',
   status: 'RUNNING',
   isSystem: false,
   ownerUsername: 'developer',
@@ -146,7 +146,7 @@ export const OPEN_API_GROUPS = [
           { name: 'modelName', type: 'string', required: false, default: 'deepseek-v4-flash', description: '指定模型；不填时跟随模型网关的默认通道' },
           { name: 'temperature', type: 'number', required: false, default: '0.7', description: '采样温度 (0~2)' },
           { name: 'memoryTurns', type: 'integer', required: false, default: '0', description: MEMORY_TURNS_DESC },
-          { name: 'thinkingMode', type: 'string', required: false, default: 'AUTO', description: THINKING_MODE_DESC },
+          { name: 'thinkingMode', type: 'string', required: false, default: 'OFF', description: THINKING_MODE_DESC },
           { name: 'knowledgeBaseIds', type: 'array[string]', required: false, default: '[]', description: '要绑定的知识库 ID，需要对这些知识库有使用权限' }
         ],
         exampleBody: body({
@@ -177,7 +177,7 @@ export const OPEN_API_GROUPS = [
           { name: 'systemPrompt', type: 'string', required: false, default: '', description: '系统提示词（修改会记录一个提示词版本）' },
           { name: 'temperature', type: 'number', required: false, default: '0.5', description: '采样温度 (0~2)' },
           { name: 'memoryTurns', type: 'integer', required: false, default: '0', description: MEMORY_TURNS_DESC },
-          { name: 'thinkingMode', type: 'string', required: false, default: 'AUTO', description: THINKING_MODE_DESC }
+          { name: 'thinkingMode', type: 'string', required: false, default: 'OFF', description: THINKING_MODE_DESC }
         ],
         exampleBody: body({
           name: '售后技术顾问（新版）',
