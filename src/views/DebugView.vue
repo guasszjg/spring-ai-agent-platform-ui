@@ -1055,16 +1055,8 @@ function saveToolSettings() {
       }
     }
 
-    // 2. Persist this agent's tools configuration to localStorage
-    if (agent.value?.id) {
-      localStorage.setItem(toolsStorageKey(agent.value.id), JSON.stringify(tools))
-
-      // 3. Auto sync to backend PostgreSQL database
-      http.put(`/api/agents/${agent.value.id}`, {
-        ...agent.value,
-        toolsConfig: JSON.stringify(tools)
-      }).catch(err => console.warn('Auto sync toolsConfig failed:', err))
-    }
+    // 2. Persist this agent's tools configuration (localStorage + backend)
+    syncToolsConfig()
 
     showToast(`工具 [${editingTool.value.prefix} ${editingTool.value.title}] 配置已持久化保存`, 'success', 2000)
   }
@@ -1103,13 +1095,22 @@ function resetToolSettings() {
   showToast('已恢复默认配置', 'info', 1500)
 }
 
+// 工具列表变化后保存到智能体，同时更新页面持有的智能体数据：
+// 其它保存（模型设置、知识库、模型名同步等）都会带上 agent.value 的全部字段，若这里不更新，会把旧的工具列表写回去
+function syncToolsConfig() {
+  if (!agent.value?.id) return
+  const toolsConfig = JSON.stringify(tools)
+  localStorage.setItem(toolsStorageKey(agent.value.id), toolsConfig)
+  agent.value.toolsConfig = toolsConfig
+  http.put(`/api/agents/${agent.value.id}`, {
+    ...agent.value,
+    toolsConfig
+  }).catch(err => console.warn('Auto sync toolsConfig failed:', err))
+}
+
 function toggleToolEnabled(tool) {
   if (agent.value?.id) {
-    localStorage.setItem(toolsStorageKey(agent.value.id), JSON.stringify(tools))
-    http.put(`/api/agents/${agent.value.id}`, {
-      ...agent.value,
-      toolsConfig: JSON.stringify(tools)
-    }).catch(err => console.warn('Auto sync toolsConfig failed:', err))
+    syncToolsConfig()
   }
   showToast(`工具 [${tool.prefix} ${tool.title}] 已${tool.enabled ? '启用' : '禁用'}`, 'info', 1500)
 }
@@ -1119,11 +1120,7 @@ function deleteTool(tool) {
   if (idx !== -1) {
     tools.splice(idx, 1)
     if (agent.value?.id) {
-      localStorage.setItem(toolsStorageKey(agent.value.id), JSON.stringify(tools))
-      http.put(`/api/agents/${agent.value.id}`, {
-        ...agent.value,
-        toolsConfig: JSON.stringify(tools)
-      }).catch(err => console.warn('Auto sync toolsConfig failed:', err))
+      syncToolsConfig()
     }
     showToast(`已移除工具 [${tool.prefix} ${tool.title}]，可在「+ 添加」中重新添加`, 'info', 2500)
   }
@@ -1246,11 +1243,7 @@ function addToolFromCatalog(toolItem) {
   }
   tools.push(newTool)
   if (agent.value?.id) {
-    localStorage.setItem(toolsStorageKey(agent.value.id), JSON.stringify(tools))
-    http.put(`/api/agents/${agent.value.id}`, {
-      ...agent.value,
-      toolsConfig: JSON.stringify(tools)
-    }).catch(err => console.warn('Auto sync toolsConfig failed:', err))
+    syncToolsConfig()
   }
   showToast(`已成功添加工具 [${toolItem.prefix} ${toolItem.title}]`, 'success', 2000)
 }
