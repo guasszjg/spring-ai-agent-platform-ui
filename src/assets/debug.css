@@ -2504,3 +2504,22 @@ input:checked + .slider-toggle:before {
   color: var(--text-secondary);
   font-size: 12px;
 }
+
+/* 命中 FAQ 时随回答返回的附图 */
+.msg-faq-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.msg-faq-images a {
+  display: block;
+  line-height: 0;
+}
+.msg-faq-images img {
+  max-width: 220px;
+  max-height: 160px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  object-fit: cover;
+}
