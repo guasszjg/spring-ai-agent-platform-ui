@@ -1041,7 +1041,7 @@ while (true) {
 })
 
 const activeRespSnippet = computed(() => {
-  const currentModel = effectiveModel.value || 'deepseek-chat'
+  const currentModel = effectiveModel.value || 'deepseek-flash'
   if (respSampleMode.value === 'stream') {
     return `// 响应头: Content-Type: text/event-stream;charset=UTF-8
 

@@ -229,7 +229,7 @@
                     v-model="form.defaultModel"
                     list="openAiModelOptions"
                     class="form-control-styled"
-                    placeholder="如 deepseek-v4-flash，可自由输入或从下拉选择"
+                    placeholder="如 deepseek-flash，可自由输入或从下拉选择"
                     required
                   >
                   <datalist id="openAiModelOptions">
@@ -337,10 +337,11 @@
                 'test-btn-fail': testResult && !testResult.success
               }"
               :disabled="testing"
+              :title="testResult ? (testResult.success ? '上次测试通过，点击重新测试' : '上次测试失败，点击重新测试') : '测试连通性并拉取模型列表'"
               @click="testInModal"
             >
               <i :class="testing ? 'fa-solid fa-spinner fa-spin' : (testResult ? (testResult.success ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark') : 'fa-solid fa-plug-circle-check')"></i>
-              <span>{{ testing ? '测试中...' : (testResult ? (testResult.success ? '测试通过' : '测试失败') : '测试连通性') }}</span>
+              <span>{{ testing ? '测试中...' : (testResult ? '重新测试' : '测试连通性') }}</span>
             </button>
             <button type="submit" class="btn-create-agent" :disabled="saving">{{ saving ? '保存中...' : '保存' }}</button>
           </div>
@@ -583,7 +584,7 @@ function loadSampleOpenAiHeaders() {
     "app_id": "0JO1CFNCJ3",
     "device_mac": "66666"
   }, null, 2)
-  form.defaultModel = 'deepseek-v4-flash'
+  form.defaultModel = 'deepseek-flash'
   form.apiKey = ''
   form.openAiWebSearch = true
   showToast('已载入第三方 (鱼亮) Header 鉴权与联网搜索示例', 'info', 2000)
@@ -744,12 +745,15 @@ async function testInModal() {
   }
 
   const payload = {
+    // 编辑已有通道且没重新填 Key 时，后端按通道 ID 取已保存的密钥
+    providerId: form.id || undefined,
     vendor: form.vendor,
     protocol: form.protocol,
     baseUrl: form.baseUrl.trim(),
     apiKey: form.apiKey.trim(),
     apiKeyMasked: form.apiKeyMasked,
     model: form.defaultModel.trim(),
+    defaultModel: form.defaultModel.trim(),
     timeoutMs: form.timeoutMs,
     customConfig: form.protocol === 'CUSTOM_HTTP'
       ? JSON.stringify({
