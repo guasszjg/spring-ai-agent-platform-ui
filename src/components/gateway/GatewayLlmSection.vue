@@ -357,6 +357,7 @@ import { useToast } from '../../composables/useToast'
 import logoDeepseek from '../../assets/vendors/deepseek-color.svg'
 import logoQwen from '../../assets/vendors/qwen-color.svg'
 import logoHunyuan from '../../assets/vendors/hunyuan-color.svg'
+import logoZhipu from '../../assets/vendors/zhipu-color.svg'
 import logoDoubao from '../../assets/vendors/doubao-color.svg'
 import logoCustomHttp from '../../assets/vendors/custom-http-color.svg'
 import logoCustomOpenAi from '../../assets/vendors/custom-openai-color.svg'
@@ -426,6 +427,7 @@ function vendorLogo(item) {
       QIANWEN: logoQwen,
       TENCENT: logoHunyuan,
       BYTEDANCE: logoDoubao,
+      ZHIPU: logoZhipu,
       CUSTOM: logoCustom
     }[item] || logoCustom
   }
@@ -436,7 +438,8 @@ function vendorLogo(item) {
     DEEPSEEK: logoDeepseek,
     QIANWEN: logoQwen,
     TENCENT: logoHunyuan,
-    BYTEDANCE: logoDoubao
+    BYTEDANCE: logoDoubao,
+    ZHIPU: logoZhipu
   }[item.vendor] || logoCustom
 }
 
@@ -446,6 +449,7 @@ function vendorLabel(vendor) {
     QIANWEN: '通义千问',
     TENCENT: '腾讯混元',
     BYTEDANCE: '字节豆包',
+    ZHIPU: '智谱 GLM',
     CUSTOM: '自定义'
   }[vendor] || vendor
 }
