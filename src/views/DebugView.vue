@@ -160,6 +160,16 @@
 
     <main v-show="pageTab === 'orchestrate'" class="debug-main-layout" ref="layoutRef">
       <section class="orchestration-pane" ref="leftPane" :style="leftWidth ? { width: leftWidth + 'px' } : {}">
+        <div v-if="agent && !canEditAgent" class="readonly-agent-banner">
+          <i class="fa-solid fa-lock"></i>
+          <div class="readonly-agent-text">
+            <strong>{{ agent.isSystem ? '系统公共智能体' : '其他账号的智能体' }}，当前账号只能调试，修改不会保存</strong>
+            <span>工具、提示词、模型设置的改动只在本次调试中生效，离开页面后恢复原样。复制一份即可自由修改并保存（会带上当前的工具配置）。</span>
+          </div>
+          <button type="button" class="readonly-agent-copy" :disabled="copyingAgent" @click="copyToMyAgent">
+            <i class="fa-regular fa-copy"></i> {{ copyingAgent ? '复制中…' : '复制为我的智能体' }}
+          </button>
+        </div>
         <div class="config-card-section prompt-editor-card">
           <div class="section-header-row">
             <div class="section-title">
@@ -309,6 +319,16 @@
             <button
               type="button"
               class="memory-chip"
+              :class="{ off: !streamMode }"
+              :title="streamMode ? '流式输出：回答边生成边显示（与广告机终端的流式接口一致），点击切换为非流式' : '非流式：等回答全部生成后一次显示，点击切换为流式'"
+              @click="toggleStreamMode"
+            >
+              <i class="fa-solid fa-bolt"></i>
+              {{ streamMode ? '流式' : '非流式' }}
+            </button>
+            <button
+              type="button"
+              class="memory-chip"
               :class="{ off: !memoryTurns }"
               :title="memoryTurns ? `每次带上最近 ${memoryTurns} 轮问答，点击调整` : '上下文记忆已关闭，每次只发当前问题，点击调整'"
               @click="openSettings"
@@ -333,17 +353,21 @@
             <div class="msg-content-wrapper">
               <div v-if="msg.tool" class="msg-tool-chip"><i class="fa-solid fa-circle-check" style="color: var(--accent-emerald);"></i> 工具调用: {{ msg.tool }}</div>
               <div class="msg-bubble" v-html="msg.html"></div>
+              <div v-if="msg.streaming && streamWaitSec" class="msg-stream-wait">
+                <i class="fa-solid fa-circle-notch fa-spin"></i> 等待模型继续输出… {{ streamWaitSec }}s（模型可能在思考、联网搜索，或通道繁忙排队中）
+              </div>
               <div v-if="msg.meta" class="msg-meta-info">
                 <span><i class="fa-solid fa-microchip"></i> {{ msg.meta.model }}</span>
-                <span><i class="fa-regular fa-clock"></i> {{ msg.meta.latencyMs }}ms</span>
+                <span v-if="msg.meta.firstTokenMs != null" title="从发送到看到第一个字"><i class="fa-solid fa-bolt"></i> 首字 {{ msg.meta.firstTokenMs }}ms</span>
+                <span title="从发送到回答全部完成"><i class="fa-regular fa-clock"></i> {{ msg.meta.latencyMs }}ms</span>
                 <span><i class="fa-solid fa-ticket"></i> {{ msg.meta.tokensUsed }} Tokens</span>
               </div>
             </div>
           </div>
-          <div v-if="sending" class="chat-msg-row chat-msg-bot">
+          <div v-if="sending && !streamingActive" class="chat-msg-row chat-msg-bot">
             <div class="msg-avatar msg-avatar-bot"><AgentMascot :size="22" animated /></div>
             <div class="msg-content-wrapper">
-              <div class="msg-bubble"><i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent-blue);"></i> {{ appliedSettings.thinking.value === 'ON' ? '思考中...' : '生成中...' }}</div>
+              <div class="msg-bubble"><i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent-blue);"></i> {{ appliedSettings.thinking.value !== 'OFF' ? '思考中...' : '生成中...' }}<span v-if="streamWaitSec" class="msg-wait-sec"> {{ streamWaitSec }}s</span></div>
             </div>
           </div>
         </div>
@@ -841,6 +865,40 @@ const timeVar = '{{system_time}}'
 const pageTab = ref('orchestrate')
 const agent = ref(null)
 
+// 与后端 ResourceAuthorizationService.canManageAgent 一致：超管可改全部；系统公共智能体只有超管能改；其余只能改自己的
+const currentUser = (() => {
+  try { return JSON.parse(localStorage.getItem('user') || '{}') } catch { return {} }
+})()
+const canEditAgent = computed(() => {
+  const a = agent.value
+  if (!a) return false
+  const role = currentUser.role
+  if (role === 'SUPER_ADMIN' || role === 'System Admin' || currentUser.username === 'admin') return true
+  if (role === 'VIEWER' || a.isSystem) return false
+  if (a.ownerId && currentUser.id) return a.ownerId === currentUser.id
+  if (a.ownerUsername && currentUser.username) return a.ownerUsername === currentUser.username
+  return false
+})
+const copyingAgent = ref(false)
+
+async function copyToMyAgent() {
+  if (!agent.value?.id || copyingAgent.value) return
+  copyingAgent.value = true
+  try {
+    const res = await http.post(`/api/agents/${agent.value.id}/copy`)
+    if (!res.success || !res.data?.id) {
+      showToast(res.message || '复制智能体失败', 'error')
+      return
+    }
+    // 把当前页面上调整过的工具带到副本上
+    await http.put(`/api/agents/${res.data.id}`, { ...res.data, toolsConfig: JSON.stringify(tools) })
+    showToast(`已复制为「${res.data.name}」，正在打开…`, 'success', 1800)
+    window.location.assign(`/debug/${res.data.id}`)
+  } finally {
+    copyingAgent.value = false
+  }
+}
+
 function onAgentUpdated(updatedAgent) {
   if (updatedAgent) {
     agent.value = { ...agent.value, ...updatedAgent }
@@ -1044,16 +1102,8 @@ function saveToolSettings() {
       }
     }
 
-    // 2. Persist this agent's tools configuration to localStorage
-    if (agent.value?.id) {
-      localStorage.setItem(toolsStorageKey(agent.value.id), JSON.stringify(tools))
-
-      // 3. Auto sync to backend PostgreSQL database
-      http.put(`/api/agents/${agent.value.id}`, {
-        ...agent.value,
-        toolsConfig: JSON.stringify(tools)
-      }).catch(err => console.warn('Auto sync toolsConfig failed:', err))
-    }
+    // 2. Persist this agent's tools configuration (localStorage + backend)
+    syncToolsConfig()
 
     showToast(`工具 [${editingTool.value.prefix} ${editingTool.value.title}] 配置已持久化保存`, 'success', 2000)
   }
@@ -1092,13 +1142,25 @@ function resetToolSettings() {
   showToast('已恢复默认配置', 'info', 1500)
 }
 
+// 工具列表变化后保存到智能体，同时更新页面持有的智能体数据：
+// 其它保存（模型设置、知识库、模型名同步等）都会带上 agent.value 的全部字段，若这里不更新，会把旧的工具列表写回去
+function syncToolsConfig() {
+  if (!agent.value?.id) return
+  const toolsConfig = JSON.stringify(tools)
+  localStorage.setItem(toolsStorageKey(agent.value.id), toolsConfig)
+  agent.value.toolsConfig = toolsConfig
+  if (!canEditAgent.value) return // 只读智能体：改动只在本次调试中生效（页面顶部有提示）
+  http.put(`/api/agents/${agent.value.id}`, {
+    ...agent.value,
+    toolsConfig
+  }).then(res => {
+    if (res && res.success === false) showToast(res.message || '工具配置保存失败', 'error', 4000)
+  }).catch(err => console.warn('Auto sync toolsConfig failed:', err))
+}
+
 function toggleToolEnabled(tool) {
   if (agent.value?.id) {
-    localStorage.setItem(toolsStorageKey(agent.value.id), JSON.stringify(tools))
-    http.put(`/api/agents/${agent.value.id}`, {
-      ...agent.value,
-      toolsConfig: JSON.stringify(tools)
-    }).catch(err => console.warn('Auto sync toolsConfig failed:', err))
+    syncToolsConfig()
   }
   showToast(`工具 [${tool.prefix} ${tool.title}] 已${tool.enabled ? '启用' : '禁用'}`, 'info', 1500)
 }
@@ -1108,11 +1170,7 @@ function deleteTool(tool) {
   if (idx !== -1) {
     tools.splice(idx, 1)
     if (agent.value?.id) {
-      localStorage.setItem(toolsStorageKey(agent.value.id), JSON.stringify(tools))
-      http.put(`/api/agents/${agent.value.id}`, {
-        ...agent.value,
-        toolsConfig: JSON.stringify(tools)
-      }).catch(err => console.warn('Auto sync toolsConfig failed:', err))
+      syncToolsConfig()
     }
     showToast(`已移除工具 [${tool.prefix} ${tool.title}]，可在「+ 添加」中重新添加`, 'info', 2500)
   }
@@ -1235,11 +1293,7 @@ function addToolFromCatalog(toolItem) {
   }
   tools.push(newTool)
   if (agent.value?.id) {
-    localStorage.setItem(toolsStorageKey(agent.value.id), JSON.stringify(tools))
-    http.put(`/api/agents/${agent.value.id}`, {
-      ...agent.value,
-      toolsConfig: JSON.stringify(tools)
-    }).catch(err => console.warn('Auto sync toolsConfig failed:', err))
+    syncToolsConfig()
   }
   showToast(`已成功添加工具 [${toolItem.prefix} ${toolItem.title}]`, 'success', 2000)
 }
@@ -1302,7 +1356,7 @@ async function sendChat() {
   const enabledToolNames = tools.filter(t => t.enabled).map(t => t.name)
   const bochaApiKey = tools.find(t => t.customIcon === 'bocha')?.config?.apiKey || localStorage.getItem(GLOBAL_BOCHA_KEY) || undefined
 
-  const res = await http.post(`/api/agents/${agent.value.id}/messages`, {
+  const payload = {
     message: text,
     prompt: prompt.value,
     history: priorHistory,
@@ -1313,7 +1367,13 @@ async function sendChat() {
     toolConfigs: {
       bochaApiKey
     }
-  })
+  }
+  if (streamMode.value) {
+    await sendStreaming(payload)
+    return
+  }
+
+  const res = await http.post(`/api/agents/${agent.value.id}/messages`, payload)
   sending.value = false
   if (res.success && res.data) {
     if (res.data.conversationId) conversationId.value = res.data.conversationId
@@ -1332,6 +1392,96 @@ async function sendChat() {
   }
   await nextTick()
   if (streamRef.value) streamRef.value.scrollTop = streamRef.value.scrollHeight
+}
+
+// 流式输出：回答边生成边显示；开关按浏览器记住，默认开启
+const STREAM_MODE_KEY = 'debug-stream-mode'
+const streamMode = ref((() => {
+  try { return localStorage.getItem(STREAM_MODE_KEY) !== 'false' } catch { return true }
+})())
+const streamingActive = ref(false)
+// 流式输出时距上一次收到内容的秒数（≥3 秒才显示），让用户知道还在等，而不是卡死
+const streamWaitSec = ref(0)
+
+function toggleStreamMode() {
+  streamMode.value = !streamMode.value
+  try { localStorage.setItem(STREAM_MODE_KEY, String(streamMode.value)) } catch {}
+  showToast(streamMode.value ? '已切换为流式输出' : '已切换为非流式输出', 'success', 1600)
+}
+
+function scrollToBottom() {
+  nextTick(() => {
+    if (streamRef.value) streamRef.value.scrollTop = streamRef.value.scrollHeight
+  })
+}
+
+async function sendStreaming(payload) {
+  const started = performance.now()
+  let msg = null
+  let answer = ''
+  let firstTokenMs = null
+  let finished = false
+  let errorMessage = ''
+
+  const ensureMessage = () => {
+    if (!msg) {
+      messages.value.push({ role: 'assistant', html: '', tool: null, meta: null, streaming: true })
+      msg = messages.value[messages.value.length - 1]
+      streamingActive.value = true
+    }
+    return msg
+  }
+
+  let lastOutputAt = started
+  streamWaitSec.value = 0
+  const waitTimer = setInterval(() => {
+    const sec = Math.floor((performance.now() - lastOutputAt) / 1000)
+    streamWaitSec.value = sec >= 3 ? sec : 0
+  }, 500)
+
+  const res = await http.stream(`/api/agents/${agent.value.id}/messages/stream`, payload, {
+    onEvent: (event, data) => {
+      if (event === 'message') {
+        lastOutputAt = performance.now()
+        streamWaitSec.value = 0
+        if (firstTokenMs == null) firstTokenMs = Math.round(performance.now() - started)
+        answer += data?.answer || ''
+        ensureMessage().html = formatHtml(answer, false)
+        scrollToBottom()
+      } else if (event === 'message_end') {
+        const reply = data?.reply || answer
+        const m = ensureMessage()
+        m.html = formatHtml(reply, false)
+        m.tool = data?.toolCalled || null
+        m.meta = {
+          model: data?.model || routedModel.value,
+          latencyMs: data?.latencyMs ?? Math.round(performance.now() - started),
+          tokensUsed: data?.tokensUsed ?? 0,
+          firstTokenMs
+        }
+        if (data?.conversationId) conversationId.value = data.conversationId
+        history.value.push({ role: 'assistant', content: reply })
+        finished = true
+      } else if (event === 'error') {
+        errorMessage = data?.message || '对话异常'
+      }
+    }
+  })
+
+  clearInterval(waitTimer)
+  streamWaitSec.value = 0
+  if (msg) msg.streaming = false
+  sending.value = false
+  streamingActive.value = false
+  if (!finished) {
+    const reason = errorMessage || res.message || '连接中断，请重试'
+    if (msg && answer) {
+      msg.html = formatHtml(answer, false) + `<div class="msg-stream-error">（输出中断：${escapeHtml(reason)}）</div>`
+    } else {
+      messages.value.push({ role: 'assistant', html: `对话异常: ${escapeHtml(reason)}` })
+    }
+  }
+  scrollToBottom()
 }
 
 function optimizePrompt() {

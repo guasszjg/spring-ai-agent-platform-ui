@@ -2437,3 +2437,70 @@ input:checked + .slider-toggle:before {
     border-bottom: 1px solid var(--border-color);
   }
 }
+
+.msg-stream-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--accent-amber);
+}
+
+/* 只读智能体提示条（系统公共 / 他人的智能体） */
+.readonly-agent-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.08);
+  color: var(--accent-amber);
+  font-size: 12px;
+}
+.readonly-agent-banner > i {
+  margin-top: 2px;
+}
+.readonly-agent-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.readonly-agent-text span {
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.readonly-agent-copy {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent-amber);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.readonly-agent-copy:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.15);
+}
+.readonly-agent-copy:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* 流式输出等待提示 */
+.msg-stream-wait {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.msg-stream-wait i {
+  margin-right: 4px;
+  color: var(--accent-blue);
+}
+.msg-wait-sec {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
