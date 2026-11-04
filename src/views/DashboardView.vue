@@ -666,9 +666,9 @@
             <label class="form-label">行业模板</label>
             <TemplatePicker ref="templatePickerRef" @select="applyTemplate" />
           </div>
-          <div class="form-row-2">
+          <div :class="{ 'form-row-2': form.id }">
             <div class="form-group"><label class="form-label">智能体名称 *</label><input v-model="form.name" class="form-control-styled" required></div>
-            <div class="form-group"><label class="form-label">唯一业务标识 Code{{ form.id ? ' *' : '' }}</label><input v-model="form.code" class="form-control-styled" :required="!!form.id" :placeholder="form.id ? '' : '留空自动生成'"></div>
+            <div v-if="form.id" class="form-group"><label class="form-label">唯一业务标识 Code</label><input :value="form.code" class="form-control-styled" readonly title="由系统生成，不可修改"></div>
           </div>
           <div class="form-row-2">
             <div class="form-group">
@@ -1694,7 +1694,6 @@ function onUseTemplateFromPanel(t) {
 function applyTemplate(t) {
   if (!t) return
   form.name = t.name || ''
-  form.code = ''
   form.category = t.category || '通用智能'
   form.modelName = routedModel.value || ''
   form.systemPrompt = t.systemPrompt || ''
@@ -1707,7 +1706,7 @@ function applyTemplate(t) {
 async function saveAgent() {
   saving.value = true
   const payload = {
-    name: form.name.trim(), code: form.code.trim(), avatar: form.avatar, category: form.category,
+    name: form.name.trim(), avatar: form.avatar, category: form.category,
     modelName: routedModel.value || form.modelName, temperature: form.temperature, status: form.status,
     systemPrompt: form.systemPrompt.trim(), description: form.description.trim(),
     tags: form.tagsText ? form.tagsText.split(/[,，]/).map((t) => t.trim()).filter(Boolean) : []
