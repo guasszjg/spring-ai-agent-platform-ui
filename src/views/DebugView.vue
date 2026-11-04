@@ -361,6 +361,9 @@
               <div v-if="msg.streaming && streamWaitSec" class="msg-stream-wait">
                 <i class="fa-solid fa-circle-notch fa-spin"></i> 等待模型继续输出… {{ streamWaitSec }}s（模型可能在思考、联网搜索，或通道繁忙排队中）
               </div>
+              <div v-if="msg.meta && msg.meta.failoverFrom" class="msg-failover-note">
+                <i class="fa-solid fa-triangle-exclamation"></i> 主通道「{{ msg.meta.failoverFrom }}」调用失败，本次已切换到备用通道（{{ msg.meta.model }}）回答，原因见后端日志
+              </div>
               <div v-if="msg.meta" class="msg-meta-info">
                 <span><i class="fa-solid fa-microchip"></i> {{ msg.meta.model }}</span>
                 <span v-if="msg.meta.firstTokenMs != null" title="从发送到看到第一个字"><i class="fa-solid fa-bolt"></i> 首字 {{ msg.meta.firstTokenMs }}ms</span>
@@ -1389,7 +1392,7 @@ async function sendChat() {
       html: formatHtml(reply, false),
       tool,
       images: res.data.images || [],
-      meta: { model: res.data.model || routedModel.value, latencyMs: res.data.latencyMs || 240, tokensUsed: res.data.tokensUsed || 150 }
+      meta: { model: res.data.model || routedModel.value, latencyMs: res.data.latencyMs || 240, tokensUsed: res.data.tokensUsed || 150, failoverFrom: res.data.failoverFrom || '' }
     })
     history.value.push({ role: 'assistant', content: reply })
     speedText.value = `↑ 0.1 K/s  ↓ ${(Math.random() * 2.2 + 1.1).toFixed(1)} K/s`
@@ -1464,7 +1467,8 @@ async function sendStreaming(payload) {
           model: data?.model || routedModel.value,
           latencyMs: data?.latencyMs ?? Math.round(performance.now() - started),
           tokensUsed: data?.tokensUsed ?? 0,
-          firstTokenMs
+          firstTokenMs,
+          failoverFrom: data?.failoverFrom || ''
         }
         if (data?.conversationId) conversationId.value = data.conversationId
         history.value.push({ role: 'assistant', content: reply })

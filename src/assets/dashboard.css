@@ -698,6 +698,16 @@
 /* ========================================================
    3. View 1: Overview (主页 / Token 统计与数据可视化大屏)
    ======================================================== */
+.overview-failover-note {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--accent-amber);
+  background: rgba(245, 158, 11, 0.1);
+}
+
 .overview-hero-row {
   display: flex;
   align-items: center;

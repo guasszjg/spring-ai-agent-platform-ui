@@ -188,7 +188,7 @@
         <div class="overview-hero-row">
           <div class="overview-heading">
             <h2>用量与成本</h2>
-            <p v-if="isSuperAdmin">全平台 Token 用量、调用趋势与成本</p>
+            <p v-if="isSuperAdmin">全平台 Token 用量、调用趋势与成本<template v-if="Number(stats.deletedAgentTokens || 0) > 0">，含已删除智能体 {{ formatToken(stats.deletedAgentTokens) }} Token</template></p>
             <p v-else>仅统计你名下智能体的 Token、调用与成本，不含平台公共智能体</p>
           </div>
           <div class="overview-date-filter">
@@ -196,6 +196,10 @@
             <button class="btn-time-range" :class="{ active: timeRange === '7days' }" @click="changeRange('7days')">近7天</button>
             <button class="btn-time-range" :class="{ active: timeRange === '30days' }" @click="changeRange('30days')">近30天</button>
           </div>
+        </div>
+        <div v-if="Number(stats.failoverCount || 0) > 0" class="overview-failover-note">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          所选时间内有 {{ Number(stats.failoverCount).toLocaleString() }} 次调用因主通道失败切换到了备用通道，请到「大语言模型」检查主通道。
         </div>
         <div class="token-stats-grid">
           <div class="token-stat-card token-card-blue">
@@ -222,7 +226,7 @@
             <div class="token-stat-card token-card-amber">
             <div class="token-card-header"><span class="token-card-title">预估成本</span><div class="token-card-icon icon-amber"><i class="fa-solid fa-coins"></i></div></div>
             <div class="token-card-val">{{ formatCny(stats.estimatedCostCny) }}</div>
-            <div class="token-card-footer"><span>按模型官方定价估算</span></div>
+            <div class="token-card-footer"><span>按官方定价估算，不含向量化、重排和联网搜索</span></div>
           </div>
         </div>
         <div class="charts-grid-row">
@@ -238,7 +242,7 @@
         <div class="charts-grid-row-equal">
           <div class="chart-card-box">
             <div class="chart-header">
-              <div class="chart-title-group"><h3><i class="fa-solid fa-ranking-star" style="color: #f59e0b;"></i> 调用排行</h3><p>按调用次数</p></div>
+              <div class="chart-title-group"><h3><i class="fa-solid fa-ranking-star" style="color: #f59e0b;"></i> 调用排行</h3><p>所选时间内的调用次数</p></div>
               <button class="btn-filter-pill" @click="currentTab = 'agents'">查看全部 →</button>
             </div>
             <div class="ranking-list-card">

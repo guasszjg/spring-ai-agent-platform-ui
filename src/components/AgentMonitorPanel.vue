@@ -50,7 +50,7 @@
           <div class="token-card-icon icon-amber"><i class="fa-solid fa-stopwatch"></i></div>
         </div>
         <div class="token-card-val">{{ stats.avgResponseTimeMs || 0 }}<span class="token-unit">ms</span></div>
-        <div class="token-card-footer"><span>调用 {{ Number(stats.callCount || 0).toLocaleString() }} 次</span></div>
+        <div class="token-card-footer"><span>调用 {{ Number(stats.callCount || 0).toLocaleString() }} 次<template v-if="Number(stats.failoverCount || 0) > 0">，其中 {{ Number(stats.failoverCount).toLocaleString() }} 次切到备用通道</template></span></div>
       </div>
     </div>
 
