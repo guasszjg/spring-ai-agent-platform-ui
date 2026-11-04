@@ -668,7 +668,7 @@
           </div>
           <div class="form-row-2">
             <div class="form-group"><label class="form-label">智能体名称 *</label><input v-model="form.name" class="form-control-styled" required></div>
-            <div class="form-group"><label class="form-label">唯一业务标识 Code *</label><input v-model="form.code" class="form-control-styled" required></div>
+            <div class="form-group"><label class="form-label">唯一业务标识 Code{{ form.id ? ' *' : '' }}</label><input v-model="form.code" class="form-control-styled" :required="!!form.id" :placeholder="form.id ? '' : '留空自动生成'"></div>
           </div>
           <div class="form-row-2">
             <div class="form-group">
@@ -1025,10 +1025,6 @@ const formCategoryOptions = computed(() => {
 })
 
 // 由名称生成业务编码：有英文/数字时用其 slug，纯中文名称则用时间戳后缀，避免生成一串下划线
-function makeAgentCode(name) {
-  const slug = String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
-  return 'agent_' + (slug || Date.now().toString(36))
-}
 const emojis = ['🤖', '🚀', '⚡', '🛡️', '✨', '🎨', '📋', '🌐', '💻', '🧠', '📊']
 const form = reactive({
   id: '', name: '', code: '', category: '通用智能', modelName: '',
@@ -1698,7 +1694,7 @@ function onUseTemplateFromPanel(t) {
 function applyTemplate(t) {
   if (!t) return
   form.name = t.name || ''
-  form.code = makeAgentCode(t.name)
+  form.code = ''
   form.category = t.category || '通用智能'
   form.modelName = routedModel.value || ''
   form.systemPrompt = t.systemPrompt || ''
