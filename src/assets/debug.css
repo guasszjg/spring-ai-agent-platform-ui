@@ -2044,6 +2044,12 @@ input:checked + .slider-toggle:before {
   font-family: monospace;
 }
 
+.msg-failover-note {
+  font-size: 12px;
+  color: var(--accent-amber);
+  line-height: 1.5;
+}
+
 .msg-meta-info {
   font-size: 11px;
   color: var(--text-muted);
