@@ -1055,7 +1055,7 @@ event: message
 data: {"event":"message","conversation_id":"conv-8f2a1b9c","message_id":"msg-4a1d9c2e","answer":"您的智能助手。","created_at":1741234567}
 
 event: message_end
-data: {"event":"message_end","conversation_id":"conv-8f2a1b9c","message_id":"msg-4a1d9c2e","metadata":{"model":"${currentModel}","tokens_used":48,"latency_ms":312,"tool_called":null}}`
+data: {"event":"message_end","conversation_id":"conv-8f2a1b9c","message_id":"msg-4a1d9c2e","images":[],"metadata":{"model":"${currentModel}","tokens_used":48,"latency_ms":312,"tool_called":null}}`
   }
 
   return `// 响应头: Content-Type: application/json;charset=UTF-8
@@ -1068,6 +1068,7 @@ data: {"event":"message_end","conversation_id":"conv-8f2a1b9c","message_id":"msg
     "conversation_id": "conv-8f2a1b9c",
     "message_id": "msg-4a1d9c2e",
     "reply": "您好！我是您的智能助手，具备联网检索、代码编写和实时问答等能力，请问今天有什么可以帮您？",
+    "images": [],
     "model": "${currentModel}",
     "tool_called": null,
     "tokens_used": 68,

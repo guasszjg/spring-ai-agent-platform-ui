@@ -53,7 +53,7 @@ export const OPEN_API_GROUPS = [
         method: 'POST',
         path: '/chat-messages',
         scope: 'chat',
-        description: '向智能体提问。blocking 返回完整 JSON；streaming 以 SSE 边生成边推送，事件依次为 message（answer 为一段文本，依次拼接）、message_end（含 model、tokens_used、latency_ms），输出命中护栏时为 guardrail，失败时为 error。平台会自动检索智能体绑定的知识库，并做输入 / 输出安全检查。',
+        description: '向智能体提问。blocking 返回完整 JSON；streaming 以 SSE 边生成边推送，事件依次为 message（answer 为一段文本，依次拼接）、message_end（含 images、model、tokens_used、latency_ms），输出命中护栏时为 guardrail，失败时为 error。平台会自动检索智能体绑定的知识库，并做输入 / 输出安全检查。回答命中带图的 FAQ 时，images 返回得分最高那条 FAQ 的附图完整网址（无则为空数组），终端可直接显示。',
         bodyFields: [
           { name: 'agent_id', type: 'string', required: false, default: 'agent-2e839a1c', description: '目标智能体 ID 或编码（兼容 agentId）。凭证范围只有一个智能体时可省略' },
           { name: 'message', type: 'string', required: true, default: '广告机怎么发布节目？', description: '用户问题（兼容 query、prompt、input、content、question）' },
@@ -72,6 +72,7 @@ export const OPEN_API_GROUPS = [
           conversation_id: 'conv-5f0c2a9e81d34b7a',
           message_id: 'msg-1a2b3c4d',
           reply: '发布节目分三步：1. 在节目管理中选择节目；2. 进入日程安排设置播放时间；3. 选择终端并点击发布。',
+          images: ['https://ai.example.com/uploads/knowledge/img_1793600000000_a1b2c3d4.png'],
           model: 'deepseek-flash',
           tool_called: null,
           tokens_used: 1230,

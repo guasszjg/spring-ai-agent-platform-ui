@@ -353,6 +353,11 @@
             <div class="msg-content-wrapper">
               <div v-if="msg.tool" class="msg-tool-chip"><i class="fa-solid fa-circle-check" style="color: var(--accent-emerald);"></i> 工具调用: {{ msg.tool }}</div>
               <div class="msg-bubble" v-html="msg.html"></div>
+              <div v-if="msg.images && msg.images.length" class="msg-faq-images">
+                <a v-for="src in msg.images" :key="src" :href="src" target="_blank" rel="noopener" title="FAQ 回答附图，点击查看原图">
+                  <img :src="src" alt="FAQ 回答附图" loading="lazy" />
+                </a>
+              </div>
               <div v-if="msg.streaming && streamWaitSec" class="msg-stream-wait">
                 <i class="fa-solid fa-circle-notch fa-spin"></i> 等待模型继续输出… {{ streamWaitSec }}s（模型可能在思考、联网搜索，或通道繁忙排队中）
               </div>
@@ -1383,6 +1388,7 @@ async function sendChat() {
       role: 'assistant',
       html: formatHtml(reply, false),
       tool,
+      images: res.data.images || [],
       meta: { model: res.data.model || routedModel.value, latencyMs: res.data.latencyMs || 240, tokensUsed: res.data.tokensUsed || 150 }
     })
     history.value.push({ role: 'assistant', content: reply })
@@ -1453,6 +1459,7 @@ async function sendStreaming(payload) {
         const m = ensureMessage()
         m.html = formatHtml(reply, false)
         m.tool = data?.toolCalled || null
+        m.images = data?.images || []
         m.meta = {
           model: data?.model || routedModel.value,
           latencyMs: data?.latencyMs ?? Math.round(performance.now() - started),
