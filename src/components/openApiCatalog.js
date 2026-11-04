@@ -140,7 +140,6 @@ export const OPEN_API_GROUPS = [
         description: '在凭证所属开发者名下创建智能体。',
         bodyFields: [
           { name: 'name', type: 'string', required: true, default: '售后技术顾问', description: '智能体名称' },
-          { name: 'code', type: 'string', required: false, default: 'tech_support_v1', description: '业务编码，全局唯一（字母、数字、下划线）' },
           { name: 'category', type: 'string', required: false, default: '通用智能', description: '业务分类' },
           { name: 'description', type: 'string', required: false, default: '为客户提供快速售后诊断与排错指南', description: '简介' },
           { name: 'systemPrompt', type: 'string', required: false, default: '你是一名资深技术支持专家，请用专业而亲切的口吻回答问题。', description: '系统提示词' },
@@ -152,7 +151,6 @@ export const OPEN_API_GROUPS = [
         ],
         exampleBody: body({
           name: '售后技术顾问',
-          code: 'tech_support_v1',
           category: '产品支持',
           description: '为客户提供快速售后诊断与排错指南',
           systemPrompt: '你是一名资深技术支持专家，请用专业而亲切的口吻回答问题。',
