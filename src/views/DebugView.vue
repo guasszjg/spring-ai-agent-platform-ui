@@ -352,7 +352,7 @@
             </div>
             <div class="msg-content-wrapper">
               <div v-if="msg.tool" class="msg-tool-chip"><i class="fa-solid fa-circle-check" style="color: var(--accent-emerald);"></i> 工具调用: {{ msg.tool }}</div>
-              <div class="msg-bubble" v-html="msg.html"></div>
+              <div class="msg-bubble" :class="{ 'md-body': msg.role === 'assistant' }" v-html="msg.html"></div>
               <div v-if="msg.images && msg.images.length" class="msg-faq-images">
                 <a v-for="src in msg.images" :key="src" :href="src" target="_blank" rel="noopener" title="FAQ 回答附图，点击查看原图">
                   <img :src="src" alt="FAQ 回答附图" loading="lazy" />
@@ -856,6 +856,7 @@ import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import AgentLogsPanel from '../components/AgentLogsPanel.vue'
 import AgentMonitorPanel from '../components/AgentMonitorPanel.vue'
+import { renderMarkdown } from '../utils/markdown'
 import AgentApiPanel from '../components/AgentApiPanel.vue'
 import ToolGlyph from '../components/ToolGlyph.vue'
 import AgentMascot from '../components/AgentMascot.vue'
@@ -1318,14 +1319,7 @@ function formatHtml(content, isUser) {
     .replace(/【\d+】/g, '')
     .replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰]+/g, '')
     .trim()
-  let html = escapeHtml(text)
-  if (isUser) return html
-  return html
-    .replace(/```([a-zA-Z]*)\n([\s\S]*?)```/g, '<pre style="background: var(--bg-primary); padding: 10px; border-radius: 8px; margin: 8px 0; overflow-x: auto; font-family: monospace; font-size: 12px;"><code>$2</code></pre>')
-    .replace(/`([^`]+)`/g, '<code style="background: var(--bg-primary); padding: 2px 5px; border-radius: 4px; font-family: monospace; font-size: 12px;">$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/### ([^\n]+)/g, '<h4 style="color: var(--accent-blue); margin: 6px 0;">$1</h4>')
-    .replace(/\n/g, '<br>')
+  return isUser ? escapeHtml(text) : renderMarkdown(text)
 }
 
 function toggleTheme() {
