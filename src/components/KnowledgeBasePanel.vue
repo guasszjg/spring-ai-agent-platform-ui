@@ -451,7 +451,7 @@
               <span class="model-badge" title="Embedding 向量模型">
                 <i class="fa-solid fa-cube"></i> {{ getEmbeddingModelLabel(selectedKb) }}
               </span>
-              <span v-if="selectedKb?.rerankEnabled" class="indexing-badge" title="重排序已开启">
+              <span v-if="selectedKb?.rerankEnabled && selectedKb?.rerankMode === 'reranking_model'" class="indexing-badge" title="使用 Rerank 模型排序">
                 <i class="fa-solid fa-arrows-spin"></i> Rerank 开启
               </span>
             </div>
@@ -980,7 +980,7 @@
               <div class="param-label-row">
                 <label class="param-label">Rerank 二次重排</label>
                 <span class="param-val-badge" :style="{ color: testParams.rerankEnabled ? '#10b981' : '#94a3b8' }">
-                  {{ testParams.rerankEnabled ? '已启用' : '已关闭' }}
+                  {{ testRerankLocked ? '未配置' : (testParams.rerankEnabled ? '已启用' : '已关闭') }}
                 </span>
               </div>
               <div class="rerank-toggle-row">
@@ -988,11 +988,12 @@
                   type="button"
                   class="toggle-switch-btn"
                   :class="{ active: testParams.rerankEnabled }"
+                  :disabled="testRerankLocked"
                   @click="testParams.rerankEnabled = !testParams.rerankEnabled"
                 >
                   <span class="switch-ball"></span>
                 </button>
-                <span class="toggle-switch-text">{{ testParams.rerankEnabled ? '对候选切片计算交叉相关度重排序' : '仅使用初筛综合得分' }}</span>
+                <span class="toggle-switch-text">{{ testRerankLocked ? '需要先在模型网关配置并生效 Rerank 模型' : (testParams.rerankEnabled ? ('调用 ' + (isDifyPage ? 'Rerank 模型' : activeRerank.modelName) + ' 对候选切片重新排序') : '仅使用融合排序') }}</span>
               </div>
             </div>
 
@@ -1271,6 +1272,14 @@
                 <i class="fa-solid fa-wand-magic-sparkles"></i>
                 改写后 Query: <strong>"{{ retrievalResult.metrics.rewrittenQuery }}"</strong>
               </span>
+              <span v-if="retrievalResult.metrics?.rerankApplied" class="result-stat-chip" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3);">
+                <i class="fa-solid fa-arrows-spin"></i>
+                已使用 Rerank 模型排序
+              </span>
+              <span v-if="retrievalResult.metrics?.rerankFallback" class="result-stat-chip" style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35);">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                Rerank 未生效，已退回融合排序（请检查模型网关的 Rerank 配置）
+              </span>
               <span v-if="retrievalResult.metrics?.semanticCacheHit" class="result-stat-chip cache-hit-chip">
                 <i class="fa-solid fa-bolt text-emerald"></i>
                 ⚡ 命中语义缓存 (响应 <strong>{{ retrievalResult.latencyMs }} ms</strong>, 节省 100% 检索与重排)
@@ -1486,7 +1495,7 @@
             <div class="cost-card-content">
               <span class="cost-label">累计 Rerank 重新排序调用</span>
               <span class="cost-val">{{ (costStats.rerankCalls || 0).toLocaleString() }} <small>次</small></span>
-              <span class="cost-sub">重排调用费用: ￥{{ (costStats.rerankCostYuan || 0).toFixed(4) }} 元</span>
+              <span class="cost-sub">{{ (costStats.rerankTokens || 0).toLocaleString() }} Tokens · 约 ￥{{ (costStats.rerankCostYuan || 0).toFixed(4) }} 元</span>
             </div>
           </div>
           <!-- 卡片 4: 综合治理预估费用 -->
@@ -1616,7 +1625,7 @@
                     <span class="retrieval-card-title">混合检索 (Hybrid)</span>
                     <span class="tag-recommend">推荐</span>
                   </div>
-                  <p class="retrieval-card-desc">结合向量检索与全文检索双路召回，综合重排评分(Rerank)，精度与泛化能力最佳</p>
+                  <p class="retrieval-card-desc">结合向量检索与全文检索双路召回并融合排序，精度与泛化能力最佳</p>
                 </div>
                 <div
                   class="retrieval-card"
@@ -1682,12 +1691,20 @@
                     type="button"
                     class="mode-tab-btn"
                     :class="{ active: kbForm.rerankMode === 'reranking_model' }"
+                    :disabled="formRerankLocked"
+                    :title="formRerankLocked ? '请先在模型网关配置并生效 Rerank 模型' : ''"
                     @click="kbForm.rerankMode = 'reranking_model'"
                   >
                     <i class="fa-solid fa-arrows-spin"></i> Rerank 模型
                   </button>
                 </div>
               </div>
+
+              <p v-if="formRerankLocked" class="rerank-locked-hint">
+                <i class="fa-solid fa-circle-info"></i>
+                尚未配置 Rerank 模型，暂时不能选择「Rerank 模型」。{{ isSuperAdmin ? '' : '请联系超级管理员在模型网关中配置。' }}
+                <router-link v-if="isSuperAdmin" to="/dashboard?tab=gateway-rerank" class="kb-gateway-link" @click="kbModalOpen = false">去配置 Rerank 模型 →</router-link>
+              </p>
 
               <!-- 方案 1: 权重设置 (Weighted score) -->
               <div v-if="kbForm.rerankMode === 'weighted_score'" class="weights-control-card">
@@ -1730,13 +1747,29 @@
 
               <!-- 方案 2: Rerank 模型 (Reranking model) -->
               <div v-else class="rerank-model-card">
-                <div class="model-info-row">
-                  <span class="model-name"><i class="fa-solid fa-arrows-spin"></i> {{ kbForm.rerankModel || 'qwen3-rerank' }}</span>
-                  <span class="tag-recommend">通义千问重排模型</span>
-                </div>
-                <div class="model-desc">
-                  通义千问专有二次重排序模型 (Provider: 通义千问)，对混合召回候选切片进行交叉重排打分，大幅提升复杂长文的检索精度。
-                </div>
+                <template v-if="kbForm.provider !== 'SPRING_AI'">
+                  <div class="model-info-row">
+                    <span class="model-name"><i class="fa-solid fa-arrows-spin"></i> {{ kbForm.rerankModel || 'qwen3-rerank' }}</span>
+                    <span class="tag-recommend">Dify 配置</span>
+                  </div>
+                  <div class="model-desc">由 Dify 调用这个模型重新排序，需要先在 Dify 中配置好该模型。</div>
+                </template>
+                <template v-else-if="activeRerank.configured">
+                  <div class="model-info-row">
+                    <span class="model-name"><i class="fa-solid fa-arrows-spin"></i> {{ activeRerank.modelName }}</span>
+                    <span class="tag-recommend">当前生效</span>
+                  </div>
+                  <div class="model-desc">
+                    使用模型网关中生效的 Rerank 配置「{{ activeRerank.name }}」对候选切片重新排序，按用量计费。调用失败时自动退回融合排序。
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="model-info-row">
+                    <span class="model-name"><i class="fa-solid fa-arrows-spin"></i> 未配置 Rerank 模型</span>
+                    <span class="tag-recommend">需配置</span>
+                  </div>
+                  <div class="model-desc">当前生效的配置已不存在，检索会退回融合排序。请重新配置 Rerank 模型，或改用权重设置。</div>
+                </template>
               </div>
             </div>
 
@@ -2326,6 +2359,19 @@ async function loadActiveEmbedding() {
     }
   }
 }
+
+// 当前生效的 Rerank 模型：没有时自建知识库不能选择 Rerank 模式（Dify 知识库的模型在 Dify 中配置，不受影响）
+const activeRerank = reactive({ configured: false, name: '', modelName: '' })
+const formRerankLocked = computed(() => kbForm.provider === 'SPRING_AI' && !activeRerank.configured)
+const testRerankLocked = computed(() => !isDifyPage.value && !activeRerank.configured)
+
+async function loadActiveRerank() {
+  const res = await http.get('/api/model-gateway/reranks/active')
+  if (res && res.success && res.data) {
+    Object.assign(activeRerank, { configured: false, name: '', modelName: '' }, res.data)
+  }
+}
+
 const savingKb = ref(false)
 const kbForm = reactive({
   id: '',
@@ -2395,7 +2441,10 @@ async function loadEngineInfo() {
 // 顶部状态卡：自建页显示当前向量模型，Dify 页显示 Dify 引擎连通状态
 function loadSourceStatus() {
   if (isDifyPage.value) loadEngineInfo()
-  else loadActiveEmbedding()
+  else {
+    loadActiveEmbedding()
+    loadActiveRerank()
+  }
 }
 
 async function loadKnowledgeBases() {
@@ -2586,6 +2635,7 @@ function openEditKb(kb) {
   })
   kbModalOpen.value = true
   loadActiveEmbedding()
+  loadActiveRerank()
 }
 
 async function saveKnowledgeBase() {
@@ -2675,13 +2725,17 @@ function backToList() {
 
 // ==================== 召回测试与调试逻辑 (Phase P1 & P2 & P3) ====================
 
-function openRetrievalTestTab() {
+async function openRetrievalTestTab() {
   activeSubTab.value = 'retrieval-test'
+  if (!isDifyPage.value) await loadActiveRerank()
   if (selectedKb.value) {
     testParams.topK = (selectedKb.value.topK !== null && selectedKb.value.topK !== undefined) ? selectedKb.value.topK : 5
     testParams.scoreThreshold = (selectedKb.value.scoreThreshold !== null && selectedKb.value.scoreThreshold !== undefined) ? selectedKb.value.scoreThreshold : 0.5
     testParams.searchMethod = selectedKb.value.searchMethod || 'hybrid_search'
-    testParams.rerankEnabled = selectedKb.value.rerankEnabled !== undefined ? selectedKb.value.rerankEnabled : true
+    const savedRerank = selectedKb.value.rerankEnabled !== undefined ? selectedKb.value.rerankEnabled : true
+    testParams.rerankEnabled = isDifyPage.value
+      ? savedRerank
+      : savedRerank && activeRerank.configured && selectedKb.value.rerankMode === 'reranking_model' && testParams.searchMethod === 'hybrid_search'
     testParams.vectorWeight = (selectedKb.value.vectorWeight !== null && selectedKb.value.vectorWeight !== undefined) ? selectedKb.value.vectorWeight : 0.7
     testParams.keywordWeight = (selectedKb.value.keywordWeight !== null && selectedKb.value.keywordWeight !== undefined) ? selectedKb.value.keywordWeight : 0.3
     testParams.expandParent = true
@@ -2750,8 +2804,9 @@ async function executeRetrievalTest(queryText) {
     scoreThreshold: Number(testParams.scoreThreshold) || 0.0,
     searchMethod: testParams.searchMethod,
     rerankEnabled: testParams.rerankEnabled,
-    vectorWeight: Number(testParams.vectorWeight) || 0.7,
-    keywordWeight: Number(testParams.keywordWeight) || 0.3,
+    rerankMode: isDifyPage.value ? undefined : (testParams.rerankEnabled ? 'reranking_model' : 'weighted_score'),
+    vectorWeight: Number(testParams.vectorWeight ?? 0.7),
+    keywordWeight: Number(testParams.keywordWeight ?? 0.3),
     indexVersionId: testParams.indexVersionId || undefined,
     expandParent: testParams.expandParent !== false,
     rewriteEnabled: Boolean(testParams.rewriteEnabled),
@@ -3338,6 +3393,23 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.rerank-locked-hint {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.rerank-locked-hint .kb-gateway-link {
+  margin: 0 0 0 4px;
+}
+
+.mode-tab-btn:disabled,
+.toggle-switch-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* 列表加载 / 空状态 */
 .kb-loading-state,
 .kb-empty-state {

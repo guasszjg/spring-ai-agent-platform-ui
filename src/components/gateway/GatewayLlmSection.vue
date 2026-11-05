@@ -180,15 +180,15 @@
             <!-- 模式一：OpenAI 兼容协议 -->
             <template v-if="form.protocol !== 'CUSTOM_HTTP'">
               <div v-if="form.vendor === 'CUSTOM'" class="gateway-custom-toolbar" style="margin-bottom: 12px;">
-                <span class="gateway-field-hint">支持标准 OpenAI 协议及无 Key、特定 Header 鉴权通道（如鱼亮 LLM，支持 Tool Call 与多轮对话）。</span>
+                <span class="gateway-field-hint">支持标准 OpenAI 协议及无 Key、特定 Header 鉴权通道（支持 Tool Call 与多轮对话）。</span>
                 <button type="button" class="btn-sample-load" @click="loadSampleOpenAiHeaders">
-                  <i class="fa-solid fa-wand-magic-sparkles"></i> 载入第三方(鱼亮)示例
+                  <i class="fa-solid fa-wand-magic-sparkles"></i> 载入第三方 Header 鉴权示例
                 </button>
               </div>
 
               <div class="form-group">
                 <label class="form-label">接口地址 (Base URL / Endpoint)</label>
-                <input v-model="form.baseUrl" class="form-control-styled" placeholder="如 https://api.openai.com/v1 或 http://82.157.197.25:9540/api/..." required>
+                <input v-model="form.baseUrl" class="form-control-styled" placeholder="如 https://api.openai.com/v1 或中转服务的完整接口地址" required>
                 <p class="gateway-field-hint">可填标准 Base URL（自动调用 /chat/completions），亦可直接填完整 Endpoint 地址。</p>
               </div>
 
@@ -201,7 +201,7 @@
                   v-model="form.openAiHeaders"
                   class="form-control-styled code-textarea"
                   rows="3"
-                  placeholder='{\n  "app_id": "0JO1CFNCJ3",\n  "device_mac": "66666"\n}'
+                  placeholder='{\n  "app_id": "your-app-id",\n  "device_mac": "your-device-mac"\n}'
                 ></textarea>
                 <p class="gateway-field-hint">若接口无需 Bearer API Key，而是通过特定 Header 鉴权，在此配置即可。</p>
               </div>
@@ -577,29 +577,29 @@ function openEdit(provider) {
 
 function loadSampleOpenAiHeaders() {
   if (form.name === '自定义通道' || !form.name) {
-    form.name = '第三方鱼亮通道'
+    form.name = '第三方 Header 鉴权通道'
   }
-  form.baseUrl = 'http://82.157.197.25:9540/api/modelConfig/modelLlmModel'
+  form.baseUrl = 'https://your-gateway.example.com/v1'
   form.openAiHeaders = JSON.stringify({
-    "app_id": "0JO1CFNCJ3",
-    "device_mac": "66666"
+    "app_id": "your-app-id",
+    "device_mac": "your-device-mac"
   }, null, 2)
   form.defaultModel = 'deepseek-flash'
   form.apiKey = ''
   form.openAiWebSearch = true
-  showToast('已载入第三方 (鱼亮) Header 鉴权与联网搜索示例', 'info', 2000)
+  showToast('已载入第三方 Header 鉴权与联网搜索示例，请替换为实际地址和请求头', 'info', 2000)
 }
 
 function loadSampleCustomConfig() {
   if (form.name === '自定义通道' || !form.name) {
     form.name = '第三方定制通道'
   }
-  form.baseUrl = 'http://82.157.197.25:9540/api/modelConfig/modelLlmModel'
+  form.baseUrl = 'https://your-gateway.example.com/api/chat'
   form.customHttpMethod = 'POST'
   form.customHeaders = '{\n  "Content-Type": "application/json;charset=utf-8"\n}'
   form.customBodyTemplate = JSON.stringify({
-    appId: "EM7C8J0FKC",
-    deviceMac: "8CFCA0288618",
+    appId: "your-app-id",
+    deviceMac: "your-device-mac",
     prompt: "{{prompt}}"
   }, null, 2)
   form.customSuccessCode = 200

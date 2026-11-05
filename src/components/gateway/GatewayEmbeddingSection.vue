@@ -126,7 +126,7 @@
                 <button type="button" class="preset-pill" @click="applyEmbPreset('openai')">OpenAI</button>
                 <button type="button" class="preset-pill" @click="applyEmbPreset('zhipu')">智谱 AI</button>
                 <button type="button" class="preset-pill" @click="applyEmbPreset('ollama')">本地 Ollama (bge-m3)</button>
-                <button type="button" class="preset-pill" @click="applyEmbPreset('header-relay')">Header 鉴权中转 (kinfra)</button>
+                <button type="button" class="preset-pill" @click="applyEmbPreset('header-relay')">Header 鉴权中转</button>
               </div>
             </div>
 
@@ -331,11 +331,11 @@ function applyEmbPreset(type) {
     embForm.modelName = 'bge-m3'
     embForm.dimension = 1024
   } else if (type === 'header-relay') {
-    // 合作方向量中转：完整接口地址 + app_id / device_mac 请求头鉴权，不需要 API Key
-    embForm.name = '向量中转 kinfra-text-embedding-0.6b'
+    // 中转服务常见写法：完整接口地址 + 请求头鉴权，不需要 API Key。地址和模型由使用者填写
+    embForm.name = 'Header 鉴权向量中转'
     embForm.provider = 'CUSTOM'
-    embForm.baseUrl = 'http://82.157.197.25:9540/api/modelConfig/textEmbeddings'
-    embForm.modelName = 'kinfra-text-embedding-0.6b'
+    embForm.baseUrl = ''
+    embForm.modelName = ''
     embForm.dimension = 1024
     for (const name of ['app_id', 'device_mac']) {
       if (!embForm.headers.some(h => h.name.toLowerCase() === name)) addEmbHeader(name)

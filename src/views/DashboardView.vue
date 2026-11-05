@@ -1134,7 +1134,7 @@ const navGroups = computed(() => {
     govItems.push({
       id: 'gateway',
       name: '模型网关',
-      title: '模型网关：大语言模型、向量模型、OCR 与 Dify 引擎',
+      title: '模型网关：大语言模型、向量模型、Rerank 模型、OCR 与 Dify 引擎',
       icon: 'fa-solid fa-server',
       children: GATEWAY_SECTIONS.map((s) => ({
         id: GATEWAY_TAB_PREFIX + s.key,

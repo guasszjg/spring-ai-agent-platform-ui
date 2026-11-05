@@ -1,6 +1,6 @@
-import { Binary, BookOpen, MessagesSquare, ScanText } from 'lucide-vue-next'
+import { ArrowUpDown, Binary, BookOpen, MessagesSquare, ScanText } from 'lucide-vue-next'
 
-// 模型网关的四个子页面：侧边栏子菜单、页头与地址（?tab=gateway-<key>）共用这一份定义
+// 模型网关的子页面：侧边栏子菜单、页头与地址（?tab=gateway-<key>）共用这一份定义
 export const GATEWAY_SECTIONS = [
   {
     key: 'llm',
@@ -13,6 +13,12 @@ export const GATEWAY_SECTIONS = [
     title: '向量模型',
     icon: Binary,
     desc: '自建知识库切片向量化与语义检索使用的 Embedding 模型。全平台同时只生效一个，更换后已入库的文档需要重新索引。'
+  },
+  {
+    key: 'rerank',
+    title: 'Rerank 模型',
+    icon: ArrowUpDown,
+    desc: '自建知识库选择「Rerank 模型」排序时调用，对候选切片做二次排序。可选，按用量计费；用哪个模型由这里生效的配置决定，不配置时知识库只能使用权重设置。'
   },
   {
     key: 'ocr',
