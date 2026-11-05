@@ -9,12 +9,20 @@ const ALLOWED_TAGS = [
 ]
 const ALLOWED_ATTR = ['href', 'title', 'align', 'start', 'colspan', 'rowspan', 'target', 'rel']
 
+let markInternalLinks = false
+
 const purifier = DOMPurify()
 purifier.addHook('afterSanitizeAttributes', (node) => {
-  if (node.tagName === 'A') {
-    node.setAttribute('target', '_blank')
-    node.setAttribute('rel', 'noopener noreferrer')
+  if (node.tagName !== 'A') return
+  const href = node.getAttribute('href') || ''
+  // 只认 / 开头的站内路径；//example.com 和 /\example.com 其实是外部地址
+  if (markInternalLinks && /^\/(?![/\\])/.test(href)) {
+    node.setAttribute('class', 'md-link')
+    node.setAttribute('data-internal', '1')
+    return
   }
+  node.setAttribute('target', '_blank')
+  node.setAttribute('rel', 'noopener noreferrer')
 })
 
 marked.use({
@@ -31,7 +39,11 @@ function escapeText(text) {
   return String(text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-/** Markdown 转成可以安全放进 v-html 的 HTML */
-export function renderMarkdown(text) {
-  return purifier.sanitize(marked.parse(String(text || '')), { ALLOWED_TAGS, ALLOWED_ATTR })
+/**
+ * Markdown 转成可以安全放进 v-html 的 HTML。
+ * @param internalLinks 为 true 时给站内链接加 data-internal，由调用方在平台内跳转；其余链接都在新窗口打开
+ */
+export function renderMarkdown(text, { internalLinks = false } = {}) {
+  markInternalLinks = internalLinks
+  return purifier.sanitize(marked.parse(String(text || '')), { ALLOWED_TAGS, ALLOWED_ATTR, ALLOW_DATA_ATTR: false })
 }

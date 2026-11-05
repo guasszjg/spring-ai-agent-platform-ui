@@ -2156,6 +2156,7 @@ input:checked + .slider-toggle:before {
   text-align: left;
   vertical-align: top;
   overflow-wrap: normal;
+  word-break: normal;
 }
 
 .md-body th {

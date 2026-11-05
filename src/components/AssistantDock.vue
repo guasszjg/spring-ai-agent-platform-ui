@@ -164,7 +164,7 @@
                     {{ t.status === 'running' ? '正在' + t.label + '…' : t.label }}
                   </span>
                 </div>
-                <div v-if="m.html" class="ad-bubble" :class="{ degraded: m.degraded }" @click="onBubbleClick" v-html="m.html"></div>
+                <div v-if="m.html" class="ad-bubble" :class="{ degraded: m.degraded, 'md-body': m.role === 'assistant' }" @click="onBubbleClick" v-html="m.html"></div>
                 <div v-else-if="m.streaming" class="ad-bubble ad-typing"><i></i><i></i><i></i></div>
                 <!-- 操作卡片：写操作不直接执行，用户确认后才执行 -->
                 <div
@@ -366,6 +366,7 @@ import { useRouter } from 'vue-router'
 import { http } from '../api/http'
 import AgentMascot from './AgentMascot.vue'
 import { useAssistantContext } from '../composables/useAssistantContext'
+import { renderMarkdown as renderMarkdownHtml } from '../utils/markdown'
 
 const props = defineProps({
   // 入口按钮离底部的距离：页面右下角有自己的按钮时（例如调试台的发送按钮）上移避开
@@ -721,40 +722,9 @@ function escapeHtml(str) {
   return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-// 轻量 Markdown：先转义，再处理代码块、标题、列表、引用、分隔线与行内格式；块级元素前后不再额外插入空行
+// 站内链接（/dashboard?... 这类）由 onBubbleClick 在平台内跳转
 function renderMarkdown(text) {
-  let html = escapeHtml(String(text || '').replace(/\r\n/g, '\n').trim())
-  const blocks = []
-  const keep = (s) => { blocks.push(s); return `@@B${blocks.length - 1}@@` }
-  html = html.replace(/```[a-zA-Z]*\n?([\s\S]*?)```/g, (_, code) => keep(`<pre><code>${code.replace(/\n$/, '')}</code></pre>`))
-  html = html
-    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
-    .replace(/\[([^\]\n]{1,80})\]\((\/(?!\/)[A-Za-z0-9_\-\/?=&;.%#]*)\)/g, '<a class="md-link" href="$2" data-internal="1">$1</a>')
-    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
-    // 表格：表头行 + 分隔行（|---|:---:|）+ 数据行；流式输出中分隔行尚未到达时按普通文本显示
-    .replace(/^(\|.*\|)[ \t]*\n\|?[ \t]*:?-{2,}:?[ \t]*(?:\|[ \t]*:?-{2,}:?[ \t]*)*\|?[ \t]*\n((?:\|.*\|[ \t]*(?:\n|$))*)/gm,
-      (_, head, body) => keep(renderTable(head, body)))
-    .replace(/^\s*(?:-{3,}|\*{3,})\s*$/gm, () => keep('<hr>'))
-    .replace(/^#{1,4} (.+)$/gm, (_, t) => keep(`<h4>${t}</h4>`))
-    .replace(/^&gt; ?(.*)$/gm, '<bq>$1</bq>')
-    .replace(/((?:<bq>.*<\/bq>\n?)+)/g, (m) => keep(`<blockquote>${m.replace(/<\/?bq>/g, '').trim().replace(/\n/g, '<br>')}</blockquote>`))
-    .replace(/^\s*[-*] (.+)$/gm, '<li>$1</li>')
-    .replace(/^\s*(\d+)\. (.+)$/gm, '<li class="ol" data-n="$1">$2</li>')
-    .replace(/((?:<li[^>]*>.*<\/li>\n?)+)/g, (m) => keep(`<ul>${m.replace(/\n/g, '')}</ul>`))
-  // 块级占位符前后的换行不再转成 <br>；普通段落之间保留一个空行
-  html = html
-    .replace(/\n*(@@B\d+@@)\n*/g, '$1')
-    .replace(/\n{2,}/g, '<br><br>')
-    .replace(/\n/g, '<br>')
-  return html.replace(/@@B(\d+)@@/g, (_, i) => blocks[Number(i)])
-}
-
-function renderTable(head, body) {
-  const cells = (row) => row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim())
-  const th = cells(head).map(c => `<th>${c}</th>`).join('')
-  const rows = body.split('\n').filter(r => r.trim())
-    .map(r => `<tr>${cells(r).map(c => `<td>${c}</td>`).join('')}</tr>`).join('')
-  return `<div class="md-table"><table><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table></div>`
+  return renderMarkdownHtml(text, { internalLinks: true })
 }
 
 // 流式回复：增量到达时按帧合并重绘，避免每个字都重新渲染 Markdown
@@ -1338,72 +1308,6 @@ async function sendFeedback(m, rating) {
   background: var(--surface-subtle);
 }
 
-.ad-bubble :deep(h4) {
-  margin: 10px 0 4px;
-  font-size: 13.5px;
-  font-weight: 600;
-}
-
-.ad-bubble :deep(h4:first-child) {
-  margin-top: 0;
-}
-
-.ad-bubble :deep(hr) {
-  margin: 10px 0;
-  border: none;
-  border-top: 1px solid var(--border-color);
-}
-
-.ad-bubble :deep(blockquote) {
-  margin: 6px 0;
-  padding: 6px 10px;
-  border-left: 3px solid var(--brand-line, var(--border-hover));
-  background: var(--surface-subtle);
-  border-radius: 0 6px 6px 0;
-  color: var(--text-secondary);
-}
-
-.ad-bubble :deep(ul) {
-  margin: 4px 0 6px;
-  padding-left: 18px;
-}
-
-.ad-bubble :deep(li) {
-  margin: 2px 0;
-}
-
-.ad-bubble :deep(li.ol) {
-  list-style: none;
-  margin-left: -18px;
-}
-
-.ad-bubble :deep(li.ol)::before {
-  content: attr(data-n) ". ";
-  color: var(--text-muted);
-}
-
-.ad-bubble :deep(code) {
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--surface-active);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
-}
-
-.ad-bubble :deep(pre) {
-  margin: 8px 0;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  overflow-x: auto;
-}
-
-.ad-bubble :deep(pre code) {
-  padding: 0;
-  background: transparent;
-}
-
 .ad-meta {
   font-size: 11.5px;
   color: var(--text-muted);
@@ -1575,32 +1479,6 @@ async function sendFeedback(m, rating) {
   font-size: 12px;
   color: var(--warning, #b7791f);
   padding-left: 2px;
-}
-
-/* ---------- 表格 ---------- */
-.ad-bubble :deep(.md-table) {
-  margin: 6px 0;
-  overflow-x: auto;
-}
-
-.ad-bubble :deep(table) {
-  border-collapse: collapse;
-  font-size: 12.5px;
-  min-width: 100%;
-}
-
-.ad-bubble :deep(th),
-.ad-bubble :deep(td) {
-  padding: 5px 8px;
-  border: 1px solid var(--border-color);
-  text-align: left;
-  vertical-align: top;
-  white-space: nowrap;
-}
-
-.ad-bubble :deep(th) {
-  background: var(--surface-subtle);
-  font-weight: 600;
 }
 
 /* ---------- 回复元信息与反馈 ---------- */
