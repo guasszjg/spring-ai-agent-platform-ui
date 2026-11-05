@@ -28,6 +28,21 @@ purifier.addHook('afterSanitizeAttributes', (node) => {
 marked.use({
   gfm: true,
   breaks: true,
+  extensions: [
+    {
+      // 标准规则下，结束的 ** 前是标点、后面紧跟文字时不算结束（如 **【列表】**中点击），中文回答里很常见，单独处理
+      name: 'cjkStrong',
+      level: 'inline',
+      start(src) {
+        return src.indexOf('**')
+      },
+      tokenizer(src) {
+        const match = /^\*\*(?=\S)([^*\n]*?\S)\*\*(?!\*)/.exec(src)
+        if (!match) return undefined
+        return { type: 'strong', raw: match[0], text: match[1], tokens: this.lexer.inlineTokens(match[1]) }
+      }
+    }
+  ],
   renderer: {
     image({ href, text }) {
       return `<a href="${encodeURI(href || '')}">${escapeText(text) || '查看图片'}</a>`
