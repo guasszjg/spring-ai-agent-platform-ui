@@ -105,6 +105,7 @@
               <th>配置</th>
               <th>时间</th>
               <th>题数</th>
+              <th title="正确内容进入前 N 名的题目占比，N 是知识库的 Top K。只有这些内容才会交给模型，最接近线上效果">前 N 命中率</th>
               <th title="正确内容进入前 5 名的题目占比，越高越好">前 5 命中率</th>
               <th title="每题的答案有多少进入了前 10 名，越高越好">前 10 召回率</th>
               <th title="NDCG@10：答案排得越靠前分数越高，最高 100%">排序质量</th>
@@ -124,6 +125,11 @@
               </td>
               <td class="re-nowrap">{{ formatTime(r.createdAt) }}</td>
               <td>{{ r.caseCount }}</td>
+              <td class="re-nowrap">
+                {{ percent(r.hitAtTopK) }}
+                <span v-if="r.topK" class="re-topk">前 {{ r.topK }}</span>
+                <span v-if="delta(r, 'hitAtTopK')" class="re-delta" :class="delta(r, 'hitAtTopK').cls">{{ delta(r, 'hitAtTopK').text }}</span>
+              </td>
               <td v-for="m in METRICS" :key="m" class="re-nowrap">
                 {{ percent(r[m]) }}
                 <span v-if="delta(r, m)" class="re-delta" :class="delta(r, m).cls">{{ delta(r, m).text }}</span>
@@ -146,10 +152,10 @@
           <h4>每道题的结果 · {{ selected.label }}</h4>
           <p v-if="selected.status === 'RUNNING'">评测进行中，结束后显示结果。</p>
           <p v-else-if="selected.status === 'FAILED'" class="re-bad">{{ selected.errorMessage || '评测失败' }}</p>
-          <p v-else>共 {{ detailRows.length }} 题，{{ missCount }} 题没有在前 5 名找到正确内容。</p>
+          <p v-else>共 {{ detailRows.length }} 题，{{ missCount }} 题的正确内容没有进入前 {{ selected.topK }} 名，模型拿不到。</p>
         </div>
         <label v-if="detailRows.length" class="re-only-miss">
-          <input v-model="onlyMissed" type="checkbox"> 只看没命中的
+          <input v-model="onlyMissed" type="checkbox"> 只看模型拿不到的
         </label>
       </div>
       <div v-for="row in visibleRows" :key="row.caseId" class="re-case">
@@ -253,7 +259,8 @@ const cases = ref([])
 const runs = ref([])
 const selected = ref(null)
 const baselineDetail = ref(null)
-const baselineId = ref('')
+const BASELINE_KEY = `ragEvalBaseline:${props.kb.id}`
+const baselineId = ref(readBaseline())
 const onlyMissed = ref(false)
 const expanded = reactive({})
 const starting = ref(false)
@@ -267,8 +274,9 @@ const baselineMismatch = computed(() => !!baseline.value && runs.value.some(
   (r) => r.status === 'DONE' && r.casesFingerprint !== baseline.value.casesFingerprint
 ))
 const detailRows = computed(() => (selected.value && Array.isArray(selected.value.details) ? selected.value.details : []))
-const missCount = computed(() => detailRows.value.filter((r) => !r.hitAt5).length)
-const visibleRows = computed(() => (onlyMissed.value ? detailRows.value.filter((r) => !r.hitAt5) : detailRows.value))
+const isMissed = (row) => !row.firstHitRank || row.firstHitRank > selected.value.topK
+const missCount = computed(() => detailRows.value.filter(isMissed).length)
+const visibleRows = computed(() => (onlyMissed.value ? detailRows.value.filter(isMissed) : detailRows.value))
 
 function caseTargets(c) {
   if (c.expectedTexts) return c.expectedTexts.split('\n')
@@ -289,6 +297,7 @@ function formatTime(value) {
 function delta(run, metric) {
   const b = baseline.value
   if (!b || b.id === run.id || run.status !== 'DONE' || run[metric] == null || b[metric] == null) return null
+  if (metric === 'hitAtTopK' && run.topK !== b.topK) return null
   const diff = (run[metric] - b[metric]) * 100
   if (Math.abs(diff) < 0.05) return { text: '持平', cls: 'is-flat' }
   return { text: (diff > 0 ? '+' : '') + diff.toFixed(1), cls: diff > 0 ? 'is-up' : 'is-down' }
@@ -296,7 +305,7 @@ function delta(run, metric) {
 
 function rankClass(row) {
   if (!row.firstHitRank) return 'is-down'
-  return row.firstHitRank <= 5 ? 'is-up' : 'is-mid'
+  return row.firstHitRank <= selected.value.topK ? 'is-up' : 'is-mid'
 }
 
 function baselineRank(row) {
@@ -345,9 +354,24 @@ async function selectRun(run) {
   selected.value = (await fetchRun(run.id)) || run
 }
 
+// 基准只记在当前浏览器里，刷新后不用重新设置
+function readBaseline() {
+  try {
+    return localStorage.getItem(BASELINE_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
 watch(baselineId, async (id) => {
+  try {
+    if (id) localStorage.setItem(BASELINE_KEY, id)
+    else localStorage.removeItem(BASELINE_KEY)
+  } catch {
+    // 无痕模式等场景写入失败时忽略，只是刷新后要重新设置
+  }
   baselineDetail.value = id ? await fetchRun(id) : null
-})
+}, { immediate: true })
 
 function schedulePoll() {
   clearTimeout(pollTimer)
@@ -555,6 +579,7 @@ onBeforeUnmount(() => clearTimeout(pollTimer))
 .re-tag-warn { color: var(--accent-amber); }
 .re-tag-bad { color: var(--accent-rose); }
 .re-delta { margin-left: 4px; font-size: 11.5px; font-weight: 600; }
+.re-topk { margin-left: 2px; font-size: 11px; color: var(--text-muted); }
 .is-up { color: var(--accent-emerald); }
 .is-down { color: var(--accent-rose); }
 .is-mid { color: var(--accent-amber); }
