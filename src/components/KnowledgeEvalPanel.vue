@@ -105,7 +105,7 @@
               <th>配置</th>
               <th>时间</th>
               <th>题数</th>
-              <th title="正确内容进入前 N 名的题目占比，N 是知识库的 Top K。只有这些内容才会交给模型，最接近线上效果">前 N 命中率</th>
+              <th title="正确内容真正交给模型的题目占比：进入前 N 名（N 是知识库的 Top K），且没有被 Token 预算裁掉。最接近线上效果">前 N 命中率</th>
               <th title="正确内容进入前 5 名的题目占比，越高越好">前 5 命中率</th>
               <th title="每题的答案有多少进入了前 10 名，越高越好">前 10 召回率</th>
               <th title="NDCG@10：答案排得越靠前分数越高，最高 100%">排序质量</th>
@@ -163,6 +163,7 @@
           <i class="fa-solid" :class="expanded[row.caseId] ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
           <span class="re-rank" :class="rankClass(row)">{{ row.firstHitRank ? `第 ${row.firstHitRank} 名` : (row.error ? '出错' : '未找到') }}</span>
           <span class="re-case-query">{{ row.query }}</span>
+          <span v-if="isDroppedByBudget(row)" class="re-tag re-tag-warn" title="排名够靠前，但前面的资料已经用完 Token 预算，这段没有交给模型">被预算挤掉</span>
           <span v-if="baselineRank(row)" class="re-delta" :class="baselineRank(row).cls">{{ baselineRank(row).text }}</span>
         </button>
         <div v-if="expanded[row.caseId]" class="re-case-body">
@@ -274,7 +275,11 @@ const baselineMismatch = computed(() => !!baseline.value && runs.value.some(
   (r) => r.status === 'DONE' && r.casesFingerprint !== baseline.value.casesFingerprint
 ))
 const detailRows = computed(() => (selected.value && Array.isArray(selected.value.details) ? selected.value.details : []))
-const isMissed = (row) => !row.firstHitRank || row.firstHitRank > selected.value.topK
+// 更早的记录没有 reachesModel，只能看名次
+const isMissed = (row) => (typeof row.reachesModel === 'boolean'
+  ? !row.reachesModel
+  : !row.firstHitRank || row.firstHitRank > selected.value.topK)
+const isDroppedByBudget = (row) => row.reachesModel === false && !!row.firstHitRank && row.firstHitRank <= selected.value.topK
 const missCount = computed(() => detailRows.value.filter(isMissed).length)
 const visibleRows = computed(() => (onlyMissed.value ? detailRows.value.filter(isMissed) : detailRows.value))
 
@@ -305,7 +310,7 @@ function delta(run, metric) {
 
 function rankClass(row) {
   if (!row.firstHitRank) return 'is-down'
-  return row.firstHitRank <= selected.value.topK ? 'is-up' : 'is-mid'
+  return isMissed(row) ? 'is-mid' : 'is-up'
 }
 
 function baselineRank(row) {
