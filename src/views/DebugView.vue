@@ -369,6 +369,7 @@
                 <span v-if="msg.meta.firstTokenMs != null" title="从发送到看到第一个字"><i class="fa-solid fa-bolt"></i> 首字 {{ msg.meta.firstTokenMs }}ms</span>
                 <span title="从发送到回答全部完成"><i class="fa-regular fa-clock"></i> {{ msg.meta.latencyMs }}ms</span>
                 <span><i class="fa-solid fa-ticket"></i> {{ msg.meta.tokensUsed }} Tokens</span>
+                <span v-if="msg.meta.cachedPromptTokens" title="输入 Token 中命中提示词缓存的部分"><i class="fa-solid fa-bolt"></i> 缓存 {{ msg.meta.cachedPromptTokens }}</span>
               </div>
             </div>
           </div>
@@ -1386,7 +1387,7 @@ async function sendChat() {
       html: formatHtml(reply, false),
       tool,
       images: res.data.images || [],
-      meta: { model: res.data.model || routedModel.value, latencyMs: res.data.latencyMs || 240, tokensUsed: res.data.tokensUsed || 150, failoverFrom: res.data.failoverFrom || '' }
+      meta: { model: res.data.model || routedModel.value, latencyMs: res.data.latencyMs || 240, tokensUsed: res.data.tokensUsed || 150, cachedPromptTokens: res.data.cachedPromptTokens || 0, failoverFrom: res.data.failoverFrom || '' }
     })
     history.value.push({ role: 'assistant', content: reply })
     speedText.value = `↑ 0.1 K/s  ↓ ${(Math.random() * 2.2 + 1.1).toFixed(1)} K/s`
@@ -1461,6 +1462,7 @@ async function sendStreaming(payload) {
           model: data?.model || routedModel.value,
           latencyMs: data?.latencyMs ?? Math.round(performance.now() - started),
           tokensUsed: data?.tokensUsed ?? 0,
+          cachedPromptTokens: data?.cachedPromptTokens ?? 0,
           firstTokenMs,
           failoverFrom: data?.failoverFrom || ''
         }

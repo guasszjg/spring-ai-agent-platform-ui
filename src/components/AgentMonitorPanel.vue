@@ -69,7 +69,7 @@
           <div class="token-card-header"><span class="token-card-title">Prompt 输入</span></div>
           <div class="token-card-val">{{ formatToken(stats.promptTokens) }}</div>
           <div class="monitor-bar"><span :style="{ width: promptShare + '%' }"></span></div>
-          <div class="token-card-footer"><span>占总用量 {{ promptShare }}%</span></div>
+          <div class="token-card-footer"><span>占总用量 {{ promptShare }}%<template v-if="Number(stats.cachedPromptTokens || 0) > 0">，其中 {{ formatToken(stats.cachedPromptTokens) }} 命中缓存</template></span></div>
         </div>
         <div class="token-stat-card">
           <div class="token-card-header"><span class="token-card-title">Completion 输出</span></div>
