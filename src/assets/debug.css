@@ -2008,6 +2008,7 @@ input:checked + .slider-toggle:before {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
 .msg-bubble {
@@ -2028,6 +2029,150 @@ input:checked + .slider-toggle:before {
   border: 1px solid var(--border-color);
   color: var(--text-primary);
   border-top-left-radius: 4px;
+}
+
+/* 模型回复的 Markdown 排版 */
+.md-body {
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+
+.md-body > :first-child {
+  margin-top: 0;
+}
+
+.md-body > :last-child {
+  margin-bottom: 0;
+}
+
+.md-body p {
+  margin: 0 0 10px;
+}
+
+.md-body h1,
+.md-body h2,
+.md-body h3,
+.md-body h4,
+.md-body h5,
+.md-body h6 {
+  margin: 16px 0 8px;
+  font-weight: 650;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+.md-body h1 { font-size: 18px; }
+.md-body h2 { font-size: 16px; }
+.md-body h3 { font-size: 15px; }
+.md-body h4,
+.md-body h5,
+.md-body h6 { font-size: 14px; }
+
+.md-body strong {
+  font-weight: 650;
+}
+
+.md-body ul,
+.md-body ol {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+
+.md-body ul { list-style: disc; }
+.md-body ol { list-style: decimal; }
+
+.md-body li {
+  margin: 3px 0;
+}
+
+.md-body li > ul,
+.md-body li > ol {
+  margin: 3px 0 0;
+}
+
+.md-body a {
+  color: var(--accent-blue);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.md-body hr {
+  margin: 14px 0;
+  border: 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.md-body blockquote {
+  margin: 0 0 10px;
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid var(--border-hover);
+  color: var(--text-secondary);
+}
+
+.md-body code {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--bg-primary);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12.5px;
+}
+
+.md-body pre {
+  margin: 0 0 10px;
+  padding: 12px;
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-primary);
+}
+
+.md-body pre code {
+  padding: 0;
+  background: none;
+  overflow-wrap: normal;
+  white-space: pre;
+}
+
+/* 列多时表格自己横向滚动，不撑破对话气泡 */
+.md-body table {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 12px;
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  border-spacing: 0;
+  border-collapse: separate;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.md-body th,
+.md-body td {
+  min-width: 112px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.md-body th {
+  background: var(--bg-primary);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.md-body th[align="center"],
+.md-body td[align="center"] { text-align: center; }
+
+.md-body th[align="right"],
+.md-body td[align="right"] { text-align: right; }
+
+.md-body tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .msg-tool-chip {
