@@ -500,6 +500,15 @@
         <button
           v-if="!isDifyPage"
           class="kb-subtab-btn"
+          :class="{ active: activeSubTab === 'evaluation' }"
+          @click="activeSubTab = 'evaluation'"
+        >
+          <i class="fa-solid fa-clipboard-check"></i>
+          <span>检索评测</span>
+        </button>
+        <button
+          v-if="!isDifyPage"
+          class="kb-subtab-btn"
           :class="{ active: activeSubTab === 'cost-governance' }"
           @click="openCostGovernanceTab"
         >
@@ -1456,6 +1465,15 @@
       </div>
 
       <!-- TAB 4: 知识库成本与治理看板 -->
+      <div v-if="activeSubTab === 'evaluation' && selectedKb" class="kb-tab-content">
+        <KnowledgeEvalPanel
+          :key="selectedKb.id"
+          :kb="selectedKb"
+          :can-manage="canManageKb(selectedKb)"
+          :is-super-admin="isSuperAdmin"
+        />
+      </div>
+
       <div v-if="!isDifyPage" v-show="activeSubTab === 'cost-governance'" class="kb-tab-content cost-governance-tab">
         <div class="cost-header-banner">
           <div class="cost-banner-info">
@@ -2087,6 +2105,7 @@ import { clearAssistantResource, setAssistantResource } from '../composables/use
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import KbAvatar from './KbAvatar.vue'
+import KnowledgeEvalPanel from './KnowledgeEvalPanel.vue'
 import { accountLabel } from '../composables/useAccountOptions'
 
 const props = defineProps({
@@ -2149,7 +2168,7 @@ watch(viewLayout, async (mode) => {
   if (!persistLayoutReady) return
   await http.put('/api/auth/preferences', { kbViewLayout: mode })
 })
-const activeSubTab = ref('documents') // 'documents' | 'faqs' | 'retrieval-test' | 'cost-governance'
+const activeSubTab = ref('documents') // 'documents' | 'faqs' | 'retrieval-test' | 'evaluation' | 'cost-governance'
 const selectedKb = ref(null)
 
 function resetToList(forceReload = true) {
