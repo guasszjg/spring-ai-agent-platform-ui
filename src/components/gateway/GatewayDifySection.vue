@@ -120,7 +120,7 @@
 
             <div class="form-group">
               <label class="form-label">Dify 服务器 API 地址 (Base URL) *</label>
-              <input v-model="difyForm.baseUrl" class="form-control-styled" placeholder="如 http://120.79.38.143/v1" required>
+              <input v-model="difyForm.baseUrl" class="form-control-styled" placeholder="如 https://dify.example.com/v1" required>
               <p class="gateway-field-hint">请填写 Dify API 服务地址（需包含 <code>/v1</code> 后缀，系统将自动校验和补齐）。</p>
             </div>
 
@@ -216,7 +216,7 @@ function openCreateDify() {
   Object.assign(difyForm, {
     id: '',
     name: '自建 Dify 知识库实例',
-    baseUrl: 'http://120.79.38.143/v1',
+    baseUrl: '',
     apiKey: '',
     apiKeyMasked: '',
     description: '知识库导入与召回专用实例',
