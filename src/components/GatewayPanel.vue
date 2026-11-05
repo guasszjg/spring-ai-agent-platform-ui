@@ -14,9 +14,10 @@
       </div>
     </header>
 
-    <!-- 四个子页面都常驻挂载：切换无需重新加载，侧边栏也能一直显示各自的状态 -->
+    <!-- 子页面都常驻挂载：切换无需重新加载，侧边栏也能一直显示各自的状态 -->
     <GatewayLlmSection v-show="section === 'llm'" ref="llmRef" @status="report('llm', $event)" />
     <GatewayEmbeddingSection v-show="section === 'embedding'" ref="embeddingRef" @status="report('embedding', $event)" />
+    <GatewayRerankSection v-show="section === 'rerank'" ref="rerankRef" @status="report('rerank', $event)" />
     <GatewayOcrSection v-show="section === 'ocr'" ref="ocrRef" @status="report('ocr', $event)" />
     <GatewayDifySection v-show="section === 'dify'" ref="difyRef" @status="report('dify', $event)" />
   </div>
@@ -27,6 +28,7 @@ import { computed, reactive, ref } from 'vue'
 import { ChevronRight } from 'lucide-vue-next'
 import GatewayLlmSection from './gateway/GatewayLlmSection.vue'
 import GatewayEmbeddingSection from './gateway/GatewayEmbeddingSection.vue'
+import GatewayRerankSection from './gateway/GatewayRerankSection.vue'
 import GatewayOcrSection from './gateway/GatewayOcrSection.vue'
 import GatewayDifySection from './gateway/GatewayDifySection.vue'
 import { GATEWAY_SECTIONS } from './gateway/sections'
@@ -47,9 +49,10 @@ function report(key, value) {
 
 const llmRef = ref(null)
 const embeddingRef = ref(null)
+const rerankRef = ref(null)
 const ocrRef = ref(null)
 const difyRef = ref(null)
-const refs = { llm: llmRef, embedding: embeddingRef, ocr: ocrRef, dify: difyRef }
+const refs = { llm: llmRef, embedding: embeddingRef, rerank: rerankRef, ocr: ocrRef, dify: difyRef }
 
 function refreshSection(key) {
   return refs[key]?.value?.refresh?.()
