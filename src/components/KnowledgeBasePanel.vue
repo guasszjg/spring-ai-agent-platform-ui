@@ -788,8 +788,13 @@
               </div>
               <div class="faq-meta-badges">
                 <span class="faq-category-pill">{{ faq.category || '通用问答' }}</span>
-                <span class="faq-sync-pill" :title="faq.externalDocId ? '已成功向量化同步至 Dify' : '未同步'">
-                  <i class="fa-solid fa-check-double"></i> Dify 向量就绪
+                <span
+                  class="faq-sync-pill"
+                  :class="{ 'faq-sync-pending': !faq.externalDocId }"
+                  :title="faq.externalDocId ? '已向量化，可以被检索到' : '还没有向量化，暂时检索不到。编辑后保存一次可以重试'"
+                >
+                  <i :class="faq.externalDocId ? 'fa-solid fa-check-double' : 'fa-solid fa-triangle-exclamation'"></i>
+                  {{ faq.externalDocId ? '向量就绪' : '未向量化' }}
                 </span>
               </div>
             </div>
