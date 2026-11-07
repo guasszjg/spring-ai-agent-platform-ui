@@ -3678,6 +3678,12 @@
   font-weight: 600;
 }
 
+.faq-sync-pill.faq-sync-pending {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--accent-amber);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
 .faq-answer-block {
   display: flex;
   align-items: flex-start;
