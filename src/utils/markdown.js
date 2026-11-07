@@ -55,6 +55,30 @@ function escapeText(text) {
 }
 
 /**
+ * Markdown 转成纯文字，用于复制。去掉格式符号，保留序号、换行和链接地址。
+ * 模型输出的 Markdown 不一定规范，所以不走解析器，只处理常见写法。
+ */
+export function markdownToPlainText(text) {
+  return String(text || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/^\s*```[^\n]*$/gm, '')
+    .replace(/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/gm, '')
+    .replace(/^[ \t]*\|?(?:[ \t]*:?-{2,}:?[ \t]*\|)+[ \t]*:?-*:?[ \t]*(?:\n|$)/gm, '')
+    .replace(/^#{1,6}[ \t]+/gm, '')
+    .replace(/^>[ \t]?/gm, '')
+    .replace(/^(\s*)[*+][ \t]+/gm, '$1- ')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g, '$1（$2）')
+    .replace(/\*\*/g, '')
+    .replace(/~~/g, '')
+    .replace(/(^|[^\w])__(?=\S)(.+?)(?<=\S)__(?!\w)/gm, '$1$2')
+    .replace(/(^|[^*\w])\*(?=\S)([^*\n]+?)(?<=\S)\*(?![*\w])/gm, '$1$2')
+    .replace(/`([^`\n]+)`/g, '$1')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+/**
  * Markdown 转成可以安全放进 v-html 的 HTML。
  * @param internalLinks 为 true 时给站内链接加 data-internal，由调用方在平台内跳转；其余链接都在新窗口打开
  */

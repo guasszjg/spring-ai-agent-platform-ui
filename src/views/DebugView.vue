@@ -867,7 +867,7 @@ import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import AgentLogsPanel from '../components/AgentLogsPanel.vue'
 import AgentMonitorPanel from '../components/AgentMonitorPanel.vue'
-import { renderMarkdown } from '../utils/markdown'
+import { markdownToPlainText, renderMarkdown } from '../utils/markdown'
 import AgentApiPanel from '../components/AgentApiPanel.vue'
 import ToolGlyph from '../components/ToolGlyph.vue'
 import AgentMascot from '../components/AgentMascot.vue'
@@ -1410,7 +1410,7 @@ async function sendChat() {
     messages.value.push({
       role: 'assistant',
       html: formatHtml(reply, false),
-      copyText: cleanAnswer(reply),
+      copyText: markdownToPlainText(cleanAnswer(reply)),
       tool,
       images: res.data.images || [],
       meta: { model: res.data.model || routedModel.value, latencyMs: res.data.latencyMs || 240, tokensUsed: res.data.tokensUsed || 150, cachedPromptTokens: res.data.cachedPromptTokens || 0, failoverFrom: res.data.failoverFrom || '' }
@@ -1479,13 +1479,13 @@ async function sendStreaming(payload) {
         answer += data?.answer || ''
         const current = ensureMessage()
         current.html = formatHtml(answer, false)
-        current.copyText = cleanAnswer(answer)
+        current.copyText = markdownToPlainText(cleanAnswer(answer))
         scrollToBottom()
       } else if (event === 'message_end') {
         const reply = data?.reply || answer
         const m = ensureMessage()
         m.html = formatHtml(reply, false)
-        m.copyText = cleanAnswer(reply)
+        m.copyText = markdownToPlainText(cleanAnswer(reply))
         m.tool = data?.toolCalled || null
         m.images = data?.images || []
         m.meta = {
