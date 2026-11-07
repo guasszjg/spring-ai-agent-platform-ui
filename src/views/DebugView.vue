@@ -364,12 +364,27 @@
               <div v-if="msg.meta && msg.meta.failoverFrom" class="msg-failover-note">
                 <i class="fa-solid fa-triangle-exclamation"></i> 主通道「{{ msg.meta.failoverFrom }}」调用失败，本次已切换到备用通道（{{ msg.meta.model }}）回答，原因见后端日志
               </div>
-              <div v-if="msg.meta" class="msg-meta-info">
-                <span><i class="fa-solid fa-microchip"></i> {{ msg.meta.model }}</span>
-                <span v-if="msg.meta.firstTokenMs != null" title="从发送到看到第一个字"><i class="fa-solid fa-bolt"></i> 首字 {{ msg.meta.firstTokenMs }}ms</span>
-                <span title="从发送到回答全部完成"><i class="fa-regular fa-clock"></i> {{ msg.meta.latencyMs }}ms</span>
-                <span><i class="fa-solid fa-ticket"></i> {{ msg.meta.tokensUsed }} Tokens</span>
-                <span v-if="msg.meta.cachedPromptTokens" title="输入 Token 中命中提示词缓存的部分"><i class="fa-solid fa-bolt"></i> 缓存 {{ msg.meta.cachedPromptTokens }}</span>
+              <div v-if="msg.meta || (msg.copyText && !msg.streaming)" class="msg-footer">
+                <button
+                  v-if="msg.copyText && !msg.streaming"
+                  type="button"
+                  class="msg-copy-btn"
+                  :class="{ copied: copiedIndex === i }"
+                  :title="msg.role === 'user' ? '复制问题' : '复制回答'"
+                  :aria-label="msg.role === 'user' ? '复制问题' : '复制回答'"
+                  @click="copyMessage(msg, i)"
+                >
+                  <Check v-if="copiedIndex === i" :size="13" :stroke-width="2" />
+                  <Copy v-else :size="13" :stroke-width="1.75" />
+                  <span v-if="copiedIndex === i">已复制</span>
+                </button>
+                <div v-if="msg.meta" class="msg-meta-info">
+                  <span><i class="fa-solid fa-microchip"></i> {{ msg.meta.model }}</span>
+                  <span v-if="msg.meta.firstTokenMs != null" title="从发送到看到第一个字"><i class="fa-solid fa-bolt"></i> 首字 {{ msg.meta.firstTokenMs }}ms</span>
+                  <span title="从发送到回答全部完成"><i class="fa-regular fa-clock"></i> {{ msg.meta.latencyMs }}ms</span>
+                  <span><i class="fa-solid fa-ticket"></i> {{ msg.meta.tokensUsed }} Tokens</span>
+                  <span v-if="msg.meta.cachedPromptTokens" title="输入 Token 中命中提示词缓存的部分"><i class="fa-solid fa-bolt"></i> 缓存 {{ msg.meta.cachedPromptTokens }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -381,11 +396,6 @@
           </div>
         </div>
         <div class="preview-input-container">
-          <div class="preset-pills-row">
-            <span class="preset-chip" @click="sendQuick('请介绍你的核心人设与工作流程')">介绍工作流程</span>
-            <span class="preset-chip" @click="sendQuick('现在系统时间是几点？星期几？')">查询当前时间</span>
-            <span class="preset-chip" @click="sendQuick('帮我写一个 Spring AI 2.0.1 动态提示词编排代码')">生成 Spring AI 代码</span>
-          </div>
           <form class="input-bar-wrapper" @submit.prevent="sendChat">
             <input v-model="inputText" class="main-chat-input" placeholder="和 Bot 聊天" autocomplete="off">
             <button type="submit" class="btn-input-send" :disabled="sending"><i class="fa-solid fa-paper-plane"></i></button>
@@ -864,7 +874,8 @@ import AgentMascot from '../components/AgentMascot.vue'
 import AgentAvatar from '../components/AgentAvatar.vue'
 import AssistantDock from '../components/AssistantDock.vue'
 import { clearAssistantResource, setAssistantPage, setAssistantResource } from '../composables/useAssistantContext'
-import { User } from 'lucide-vue-next'
+import { copyToClipboard } from '../utils/clipboard'
+import { Check, Copy, User } from 'lucide-vue-next'
 import { FALLBACK_PLATFORM_TOOLS, matchSavedTool, toDebugTool } from '../composables/platformTools'
 import logoDeepseek from '../assets/vendors/deepseek-color.svg'
 
@@ -1313,14 +1324,18 @@ function escapeHtml(str) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-function formatHtml(content, isUser) {
-  if (!content) return ''
-  let text = isUser ? content : content
+/** 去掉回答里的引用角标；页面显示和复制都用这份文字 */
+function cleanAnswer(content) {
+  return String(content || '')
     .replace(/\[\d+\]/g, '')
     .replace(/【\d+】/g, '')
     .replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰]+/g, '')
     .trim()
-  return isUser ? escapeHtml(text) : renderMarkdown(text)
+}
+
+function formatHtml(content, isUser) {
+  if (!content) return ''
+  return isUser ? escapeHtml(content) : renderMarkdown(cleanAnswer(content))
 }
 
 function toggleTheme() {
@@ -1333,11 +1348,21 @@ function resetChat() {
   conversationId.value = ''
   history.value = []
   messages.value = []
+  copiedIndex.value = null
 }
 
-function sendQuick(text) {
-  inputText.value = text
-  sendChat()
+// 同一时间只有一条消息显示“已复制”
+const copiedIndex = ref(null)
+let copiedTimer = null
+
+async function copyMessage(msg, index) {
+  if (!(await copyToClipboard(msg.copyText))) {
+    showToast('复制失败，请手动选择文字复制', 'error')
+    return
+  }
+  copiedIndex.value = index
+  clearTimeout(copiedTimer)
+  copiedTimer = setTimeout(() => { copiedIndex.value = null }, 1500)
 }
 
 async function sendChat() {
@@ -1346,7 +1371,7 @@ async function sendChat() {
   inputText.value = ''
   // 只带本次问题之前的最近 N 轮（本次问题单独作为 message 发送）
   const priorHistory = memoryTurns.value ? history.value.slice(-memoryTurns.value * 2) : []
-  messages.value.push({ role: 'user', html: escapeHtml(text) })
+  messages.value.push({ role: 'user', html: escapeHtml(text), copyText: text })
   history.value.push({ role: 'user', content: text })
   sending.value = true
   await nextTick()
@@ -1385,6 +1410,7 @@ async function sendChat() {
     messages.value.push({
       role: 'assistant',
       html: formatHtml(reply, false),
+      copyText: cleanAnswer(reply),
       tool,
       images: res.data.images || [],
       meta: { model: res.data.model || routedModel.value, latencyMs: res.data.latencyMs || 240, tokensUsed: res.data.tokensUsed || 150, cachedPromptTokens: res.data.cachedPromptTokens || 0, failoverFrom: res.data.failoverFrom || '' }
@@ -1392,7 +1418,8 @@ async function sendChat() {
     history.value.push({ role: 'assistant', content: reply })
     speedText.value = `↑ 0.1 K/s  ↓ ${(Math.random() * 2.2 + 1.1).toFixed(1)} K/s`
   } else {
-    messages.value.push({ role: 'assistant', html: `对话异常: ${res.message || '未知错误'}` })
+    const failure = `对话异常: ${res.message || '未知错误'}`
+    messages.value.push({ role: 'assistant', html: failure, copyText: failure })
   }
   await nextTick()
   if (streamRef.value) streamRef.value.scrollTop = streamRef.value.scrollHeight
@@ -1450,12 +1477,15 @@ async function sendStreaming(payload) {
         streamWaitSec.value = 0
         if (firstTokenMs == null) firstTokenMs = Math.round(performance.now() - started)
         answer += data?.answer || ''
-        ensureMessage().html = formatHtml(answer, false)
+        const current = ensureMessage()
+        current.html = formatHtml(answer, false)
+        current.copyText = cleanAnswer(answer)
         scrollToBottom()
       } else if (event === 'message_end') {
         const reply = data?.reply || answer
         const m = ensureMessage()
         m.html = formatHtml(reply, false)
+        m.copyText = cleanAnswer(reply)
         m.tool = data?.toolCalled || null
         m.images = data?.images || []
         m.meta = {
@@ -1485,7 +1515,7 @@ async function sendStreaming(payload) {
     if (msg && answer) {
       msg.html = formatHtml(answer, false) + `<div class="msg-stream-error">（输出中断：${escapeHtml(reason)}）</div>`
     } else {
-      messages.value.push({ role: 'assistant', html: `对话异常: ${escapeHtml(reason)}` })
+      messages.value.push({ role: 'assistant', html: `对话异常: ${escapeHtml(reason)}`, copyText: `对话异常: ${reason}` })
     }
   }
   scrollToBottom()

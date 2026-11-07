@@ -2199,8 +2199,54 @@ input:checked + .slider-toggle:before {
   font-size: 11px;
   color: var(--text-muted);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 2px 10px;
+  min-width: 0;
+}
+
+/* 消息下方的一行：复制按钮 + 模型和耗时 */
+.msg-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.chat-msg-user .msg-footer {
+  justify-content: flex-end;
+}
+
+.msg-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  min-width: 24px;
+  justify-content: center;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.msg-copy-btn:hover {
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.msg-copy-btn:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 1px;
+}
+
+.msg-copy-btn.copied {
+  color: var(--accent-emerald);
 }
 
 /* Chat Input Footer Area */
@@ -2212,31 +2258,6 @@ input:checked + .slider-toggle:before {
   flex-direction: column;
   gap: 12px;
   flex-shrink: 0;
-}
-
-.preset-pills-row {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-}
-
-.preset-chip {
-  padding: 5px 12px;
-  background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.2s;
-}
-
-.preset-chip:hover {
-  background: rgba(59, 130, 246, 0.15);
-  border-color: var(--accent-blue);
-  color: var(--accent-blue);
 }
 
 .input-bar-wrapper {
