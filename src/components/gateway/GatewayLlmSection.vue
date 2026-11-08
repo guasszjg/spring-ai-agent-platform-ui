@@ -159,11 +159,19 @@
                 <button
                   type="button"
                   class="protocol-tab-btn"
-                  :class="{ active: form.protocol !== 'CUSTOM_HTTP' }"
+                  :class="{ active: form.protocol === 'OPENAI' }"
                   @click="form.protocol = 'OPENAI'"
                 >
                   <img :src="logoCustomOpenAi" alt="OpenAI" class="protocol-tab-icon">
                   <span>OpenAI 兼容协议</span>
+                </button>
+                <button
+                  type="button"
+                  class="protocol-tab-btn"
+                  :class="{ active: form.protocol === 'OLLAMA' }"
+                  @click="form.protocol = 'OLLAMA'"
+                >
+                  <span>Ollama（OpenAI 兼容）</span>
                 </button>
                 <button
                   type="button"
@@ -179,6 +187,9 @@
 
             <!-- 模式一：OpenAI 兼容协议 -->
             <template v-if="form.protocol !== 'CUSTOM_HTTP'">
+              <p v-if="form.protocol === 'OLLAMA'" class="gateway-field-hint">
+                使用 Ollama 的 /v1 地址，支持任意端口及反向代理；思考开关由平台按 Ollama 协议转换。
+              </p>
               <div v-if="form.vendor === 'CUSTOM'" class="gateway-custom-toolbar" style="margin-bottom: 12px;">
                 <span class="gateway-field-hint">支持标准 OpenAI 协议及无 Key、特定 Header 鉴权通道（支持 Tool Call 与多轮对话）。</span>
                 <button type="button" class="btn-sample-load" @click="loadSampleOpenAiHeaders">
@@ -695,7 +706,7 @@ async function saveProvider() {
 
   const payload = {
     vendor: form.vendor,
-    protocol: 'OPENAI',
+    protocol: form.protocol,
     customConfig: JSON.stringify(customConfigObj, null, 2),
     name: form.name.trim(),
     baseUrl: form.baseUrl.trim(),
