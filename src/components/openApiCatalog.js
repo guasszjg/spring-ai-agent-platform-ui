@@ -319,8 +319,8 @@ export const OPEN_API_GROUPS = [
           { name: 'searchMethod', type: 'string', required: false, default: 'hybrid_search', description: '检索方式' },
           { name: 'topK', type: 'integer', required: false, default: '3', description: '召回切片数' },
           { name: 'scoreThreshold', type: 'number', required: false, default: '0.5', description: '相似度阈值 (0~1)' },
-          { name: 'vectorWeight', type: 'number', required: false, default: '0.7', description: '混合检索中向量得分权重' },
-          { name: 'keywordWeight', type: 'number', required: false, default: '0.3', description: '混合检索中关键词得分权重' }
+          { name: 'vectorWeight', type: 'number', required: false, default: '0.5', description: '混合检索中向量得分权重' },
+          { name: 'keywordWeight', type: 'number', required: false, default: '0.5', description: '混合检索中关键词得分权重' }
         ],
         exampleBody: body({ name: '广告机产品手册（2026 版）', topK: 4 }),
         exampleResponse: ok({ ...KB_SAMPLE, name: '广告机产品手册（2026 版）', topK: 4 }, '更新成功')
