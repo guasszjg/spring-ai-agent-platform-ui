@@ -985,6 +985,13 @@
   margin-bottom: 10px;
 }
 
+.tools-channel-hint {
+  color: var(--accent-amber);
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
 .var-tag-list {
   display: flex;
   gap: 8px;

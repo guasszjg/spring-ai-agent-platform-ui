@@ -72,6 +72,8 @@
                     <span>{{ vendorLabel(p.vendor) }}</span>
                     <span v-if="p.protocol === 'CUSTOM_HTTP'" class="gateway-proto-badge proto-custom">自定义 HTTP</span>
                     <span v-else-if="p.vendor === 'CUSTOM'" class="gateway-proto-badge proto-openai">OpenAI 兼容</span>
+                    <span v-if="p.protocol !== 'CUSTOM_HTTP' && !p.supportsTools" class="gateway-proto-badge proto-custom" title="不发送工具定义，智能体勾选的工具在这个通道上不生效">无工具调用</span>
+                    <span v-if="p.contextWindow" class="gateway-proto-badge proto-openai" title="平台按这个窗口收缩知识库内容和历史对话">上下文 {{ formatWindow(p.contextWindow) }}</span>
                   </div>
                 </div>
               </div>
@@ -263,6 +265,14 @@
                 <input v-model="form.openAiWebSearch" type="checkbox">
                 <span>启用服务端原生联网搜索 (Web Search)</span>
               </label>
+
+              <label class="gateway-enable-row" style="margin-top: 4px; margin-bottom: 2px;">
+                <input v-model="form.supportsTools" type="checkbox">
+                <span>支持工具调用 (Function Calling)</span>
+              </label>
+              <p class="gateway-field-hint" style="margin-top: 0;">
+                不勾选时，平台不向这个通道发送工具定义，智能体勾选的工具在这里不生效。本地小模型通常不支持，确认模型能可靠调用工具后再勾选。
+              </p>
             </template>
 
             <!-- 模式二：自定义 HTTP REST 接口 -->
@@ -327,6 +337,14 @@
                 </div>
               </div>
             </template>
+
+            <div class="form-group" style="margin-top: 10px;">
+              <label class="form-label">上下文窗口 (tokens，可选)</label>
+              <input v-model.number="form.contextWindow" type="number" min="0" step="1024" class="form-control-styled" placeholder="留空表示不限制，如 4096">
+              <p class="gateway-field-hint">
+                模型一次能处理的输入加输出上限。填写后，平台给回答预留最多四分之一，再按剩余空间收缩知识库内容和历史对话，避免请求超长被模型拒绝。
+              </p>
+            </div>
 
             <label class="gateway-enable-row">
               <input v-model="form.enabled" type="checkbox">
@@ -403,6 +421,7 @@ const policy = reactive({
 const form = reactive({
   id: '', vendor: 'CUSTOM', protocol: 'OPENAI', name: '', baseUrl: '', apiKey: '', apiKeyMasked: '',
   defaultModel: '', models: '', timeoutMs: 30000, remark: '', enabled: false, configured: false,
+  supportsTools: false, contextWindow: '',
   openAiHeaders: '',
   openAiWebSearch: false,
   customHttpMethod: 'POST',
@@ -515,6 +534,11 @@ function ensureDefaultProvider() {
   }
 }
 
+function formatWindow(tokens) {
+  if (tokens >= 1024 && tokens % 1024 === 0) return `${tokens / 1024}K`
+  return String(tokens)
+}
+
 function openCreate() {
   const preset = catalog.value.find((item) => item.vendor === 'CUSTOM') || {}
   Object.assign(form, {
@@ -523,6 +547,7 @@ function openCreate() {
     apiKey: '', apiKeyMasked: '', defaultModel: preset.defaultModel || '',
     models: (preset.models || []).join(', '),
     timeoutMs: 30000, remark: '', enabled: true, configured: false,
+    supportsTools: false, contextWindow: '',
     openAiHeaders: '',
     openAiWebSearch: false,
     customHttpMethod: 'POST',
@@ -565,6 +590,8 @@ function openEdit(provider) {
     remark: provider.remark || '',
     enabled: provider.enabled,
     configured: provider.configured,
+    supportsTools: !!provider.supportsTools,
+    contextWindow: provider.contextWindow || '',
     openAiHeaders: openAiHdrs,
     openAiWebSearch: !!(customCfg.webSearch || customCfg.enable_search),
     customHttpMethod: customCfg.httpMethod || 'POST',
@@ -669,6 +696,7 @@ async function saveProvider() {
       defaultModel: form.defaultModel.trim(),
       models: form.defaultModel.trim(),
       timeoutMs: form.timeoutMs,
+      contextWindow: Number(form.contextWindow) || 0,
       remark: form.remark.trim(),
       enabled: form.enabled
     }
@@ -714,6 +742,8 @@ async function saveProvider() {
     defaultModel: form.defaultModel.trim(),
     models: form.models.trim(),
     timeoutMs: form.timeoutMs,
+    supportsTools: !!form.supportsTools,
+    contextWindow: Number(form.contextWindow) || 0,
     remark: form.remark.trim(),
     enabled: form.enabled
   }
