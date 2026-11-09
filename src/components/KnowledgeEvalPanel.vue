@@ -266,7 +266,7 @@ const onlyMissed = ref(false)
 const expanded = reactive({})
 const starting = ref(false)
 const activeRerank = reactive({ configured: false, modelName: '' })
-const config = reactive({ searchMethod: 'hybrid_search', rerankMode: 'weighted_score', vectorWeight: 0.7, label: '' })
+const config = reactive({ searchMethod: 'hybrid_search', rerankMode: 'weighted_score', vectorWeight: 0.5, label: '' })
 let pollTimer = null
 
 const running = computed(() => runs.value.some((r) => r.status === 'RUNNING'))
@@ -507,7 +507,7 @@ function resetConfig() {
   Object.assign(config, {
     searchMethod: ['hybrid_search', 'semantic_search', 'full_text_search'].includes(method) ? method : 'hybrid_search',
     rerankMode: kb.rerankEnabled !== false && kb.rerankMode === 'reranking_model' && method === 'hybrid_search' ? 'reranking_model' : 'weighted_score',
-    vectorWeight: kb.vectorWeight ?? 0.7,
+    vectorWeight: kb.vectorWeight ?? 0.5,
     label: ''
   })
 }

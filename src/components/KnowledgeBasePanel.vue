@@ -1029,7 +1029,7 @@
                 >
                 <div class="weights-scale-labels">
                   <span>偏向语义意图 (0.9 : 0.1)</span>
-                  <span>7:3 黄金配比</span>
+                  <span>5:5 均衡</span>
                   <span>偏向精准关键词 (0.1 : 0.9)</span>
                 </div>
               </div>
@@ -1734,11 +1734,11 @@
                 <div class="weights-labels-row">
                   <div class="weight-label-item">
                     <span class="weight-title"><i class="fa-solid fa-brain"></i> 语义检索权重 (Vector)</span>
-                    <span class="weight-value">{{ Math.round((kbForm.vectorWeight || 0.7) * 100) }}% ({{ kbForm.vectorWeight || 0.7 }})</span>
+                    <span class="weight-value">{{ Math.round((kbForm.vectorWeight || 0.5) * 100) }}% ({{ kbForm.vectorWeight || 0.5 }})</span>
                   </div>
                   <div class="weight-label-item" style="text-align: right;">
                     <span class="weight-title"><i class="fa-solid fa-font"></i> 关键字检索权重 (Keyword)</span>
-                    <span class="weight-value" style="color: #10b981;">{{ Math.round((kbForm.keywordWeight || 0.3) * 100) }}% ({{ kbForm.keywordWeight || 0.3 }})</span>
+                    <span class="weight-value" style="color: #10b981;">{{ Math.round((kbForm.keywordWeight || 0.5) * 100) }}% ({{ kbForm.keywordWeight || 0.5 }})</span>
                   </div>
                 </div>
 
@@ -1755,16 +1755,16 @@
                 </div>
 
                 <div class="weights-ratio-bar">
-                  <div class="ratio-segment vector-segment" :style="{ width: ((kbForm.vectorWeight || 0.7) * 100) + '%' }">
-                    语义 {{ Math.round((kbForm.vectorWeight || 0.7) * 100) }}%
+                  <div class="ratio-segment vector-segment" :style="{ width: ((kbForm.vectorWeight || 0.5) * 100) + '%' }">
+                    语义 {{ Math.round((kbForm.vectorWeight || 0.5) * 100) }}%
                   </div>
-                  <div class="ratio-segment keyword-segment" :style="{ width: ((kbForm.keywordWeight || 0.3) * 100) + '%' }">
-                    关键词 {{ Math.round((kbForm.keywordWeight || 0.3) * 100) }}%
+                  <div class="ratio-segment keyword-segment" :style="{ width: ((kbForm.keywordWeight || 0.5) * 100) + '%' }">
+                    关键词 {{ Math.round((kbForm.keywordWeight || 0.5) * 100) }}%
                   </div>
                 </div>
 
                 <div class="input-hint">
-                  <i class="fa-solid fa-circle-info"></i> 默认 7:3 黄金权重：语义权重保障概念和上下文泛化召回，关键词权重保障专有名词与精确匹配。
+                  <i class="fa-solid fa-circle-info"></i> 默认 5:5：语义检索保障换一种说法也能找到，关键词检索保障专有名词、参数、文件名精确命中。产品手册、FAQ 这类术语多的知识库可调高关键词权重。
                 </div>
               </div>
 
@@ -2240,8 +2240,8 @@ const testParams = reactive({
   scoreThreshold: 0.5,
   searchMethod: 'hybrid_search',
   rerankEnabled: true,
-  vectorWeight: 0.7,
-  keywordWeight: 0.3,
+  vectorWeight: 0.5,
+  keywordWeight: 0.5,
   indexVersionId: '',
   expandParent: true,
   rewriteEnabled: false,
@@ -2411,8 +2411,8 @@ const kbForm = reactive({
   rerankMode: 'weighted_score',
   rerankModel: 'qwen3-rerank',
   rerankModelProvider: 'langgenius/tongyi/tongyi',
-  vectorWeight: 0.7,
-  keywordWeight: 0.3
+  vectorWeight: 0.5,
+  keywordWeight: 0.5
 })
 
 const faqModalOpen = ref(false)
@@ -2572,11 +2572,11 @@ function getSearchMethodLabel(method, kb) {
         return '混合检索 (Rerank)'
       }
       if (kb && (kb.vectorWeight != null || kb.keywordWeight != null)) {
-        const vw = Math.round((kb.vectorWeight ?? 0.7) * 10)
-        const kw = Math.round((kb.keywordWeight ?? 0.3) * 10)
+        const vw = Math.round((kb.vectorWeight ?? 0.5) * 10)
+        const kw = Math.round((kb.keywordWeight ?? 0.5) * 10)
         return `混合检索 (权重 ${vw}:${kw})`
       }
-      return '混合检索 (权重 7:3)'
+      return '混合检索 (权重 5:5)'
     case 'semantic_search':
       return '向量检索'
     case 'full_text_search':
@@ -2600,7 +2600,7 @@ function getSearchMethodIcon(method) {
 }
 
 function onVectorWeightChange() {
-  kbForm.vectorWeight = Math.round(Number(kbForm.vectorWeight || 0.7) * 10) / 10
+  kbForm.vectorWeight = Math.round(Number(kbForm.vectorWeight || 0.5) * 10) / 10
   kbForm.keywordWeight = Math.round((1.0 - kbForm.vectorWeight) * 10) / 10
 }
 
@@ -2631,8 +2631,8 @@ function openCreateKb() {
     rerankMode: 'weighted_score',
     rerankModel: 'qwen3-rerank',
     rerankModelProvider: dify ? 'langgenius/tongyi/tongyi' : 'spring_ai',
-    vectorWeight: 0.7,
-    keywordWeight: 0.3
+    vectorWeight: 0.5,
+    keywordWeight: 0.5
   })
   kbModalOpen.value = true
   loadSourceStatus()
@@ -2654,8 +2654,8 @@ function openEditKb(kb) {
     rerankMode: kb.rerankMode || 'weighted_score',
     rerankModel: kb.rerankModel || 'qwen3-rerank',
     rerankModelProvider: kb.rerankModelProvider || 'langgenius/tongyi/tongyi',
-    vectorWeight: kb.vectorWeight !== undefined && kb.vectorWeight !== null ? kb.vectorWeight : 0.7,
-    keywordWeight: kb.keywordWeight !== undefined && kb.keywordWeight !== null ? kb.keywordWeight : 0.3
+    vectorWeight: kb.vectorWeight !== undefined && kb.vectorWeight !== null ? kb.vectorWeight : 0.5,
+    keywordWeight: kb.keywordWeight !== undefined && kb.keywordWeight !== null ? kb.keywordWeight : 0.5
   })
   kbModalOpen.value = true
   loadActiveEmbedding()
@@ -2760,8 +2760,8 @@ async function openRetrievalTestTab() {
     testParams.rerankEnabled = isDifyPage.value
       ? savedRerank
       : savedRerank && activeRerank.configured && selectedKb.value.rerankMode === 'reranking_model' && testParams.searchMethod === 'hybrid_search'
-    testParams.vectorWeight = (selectedKb.value.vectorWeight !== null && selectedKb.value.vectorWeight !== undefined) ? selectedKb.value.vectorWeight : 0.7
-    testParams.keywordWeight = (selectedKb.value.keywordWeight !== null && selectedKb.value.keywordWeight !== undefined) ? selectedKb.value.keywordWeight : 0.3
+    testParams.vectorWeight = (selectedKb.value.vectorWeight !== null && selectedKb.value.vectorWeight !== undefined) ? selectedKb.value.vectorWeight : 0.5
+    testParams.keywordWeight = (selectedKb.value.keywordWeight !== null && selectedKb.value.keywordWeight !== undefined) ? selectedKb.value.keywordWeight : 0.5
     testParams.expandParent = true
     testParams.rewriteEnabled = false
     testParams.maxContextTokens = 3000
@@ -2829,8 +2829,8 @@ async function executeRetrievalTest(queryText) {
     searchMethod: testParams.searchMethod,
     rerankEnabled: testParams.rerankEnabled,
     rerankMode: isDifyPage.value ? undefined : (testParams.rerankEnabled ? 'reranking_model' : 'weighted_score'),
-    vectorWeight: Number(testParams.vectorWeight ?? 0.7),
-    keywordWeight: Number(testParams.keywordWeight ?? 0.3),
+    vectorWeight: Number(testParams.vectorWeight ?? 0.5),
+    keywordWeight: Number(testParams.keywordWeight ?? 0.5),
     indexVersionId: testParams.indexVersionId || undefined,
     expandParent: testParams.expandParent !== false,
     rewriteEnabled: Boolean(testParams.rewriteEnabled),
