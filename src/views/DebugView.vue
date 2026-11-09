@@ -249,6 +249,10 @@
               </button>
             </div>
           </div>
+          <p v-if="!routedSupportsTools && enabledToolsCount > 0" class="section-hint tools-channel-hint">
+            <i class="fa-solid fa-circle-info"></i>
+            当前模型通道「{{ routedChannel || '默认通道' }}」没有开启工具调用，这些工具在对话中不会生效。可到「模型网关」编辑通道后开启。
+          </p>
           <div class="tools-grid">
             <div
               v-for="tool in tools"
@@ -930,6 +934,7 @@ const publishedPrompt = ref('')
 const promptDirty = computed(() => prompt.value !== publishedPrompt.value)
 const routedChannel = ref('')
 const routedModel = ref('')
+const routedSupportsTools = ref(true)
 const routedLabel = computed(() => {
   if (routedChannel.value && routedModel.value) {
     return `${routedChannel.value} · ${routedModel.value}`
@@ -1742,6 +1747,7 @@ function onUp() {
 function applyGatewayRoute(route) {
   routedChannel.value = route?.channel || ''
   routedModel.value = route?.model || ''
+  routedSupportsTools.value = route?.supportsTools !== 'false'
 }
 
 function createDefaultSettings() {
