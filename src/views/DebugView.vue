@@ -212,6 +212,29 @@
             </div>
           </div>
           <p v-if="!boundKnowledgeBases.length" class="section-hint">尚未关联知识库。对话前会按这里绑定的库做检索并注入提示词。</p>
+          <div v-else class="kb-mode-row">
+            <span class="kb-mode-label">使用方式</span>
+            <div class="kb-source-switch kb-mode-switch">
+              <button
+                type="button"
+                class="kb-source-option"
+                :class="{ active: knowledgeMode === 'PRE_RETRIEVE' }"
+                title="每次提问前先检索一次，把结果和问题一起交给模型"
+                @click="setKnowledgeMode('PRE_RETRIEVE')"
+              >先检索后回答</button>
+              <button
+                type="button"
+                class="kb-source-option"
+                :class="{ active: knowledgeMode === 'AGENTIC' }"
+                title="模型自己判断要不要查、查什么，没查到可以换个说法再查"
+                @click="setKnowledgeMode('AGENTIC')"
+              >模型自主检索</button>
+            </div>
+          </div>
+          <p v-if="boundKnowledgeBases.length && knowledgeMode === 'AGENTIC'" class="section-hint" :class="{ 'tools-channel-hint': !routedSupportsTools }">
+            <template v-if="routedSupportsTools">模型判断需要时调用 search_knowledge 检索，每次回答最多查 3 次；寒暄闲聊不检索。</template>
+            <template v-else><i class="fa-solid fa-circle-info"></i> 当前模型通道不支持工具调用，会自动按「先检索后回答」处理。</template>
+          </p>
           <div
             v-for="kb in boundKnowledgeBases"
             :key="kb.id"
@@ -406,6 +429,7 @@
               <AgentMascot v-else :size="22" />
             </div>
             <div class="msg-content-wrapper">
+              <div v-if="msg.searches && msg.searches.length" class="msg-tool-chip msg-search-chip" :title="msg.searches.join('\n')"><i class="fa-solid fa-book-open"></i> 检索知识库 ×{{ msg.searches.length }}：{{ msg.searches.join(' / ') }}</div>
               <div v-if="msg.skills && msg.skills.length" class="msg-tool-chip msg-skill-chip"><i class="fa-solid fa-wand-magic-sparkles"></i> 加载技能: {{ msg.skills.join('、') }}</div>
               <div v-if="toolTextWithoutSkills(msg.tool)" class="msg-tool-chip"><i class="fa-solid fa-circle-check" style="color: var(--accent-emerald);"></i> 工具调用: {{ toolTextWithoutSkills(msg.tool) }}</div>
               <div class="msg-bubble" :class="{ 'md-body': msg.role === 'assistant' }" v-html="msg.html"></div>
@@ -1428,6 +1452,24 @@ async function unbindKnowledgeBase(kb) {
   showToast(`已取消关联 [${kb.name}]`, 'info', 2000)
 }
 
+// 知识库使用方式：先检索后回答（默认）/ 模型自主检索
+const knowledgeMode = computed(() => agent.value?.knowledgeMode === 'AGENTIC' ? 'AGENTIC' : 'PRE_RETRIEVE')
+
+async function setKnowledgeMode(mode) {
+  if (!agent.value?.id || knowledgeMode.value === mode) return
+  if (!canEditAgent.value) {
+    showToast('当前账号不能修改这个智能体，复制为自己的智能体后再切换', 'error', 4000)
+    return
+  }
+  const res = await http.put(`/api/agents/${agent.value.id}`, { ...agent.value, knowledgeMode: mode })
+  if (res.success && res.data) {
+    agent.value = res.data
+    showToast(mode === 'AGENTIC' ? '已切换为模型自主检索' : '已切换为先检索后回答', 'success', 2000)
+  } else {
+    showToast(res.message || '切换失败', 'error')
+  }
+}
+
 async function loadSkillOptions() {
   const res = await http.get('/api/skills')
   if (res.success && Array.isArray(res.data)) {
@@ -1448,7 +1490,7 @@ function missingSkillTools(skill) {
 // 工具调用摘要里去掉加载技能那几条，技能单独显示
 function toolTextWithoutSkills(text) {
   if (!text) return ''
-  return text.split(' | ').filter(part => !part.startsWith('加载技能')).join(' | ')
+  return text.split(' | ').filter(part => !part.startsWith('加载技能') && !part.startsWith('检索知识库')).join(' | ')
 }
 
 async function persistSkillIds(prev) {
@@ -1609,6 +1651,7 @@ async function sendChat() {
       copyText: markdownToPlainText(cleanAnswer(reply)),
       tool,
       skills: res.data.skillsLoaded || [],
+      searches: res.data.knowledgeSearches || [],
       images: res.data.images || [],
       meta: { model: res.data.model || routedModel.value, latencyMs: res.data.latencyMs || 240, tokensUsed: res.data.tokensUsed || 150, cachedPromptTokens: res.data.cachedPromptTokens || 0, failoverFrom: res.data.failoverFrom || '' }
     })
@@ -1685,6 +1728,7 @@ async function sendStreaming(payload) {
         m.copyText = markdownToPlainText(cleanAnswer(reply))
         m.tool = data?.toolCalled || null
         m.skills = data?.skillsLoaded || []
+        m.searches = data?.knowledgeSearches || []
         m.images = data?.images || []
         m.meta = {
           model: data?.model || routedModel.value,
