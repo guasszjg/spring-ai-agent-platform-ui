@@ -163,7 +163,8 @@
             <div class="skill-split">
               <textarea v-model="form.content" class="skill-md-input" :disabled="readonly" spellcheck="false"
                 placeholder="## 处理步骤&#10;1. 先确认订单号和购买时间&#10;2. ……&#10;&#10;## 注意事项&#10;- ……"></textarea>
-              <div class="skill-md-preview md-body" v-html="preview"></div>
+              <div v-if="form.content.trim()" class="skill-md-preview md-body" v-html="preview"></div>
+              <div v-else class="skill-md-preview skill-md-empty">左边写步骤，这里显示预览</div>
             </div>
           </div>
           <div v-if="form.id && !readonly" class="tool-form-group">
@@ -716,11 +717,25 @@ defineExpose({ load })
 .skill-editor-dialog {
   max-width: 1080px;
   width: 94%;
-  max-height: 92vh;
+  height: min(860px, 92vh);
 }
 
+/* 弹窗固定高度，正文区填满剩余空间；步骤编辑区随弹窗伸缩，不再被底部按钮栏盖住 */
 .skill-editor-body {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
   overflow-y: auto;
+}
+
+.skill-editor-body .tool-form-label {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+
+.skill-content-group {
+  flex: 1;
+  min-height: 260px;
 }
 
 .skill-form-row {
@@ -762,6 +777,7 @@ defineExpose({ load })
 
 .skill-tool-chip {
   display: inline-flex;
+  line-height: 20px;
   align-items: center;
   gap: 4px;
   padding: 3px 8px;
@@ -782,9 +798,11 @@ defineExpose({ load })
 
 .skill-tool-select {
   width: auto;
-  min-width: 160px;
-  height: 30px;
-  font-size: 12.5px;
+  min-width: 180px;
+  height: 34px;
+  padding: 0 10px;
+  line-height: 32px;
+  font-size: 13px;
 }
 
 .label-sub.warn {
@@ -799,8 +817,8 @@ defineExpose({ load })
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  height: 46vh;
-  min-height: 280px;
+  flex: 1;
+  min-height: 220px;
 }
 
 .skill-md-input {
@@ -833,6 +851,14 @@ defineExpose({ load })
   line-height: 1.65;
   color: var(--text-primary);
   box-sizing: border-box;
+}
+
+.skill-md-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 12.5px;
 }
 
 .skill-footer-buttons {
