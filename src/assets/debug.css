@@ -2712,3 +2712,32 @@ input:checked + .slider-toggle:before {
   border: 1px solid var(--border-color);
   object-fit: cover;
 }
+
+/* 技能 */
+.skill-missing-tools {
+  font-size: 11px;
+  color: var(--accent-amber);
+  white-space: nowrap;
+}
+
+.skill-catalog-icon {
+  background: rgba(139, 92, 246, 0.12);
+  color: #8b5cf6;
+}
+
+.skill-system-tag {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--accent-emerald);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.msg-skill-chip {
+  background: rgba(139, 92, 246, 0.12);
+  border-color: rgba(139, 92, 246, 0.28);
+  color: #8b5cf6;
+  margin-right: 6px;
+}

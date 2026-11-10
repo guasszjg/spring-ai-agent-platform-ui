@@ -1859,3 +1859,61 @@ input[type="range"] {
 .kb-gateway-link:hover {
   text-decoration: underline;
 }
+
+/* ==========================================================
+   侧边栏层级：分组标题 < 子菜单 < 一级菜单，靠字号、字重和颜色区分
+   ========================================================== */
+.sidebar-nav {
+  gap: 20px;
+}
+
+/* 分组标题：小号、浅色、加字距，只做分隔，不和菜单抢眼 */
+.sidebar-nav .nav-section-header {
+  padding: 0 10px 6px;
+}
+
+.sidebar-nav .nav-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+/* 一级菜单：正文色、稍重 */
+.sidebar-nav .sidebar-nav-item:not(.nav-child) {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.sidebar-nav .sidebar-nav-item:not(.nav-child) .nav-item-icon-wrap svg {
+  color: var(--text-secondary);
+}
+
+.sidebar-nav .sidebar-nav-item:not(.nav-child).active {
+  color: var(--active-fg);
+  font-weight: 600;
+}
+
+.sidebar-nav .sidebar-nav-item.active .nav-item-icon-wrap svg {
+  color: var(--active-fg);
+}
+
+/* 子菜单：小一号、次要色，选中时才变深 */
+.sidebar-nav .sidebar-nav-item.nav-child {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--text-muted);
+  padding: 5px 10px;
+}
+
+.sidebar-nav .sidebar-nav-item.nav-child:hover {
+  color: var(--text-primary);
+}
+
+.sidebar-nav .sidebar-nav-item.nav-child.active {
+  color: var(--active-fg);
+  font-weight: 500;
+  background: transparent;
+}

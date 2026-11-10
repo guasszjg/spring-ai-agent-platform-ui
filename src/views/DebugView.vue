@@ -237,6 +237,50 @@
         <div class="config-card-section">
           <div class="section-header-row">
             <div class="section-title">
+              <span>技能</span>
+            </div>
+            <div class="section-tools-header-right">
+              <span class="tools-count-badge">{{ boundSkills.length }} 已关联</span>
+              <span class="tools-header-divider">|</span>
+              <button type="button" class="btn-tools-add" @click="openAddSkillModal">
+                <i class="fa-solid fa-plus"></i>
+                <span>添加</span>
+              </button>
+            </div>
+          </div>
+          <p v-if="!boundSkills.length" class="section-hint">尚未关联技能。技能是写好的处理步骤，对话时模型判断用得上才加载，可在「技能库」里新建或导入。</p>
+          <p v-else-if="!routedSupportsTools" class="section-hint tools-channel-hint">
+            <i class="fa-solid fa-circle-info"></i> 当前模型通道不支持工具调用，技能不会生效（技能靠工具调用按需加载）。
+          </p>
+          <div v-for="skill in boundSkills" :key="skill.id" class="knowledge-item-card skill-item-card">
+            <div class="knowledge-meta">
+              <i class="fa-solid fa-wand-magic-sparkles" style="color: #8b5cf6;"></i>
+              <span :title="skill.description">{{ skill.name }}</span>
+              <span v-if="skill.missing" class="tool-unavailable-tag">技能已删除</span>
+              <span v-else-if="!skill.enabled" class="tool-unavailable-tag">已停用</span>
+            </div>
+            <div class="tool-right">
+              <span
+                v-if="missingSkillTools(skill).length"
+                class="skill-missing-tools"
+                :title="'技能需要但当前没启用的工具：' + missingSkillTools(skill).join('、')"
+              >
+                <i class="fa-solid fa-triangle-exclamation"></i> 缺 {{ missingSkillTools(skill).length }} 个工具
+              </span>
+              <button
+                type="button"
+                class="btn-tool-action btn-tool-delete"
+                title="取消关联"
+                @click.stop="unbindSkill(skill)"
+              >
+                <i class="fa-regular fa-trash-can"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="config-card-section">
+          <div class="section-header-row">
+            <div class="section-title">
               <span>工具</span>
               <i class="fa-regular fa-circle-question section-title-help" title="从平台工具管理中选择，配置一次即可被全部智能体使用"></i>
             </div>
@@ -362,7 +406,8 @@
               <AgentMascot v-else :size="22" />
             </div>
             <div class="msg-content-wrapper">
-              <div v-if="msg.tool" class="msg-tool-chip"><i class="fa-solid fa-circle-check" style="color: var(--accent-emerald);"></i> 工具调用: {{ msg.tool }}</div>
+              <div v-if="msg.skills && msg.skills.length" class="msg-tool-chip msg-skill-chip"><i class="fa-solid fa-wand-magic-sparkles"></i> 加载技能: {{ msg.skills.join('、') }}</div>
+              <div v-if="toolTextWithoutSkills(msg.tool)" class="msg-tool-chip"><i class="fa-solid fa-circle-check" style="color: var(--accent-emerald);"></i> 工具调用: {{ toolTextWithoutSkills(msg.tool) }}</div>
               <div class="msg-bubble" :class="{ 'md-body': msg.role === 'assistant' }" v-html="msg.html"></div>
               <div v-if="msg.images && msg.images.length" class="msg-faq-images">
                 <a v-for="src in msg.images" :key="src" :href="src" target="_blank" rel="noopener" title="FAQ 回答附图，点击查看原图">
@@ -736,6 +781,55 @@
       </div>
     </div>
 
+    <div v-if="addSkillModalOpen" class="tool-modal-backdrop" @click.self="addSkillModalOpen = false">
+      <div class="tool-modal-dialog">
+        <div class="tool-modal-header">
+          <div class="tool-modal-title">
+            <i class="fa-solid fa-wand-magic-sparkles" style="color: #8b5cf6;"></i>
+            <span>关联技能</span>
+          </div>
+          <button type="button" class="btn-modal-close" @click="addSkillModalOpen = false">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="tool-modal-body">
+          <div class="tool-catalog-section">
+            <h4 class="catalog-section-title">技能库 (共 {{ skillCatalog.length }} 项，最多关联 {{ MAX_AGENT_SKILLS }} 个)</h4>
+            <p v-if="!skillCatalog.length" class="section-hint">还没有可用的技能，请先在「技能库」页面新建或导入。</p>
+            <div class="tool-catalog-list">
+              <div v-for="skill in skillCatalog" :key="skill.id" class="catalog-item-card">
+                <div class="catalog-item-left">
+                  <div class="tool-icon skill-catalog-icon">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                  </div>
+                  <div>
+                    <div class="tool-info-text">
+                      <span class="tool-title">{{ skill.name }}</span>
+                      <span v-if="skill.isSystem" class="skill-system-tag">系统内置</span>
+                    </div>
+                    <div class="catalog-item-desc">{{ skill.description }}</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="btn-catalog-add"
+                  :disabled="boundSkillIds.includes(skill.id) || boundSkillIds.length >= MAX_AGENT_SKILLS"
+                  @click="bindSkill(skill)"
+                >
+                  <i :class="boundSkillIds.includes(skill.id) ? 'fa-solid fa-check' : 'fa-solid fa-plus'"></i>
+                  {{ boundSkillIds.includes(skill.id) ? '已关联' : '添加' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="tool-modal-footer">
+          <span class="label-sub">只列出已启用、你有权使用的技能</span>
+          <button type="button" class="btn-modal-cancel" @click="addSkillModalOpen = false">完成</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 系统提示词版本：列表、查看、与草稿对比、载入草稿、回滚 -->
     <div v-if="versionsOpen" class="tool-modal-backdrop" @click.self="versionsOpen = false">
       <div class="tool-modal-dialog pv-dialog">
@@ -988,6 +1082,17 @@ const tools = reactive([])
 const enabledToolsCount = computed(() => tools.filter(t => t.enabled).length)
 const removedTools = ref([])
 const boundKbIds = ref([])
+const MAX_AGENT_SKILLS = 20
+const boundSkillIds = ref([])
+const skillOptions = ref([])
+const skillOptionsLoaded = ref(false)
+const addSkillModalOpen = ref(false)
+const boundSkills = computed(() => boundSkillIds.value.map(id => {
+  const found = skillOptions.value.find(s => s.id === id)
+  return found || { id, name: id, description: '', requiredTools: [], enabled: true, missing: skillOptionsLoaded.value }
+}))
+// 添加弹窗里只列出启用的技能
+const skillCatalog = computed(() => skillOptions.value.filter(s => s.enabled))
 const knowledgeCatalog = ref([])
 const addKnowledgeModalOpen = ref(false)
 const boundKnowledgeBases = computed(() => {
@@ -1323,6 +1428,66 @@ async function unbindKnowledgeBase(kb) {
   showToast(`已取消关联 [${kb.name}]`, 'info', 2000)
 }
 
+async function loadSkillOptions() {
+  const res = await http.get('/api/skills')
+  if (res.success && Array.isArray(res.data)) {
+    skillOptions.value = res.data
+    skillOptionsLoaded.value = true
+  }
+}
+
+// 技能需要、但当前智能体没有启用的工具（按函数名比较）
+function missingSkillTools(skill) {
+  const required = skill?.requiredTools || []
+  if (!required.length) return []
+  const enabled = new Set(tools.filter(t => t.enabled && !t.unavailable)
+    .flatMap(t => [t.code, t.name]).filter(Boolean).map(v => String(v).toLowerCase()))
+  return required.filter(code => !enabled.has(String(code).toLowerCase()))
+}
+
+// 工具调用摘要里去掉加载技能那几条，技能单独显示
+function toolTextWithoutSkills(text) {
+  if (!text) return ''
+  return text.split(' | ').filter(part => !part.startsWith('加载技能')).join(' | ')
+}
+
+async function persistSkillIds(prev) {
+  if (!agent.value?.id) return false
+  if (!canEditAgent.value) {
+    boundSkillIds.value = prev
+    showToast('当前账号不能修改这个智能体的技能，复制为自己的智能体后再关联', 'error', 4000)
+    return false
+  }
+  const ids = [...boundSkillIds.value]
+  const res = await http.put(`/api/agents/${agent.value.id}`, { ...agent.value, skillIds: ids })
+  if (res.success && res.data) {
+    agent.value = res.data
+    boundSkillIds.value = Array.isArray(res.data.skillIds) ? [...res.data.skillIds] : ids
+    return true
+  }
+  boundSkillIds.value = prev
+  showToast(res.message || '技能关联保存失败', 'error')
+  return false
+}
+
+async function openAddSkillModal() {
+  await loadSkillOptions()
+  addSkillModalOpen.value = true
+}
+
+async function bindSkill(skill) {
+  if (!skill?.id || boundSkillIds.value.includes(skill.id)) return
+  const prev = [...boundSkillIds.value]
+  boundSkillIds.value = [...prev, skill.id]
+  if (await persistSkillIds(prev)) showToast(`已关联技能 [${skill.name}]`, 'success', 2000)
+}
+
+async function unbindSkill(skill) {
+  const prev = [...boundSkillIds.value]
+  boundSkillIds.value = prev.filter(id => id !== skill.id)
+  if (await persistSkillIds(prev)) showToast(`已取消关联 [${skill.name}]`, 'info', 2000)
+}
+
 async function openAddToolModal() {
   toolCatalogKeyword.value = ''
   await loadPlatformCatalog()
@@ -1443,6 +1608,7 @@ async function sendChat() {
       html: formatHtml(reply, false),
       copyText: markdownToPlainText(cleanAnswer(reply)),
       tool,
+      skills: res.data.skillsLoaded || [],
       images: res.data.images || [],
       meta: { model: res.data.model || routedModel.value, latencyMs: res.data.latencyMs || 240, tokensUsed: res.data.tokensUsed || 150, cachedPromptTokens: res.data.cachedPromptTokens || 0, failoverFrom: res.data.failoverFrom || '' }
     })
@@ -1518,6 +1684,7 @@ async function sendStreaming(payload) {
         m.html = formatHtml(reply, false)
         m.copyText = markdownToPlainText(cleanAnswer(reply))
         m.tool = data?.toolCalled || null
+        m.skills = data?.skillsLoaded || []
         m.images = data?.images || []
         m.meta = {
           model: data?.model || routedModel.value,
@@ -1969,7 +2136,9 @@ onMounted(async () => {
     await loadPlatformCatalog()
     loadPersistedTools(res.data)
     boundKbIds.value = Array.isArray(res.data.knowledgeBaseIds) ? [...res.data.knowledgeBaseIds] : []
+    boundSkillIds.value = Array.isArray(res.data.skillIds) ? [...res.data.skillIds] : []
     await loadKnowledgeCatalog()
+    if (boundSkillIds.value.length) loadSkillOptions()
     resetChat()
 
     if (routedModel.value && agent.value.modelName !== routedModel.value) {
