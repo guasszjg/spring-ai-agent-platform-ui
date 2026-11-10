@@ -631,6 +631,15 @@
         <ToolManagementPanel ref="toolsPanelRef" :can-manage="!isViewer" :is-super-admin="isSuperAdmin" />
       </section>
 
+      <section v-show="currentTab === 'skills'" class="app-subview active">
+        <SkillLibraryPanel
+          ref="skillsPanelRef"
+          :active="currentTab === 'skills'"
+          :can-manage="!isViewer"
+          :is-super-admin="isSuperAdmin"
+        />
+      </section>
+
       <section v-show="currentTab === 'users'" class="app-subview active">
         <UserManagementPanel v-if="isSuperAdmin" ref="usersPanelRef" :currentUser="user" />
       </section>
@@ -872,6 +881,7 @@ import { useToast } from '../composables/useToast'
 import { accountLabel } from '../composables/useAccountOptions'
 import GatewayPanel from '../components/GatewayPanel.vue'
 import ToolManagementPanel from '../components/ToolManagementPanel.vue'
+import SkillLibraryPanel from '../components/SkillLibraryPanel.vue'
 import AgentTemplatesPanel from '../components/AgentTemplatesPanel.vue'
 import KnowledgeBasePanel from '../components/KnowledgeBasePanel.vue'
 import UserManagementPanel from '../components/UserManagementPanel.vue'
@@ -887,7 +897,7 @@ import AssistantDock from '../components/AssistantDock.vue'
 import { setAssistantPage } from '../composables/useAssistantContext'
 import {
   LayoutDashboard, Bot, LayoutTemplate, Wrench, BookOpen, Link2, Network, Users, ShieldCheck, KeyRound,
-  Circle, PanelLeftClose, LogOut, Sun, Moon, ChevronDown
+  Circle, PanelLeftClose, LogOut, Sun, Moon, ChevronDown, WandSparkles
 } from 'lucide-vue-next'
 import {
   GATEWAY_SECTIONS, GATEWAY_TAB_PREFIX, GATEWAY_TABS, lastGatewayTab, rememberGatewayTab
@@ -898,6 +908,7 @@ const navIcons = {
   agents: Bot,
   templates: LayoutTemplate,
   tools: Wrench,
+  skills: WandSparkles,
   knowledge: BookOpen,
   'knowledge-dify': Link2,
   gateway: Network,
@@ -912,7 +923,7 @@ const router = useRouter()
 const route = useRoute()
 const { showToast } = useToast()
 
-const validTabs = ['overview', 'agents', 'templates', 'tools', 'knowledge', 'knowledge-dify', ...GATEWAY_TABS, 'users', 'roles', 'assistant-eval', 'security']
+const validTabs = ['overview', 'agents', 'templates', 'tools', 'skills', 'knowledge', 'knowledge-dify', ...GATEWAY_TABS, 'users', 'roles', 'assistant-eval', 'security']
 // 仅超级管理员可见的模块：导航隐藏，且通过 URL 或点击进入时会被拦回概览
 const superAdminOnlyTabs = [...GATEWAY_TABS, 'users', 'roles', 'assistant-eval']
 
@@ -946,6 +957,7 @@ async function loadDifyNavVisibility() {
 const templatesPanelRef = ref(null)
 const gatewayPanelRef = ref(null)
 const toolsPanelRef = ref(null)
+const skillsPanelRef = ref(null)
 const usersPanelRef = ref(null)
 const rolesPanelRef = ref(null)
 const evalPanelRef = ref(null)
@@ -1052,6 +1064,7 @@ const pageTitle = computed(() => {
   if (currentTab.value === 'agents') return '智能体'
   if (currentTab.value === 'templates') return '场景模板'
   if (currentTab.value === 'tools') return '工具'
+  if (currentTab.value === 'skills') return '技能库'
   if (currentTab.value === 'knowledge') return '自建知识库'
   if (currentTab.value === 'knowledge-dify') return 'Dify 知识库'
   if (isGatewayTab.value) return '模型网关'
@@ -1102,6 +1115,12 @@ const navGroups = computed(() => {
           name: '工具',
           title: '平台工具管理 (全智能体共用)',
           icon: 'fa-solid fa-screwdriver-wrench'
+        },
+        {
+          id: 'skills',
+          name: '技能库',
+          title: '技能库：把处理流程写成技能，智能体按需加载',
+          icon: 'fa-solid fa-wand-magic-sparkles'
         }
       ]
     },
@@ -1190,6 +1209,8 @@ function triggerTabRefresh(tabId) {
     templatesPanelRef.value?.resetTemplates?.(true)
   } else if (tabId === 'tools') {
     toolsPanelRef.value?.loadTools?.()
+  } else if (tabId === 'skills') {
+    skillsPanelRef.value?.load?.()
   } else if (tabId === 'knowledge' || tabId === 'knowledge-dify') {
     loadDifyNavVisibility()
     const kbId = queryKbId()
