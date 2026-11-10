@@ -458,6 +458,16 @@
             <p class="kb-desc-text">{{ selectedKb?.description || '暂无业务描述' }}</p>
           </div>
           <div class="kb-detail-top-actions">
+            <button
+              v-if="canManageKb(selectedKb) && selectedKb?.provider === 'SPRING_AI'"
+              class="btn-secondary"
+              :disabled="rebuildRunning"
+              :title="rebuildRunning ? '正在后台重建，可以离开页面' : '用上传时保存的原件重新解析、切片和向量化全部文档'"
+              @click="startRebuildIndex"
+            >
+              <i :class="rebuildRunning ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-rotate'"></i>
+              <span>{{ rebuildRunning ? `重建中 ${rebuildStatus.done}/${rebuildStatus.total}` : '重建索引' }}</span>
+            </button>
             <button v-if="canManageKb(selectedKb)" class="btn-secondary" title="编辑知识库信息" @click="openEditKb(selectedKb)">
               <i class="fa-solid fa-pen-to-square"></i> <span>编辑信息</span>
             </button>
@@ -2210,6 +2220,63 @@ defineExpose({
   resetToList,
   loadKnowledgeBases,
   openById
+})
+
+// ==================== 重建索引（3.2：切片加上下文标题后，已有文档重建一次才生效） ====================
+const rebuildStatus = ref({ state: 'IDLE', total: 0, done: 0 })
+const rebuildRunning = computed(() => rebuildStatus.value.state === 'RUNNING')
+let rebuildTimer = null
+
+async function startRebuildIndex() {
+  const kb = selectedKb.value
+  if (!kb?.id || rebuildRunning.value) return
+  const ok = window.confirm(
+    `重建「${kb.name}」的索引？\n\n用上传时保存的原件逐个重新解析、切片和向量化（共 ${kb.documentCount || 0} 个文档）：` +
+    '切片会带上「文档名 › 章节」标题，并去掉页眉页脚和目录，检索更准。\n\n' +
+    '后台处理，期间检索照常可用；会重新调用向量模型。问答 FAQ 不受影响。'
+  )
+  if (!ok) return
+  const res = await http.post(`/api/knowledge-bases/${kb.id}/rebuild-index`)
+  if (!res.success) {
+    showToast(res.message || '重建索引失败', 'error')
+    return
+  }
+  rebuildStatus.value = res.data
+  watchRebuild(kb.id)
+}
+
+function watchRebuild(kbId) {
+  clearTimeout(rebuildTimer)
+  rebuildTimer = setTimeout(() => pollRebuild(kbId), 2000)
+}
+
+async function pollRebuild(kbId, quiet = false) {
+  const res = await http.get(`/api/knowledge-bases/${kbId}/rebuild-index`)
+  if (!res.success || selectedKb.value?.id !== kbId) return
+  const before = rebuildStatus.value.state
+  rebuildStatus.value = res.data
+  if (res.data.state === 'RUNNING') {
+    watchRebuild(kbId)
+    return
+  }
+  if (quiet || before !== 'RUNNING') return
+  const s = res.data
+  const extra = (s.skipped ? `，跳过 ${s.skipped} 个` : '') + (s.failed ? `，失败 ${s.failed} 个` : '')
+  showToast(`索引重建完成：${s.rebuilt} 个文档，共 ${s.chunks} 个切片${extra}`, s.failed ? 'warning' : 'success', 5000)
+  if (s.errors?.length) {
+    console.warn('重建索引提示：', s.errors)
+    showToast(s.errors.slice(0, 3).join('；'), 'warning', 8000)
+  }
+  loadDocuments()
+}
+
+// 打开知识库时看一眼有没有正在进行的重建（例如刚才离开过页面）
+watch(() => selectedKb.value?.id, (id) => {
+  clearTimeout(rebuildTimer)
+  rebuildStatus.value = { state: 'IDLE', total: 0, done: 0 }
+  if (id && selectedKb.value?.provider === 'SPRING_AI' && canManageKb(selectedKb.value)) {
+    pollRebuild(id, true)
+  }
 })
 
 // ==================== 召回测试与调试状态 (Phase P1 & P2 & P3) ====================
