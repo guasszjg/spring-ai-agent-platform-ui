@@ -2741,3 +2741,37 @@ input:checked + .slider-toggle:before {
   color: #8b5cf6;
   margin-right: 6px;
 }
+
+/* 知识库使用方式 */
+.kb-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.kb-mode-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.kb-mode-switch {
+  margin-bottom: 0;
+}
+
+.kb-mode-switch .kb-source-option {
+  padding: 4px 12px;
+  font-size: 12.5px;
+}
+
+.msg-search-chip {
+  background: rgba(236, 72, 153, 0.1);
+  border-color: rgba(236, 72, 153, 0.25);
+  color: #db2777;
+  margin-right: 6px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
