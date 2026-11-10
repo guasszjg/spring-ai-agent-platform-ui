@@ -14,7 +14,7 @@
           <span :class="bochaReady ? 'ok' : ''">联网 {{ bochaReady ? '已配' : '待配' }}</span>
         </div>
         <button
-          v-if="canManage"
+          v-if="canManage && tab === 'tools'"
           type="button"
           class="btn-create-agent btn-tool-add"
           @click="openCreate"
@@ -25,6 +25,19 @@
       </div>
     </div>
 
+    <div v-if="isSuperAdmin" class="tools-tabs">
+      <button type="button" class="tools-tab" :class="{ active: tab === 'tools' }" @click="tab = 'tools'">
+        <i class="fa-solid fa-toolbox"></i> 平台工具
+      </button>
+      <button type="button" class="tools-tab" :class="{ active: tab === 'mcp' }" @click="tab = 'mcp'">
+        <i class="fa-solid fa-plug"></i> MCP 服务
+        <span v-if="mcpPending" class="tools-tab-badge" title="待审核的 MCP 工具">{{ mcpPending }}</span>
+      </button>
+    </div>
+
+    <McpServersPanel v-if="isSuperAdmin && tab === 'mcp'" @changed="onMcpChanged" />
+
+    <div v-show="tab === 'tools'">
     <div class="tools-settings-bar">
       <div class="tools-setting-item">
         <label class="tools-setting-label" for="max-tool-rounds">单次回答最多调用工具轮数</label>
@@ -265,6 +278,7 @@
         </button>
       </div>
     </section>
+    </div>
 
     <div v-if="usageOpen" class="tool-modal-backdrop" @click.self="usageOpen = false">
       <div class="tool-modal-dialog tools-usage-dialog">
@@ -585,6 +599,7 @@ import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { categoryLabel, FALLBACK_PLATFORM_TOOLS, freshnessLabel, timezoneLabel } from '../composables/platformTools'
 import ToolGlyph from './ToolGlyph.vue'
+import McpServersPanel from './McpServersPanel.vue'
 
 const props = defineProps({
   canManage: { type: Boolean, default: true },
@@ -593,6 +608,12 @@ const props = defineProps({
 
 const { showToast } = useToast()
 const VIEW_MODE_KEY = 'toolsViewMode'
+const tab = ref('tools')
+const mcpPending = ref(0)
+
+function onMcpChanged(servers) {
+  mcpPending.value = (servers || []).reduce((sum, s) => sum + (s.pendingToolCount || 0), 0)
+}
 const tools = ref([])
 const allTools = ref([])
 const loading = ref(false)
@@ -1055,6 +1076,48 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.tools-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tools-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+
+.tools-tab:hover {
+  color: var(--text-primary);
+}
+
+.tools-tab.active {
+  color: var(--accent-blue);
+  border-bottom-color: var(--accent-blue);
+}
+
+.tools-tab-badge {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--accent-amber);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+
 .tools-settings-bar {
   display: flex;
   align-items: center;

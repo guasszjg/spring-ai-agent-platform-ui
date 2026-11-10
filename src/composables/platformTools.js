@@ -18,6 +18,26 @@ export function toDebugTool(view) {
   }
 }
 
+// MCP 工具（管理员已审核启用的）。name 用平台内唯一的函数名，对话时后端按它精确匹配
+export function mcpToDebugTool(view) {
+  return {
+    id: `mcp:${view.id}`,
+    code: view.functionName,
+    name: view.functionName,
+    prefix: view.serverSlug || 'mcp',
+    title: view.title || view.toolName,
+    icon: 'fa-solid fa-plug',
+    iconClass: 'icon-blue-tool',
+    help: `MCP · ${view.serverName}${view.writeOperation ? ' · 写操作' : ''}：${view.description || view.toolName}`,
+    enabled: true,
+    description: view.description,
+    config: {},
+    category: 'MCP',
+    mcpCategory: view.category,
+    serverName: view.serverName
+  }
+}
+
 export function matchSavedTool(saved, catalog) {
   if (!saved || !catalog?.length) return null
   return catalog.find(t =>

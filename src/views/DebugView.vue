@@ -253,12 +253,17 @@
             <i class="fa-solid fa-circle-info"></i>
             当前模型通道「{{ routedChannel || '默认通道' }}」没有开启工具调用，这些工具在对话中不会生效。可到「模型网关」编辑通道后开启。
           </p>
+          <p v-for="hint in duplicateToolHints" :key="hint" class="section-hint tools-channel-hint">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            {{ hint }}，建议只保留一个，避免模型选择不稳定和重复计费。
+          </p>
           <div class="tools-grid">
             <div
               v-for="tool in tools"
               :key="tool.id || tool.code || tool.name"
               class="tool-item-card"
-              :class="{ 'tool-disabled': !tool.enabled }"
+              :class="{ 'tool-disabled': !tool.enabled || tool.unavailable }"
+              :title="tool.unavailable ? '这个 MCP 工具已被管理员停用、等待重新审核或已删除，对话中不会生效' : ''"
             >
               <div class="tool-left">
                 <div class="tool-icon" :class="tool.iconClass">
@@ -275,12 +280,14 @@
                 <div class="tool-info-text">
                   <span class="tool-prefix">{{ tool.prefix }}</span>
                   <span class="tool-title">{{ tool.title }}</span>
-                  <i v-if="tool.help" class="fa-regular fa-circle-question tool-help-icon" :title="tool.help"></i>
+                  <span v-if="tool.unavailable" class="tool-unavailable-tag">不可用</span>
+                  <i v-else-if="tool.help" class="fa-regular fa-circle-question tool-help-icon" :title="tool.help"></i>
                 </div>
               </div>
               <div class="tool-right">
                 <div class="tool-hover-actions">
                   <button
+                    v-if="tool.category !== 'MCP'"
                     type="button"
                     class="btn-tool-action btn-tool-sliders"
                     title="参数配置"
@@ -626,7 +633,7 @@
               <i class="fa-solid fa-magnifying-glass"></i>
               <input v-model="toolCatalogKeyword" type="search" autocomplete="off" placeholder="搜索工具名称、前缀或能力…">
             </div>
-            <h4 class="catalog-section-title">平台工具目录 ({{ filteredToolCatalog.length }}/{{ standardToolCatalog.length }})</h4>
+            <h4 class="catalog-section-title">平台工具与 MCP 工具 ({{ filteredToolCatalog.length }}/{{ standardToolCatalog.length }})</h4>
             <p v-if="!standardToolCatalog.length" class="section-hint">暂无可用工具，请先在左侧「工具管理」中启用。</p>
             <p v-else-if="!filteredToolCatalog.length" class="section-hint">没有匹配的工具，试试其他关键词。</p>
             <div class="tool-catalog-list">
@@ -880,7 +887,7 @@ import AssistantDock from '../components/AssistantDock.vue'
 import { clearAssistantResource, setAssistantPage, setAssistantResource } from '../composables/useAssistantContext'
 import { copyToClipboard } from '../utils/clipboard'
 import { Check, Copy, User } from 'lucide-vue-next'
-import { FALLBACK_PLATFORM_TOOLS, matchSavedTool, toDebugTool } from '../composables/platformTools'
+import { FALLBACK_PLATFORM_TOOLS, matchSavedTool, mcpToDebugTool, toDebugTool } from '../composables/platformTools'
 import logoDeepseek from '../assets/vendors/deepseek-color.svg'
 
 const route = useRoute()
@@ -1225,13 +1232,32 @@ function isToolAttached(catTool) {
 }
 
 async function loadPlatformCatalog() {
-  const res = await http.get('/api/platform-tools')
+  const [res, mcpRes] = await Promise.all([
+    http.get('/api/platform-tools'),
+    http.get('/api/mcp-servers/available-tools')
+  ])
   const rows = Array.isArray(res?.data) ? res.data : (res?.data?.records || [])
   const catalog = (res.success && rows.length) ? rows : FALLBACK_PLATFORM_TOOLS
+  const mcpTools = (mcpRes?.success && Array.isArray(mcpRes.data)) ? mcpRes.data.map(mcpToDebugTool) : []
   standardToolCatalog.value = catalog
     .filter(t => t.enabled !== false)
     .map(toDebugTool)
+    .concat(mcpTools)
 }
+
+// 同一类工具（如两个联网检索）同时启用时，模型选哪个不稳定，还可能重复计费
+const DUPLICATE_CATEGORY_LABELS = { SEARCH: '联网检索', MAP: '地图天气', DATABASE: '数据库', FILE: '文件' }
+const duplicateToolHints = computed(() => {
+  const groups = {}
+  tools.filter(t => t.enabled && !t.unavailable).forEach(t => {
+    const cat = t.category === 'MCP' ? t.mcpCategory : t.category
+    if (!DUPLICATE_CATEGORY_LABELS[cat]) return
+    ;(groups[cat] ||= []).push(t.title || t.name)
+  })
+  return Object.entries(groups)
+    .filter(([, names]) => names.length > 1)
+    .map(([cat, names]) => `${DUPLICATE_CATEGORY_LABELS[cat]}类启用了 ${names.length} 个工具（${names.join('、')}）`)
+})
 
 function knowledgeBadge(kb) {
   const quality = kb?.indexingTechnique === 'economy' ? '经济' : '高质量'
@@ -1887,17 +1913,22 @@ function loadPersistedTools(agentData) {
           loadedList.push({
             ...standard,
             ...st,
+            unavailable: false,
             config: { ...standard.config, ...(st.config || {}) }
           })
         } else {
-          loadedList.push(st)
+          // 保存过的 MCP 工具已经不在可用列表里：被管理员停用、上游有变化待重新审核，或服务已删除
+          loadedList.push(st.category === 'MCP' ? { ...st, unavailable: true } : st)
         }
       })
       if (loadedList.length > 0) {
         tools.splice(0, tools.length, ...loadedList)
       }
     } else if (standardToolCatalog.value.length) {
-      tools.splice(0, tools.length, ...standardToolCatalog.value.map(t => ({ ...t, config: { ...(t.config || {}) } })))
+      // 新智能体默认带上内置工具；MCP 工具必须手动添加，不默认带
+      tools.splice(0, tools.length, ...standardToolCatalog.value
+        .filter(t => t.category !== 'MCP')
+        .map(t => ({ ...t, config: { ...(t.config || {}) } })))
     }
     const bocha = tools.find(t => t.customIcon === 'bocha')
     if (bocha) {

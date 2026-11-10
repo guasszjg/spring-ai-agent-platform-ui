@@ -985,6 +985,16 @@
   margin-bottom: 10px;
 }
 
+.tool-unavailable-tag {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--accent-amber);
+  font-size: 11px;
+  line-height: 18px;
+}
+
 .tools-channel-hint {
   color: var(--accent-amber);
   background: rgba(245, 158, 11, 0.08);
