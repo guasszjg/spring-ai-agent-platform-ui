@@ -68,30 +68,15 @@
         <h2>登录</h2>
         <p class="lg-sub">使用企业账号登录控制台</p>
 
-        <div class="lg-segment" role="tablist">
-          <button
-            type="button"
-            :class="{ active: currentRole === 'admin' }"
-            @click="selectRole('admin', 'Amx#Admin2026')"
-          >管理员</button>
-          <button
-            type="button"
-            :class="{ active: currentRole === 'dev' }"
-            @click="selectRole('developer', 'Amx#Dev2026')"
-          >开发者</button>
-        </div>
-
-        <form class="lg-form" autocomplete="off" @submit.prevent="handleLogin">
+        <form class="lg-form" autocomplete="on" @submit.prevent="handleLogin">
           <label class="lg-field">
             <span>账号</span>
             <input
               v-model="username"
               type="text"
+              name="username"
               required
-              autocomplete="off"
-              data-1p-ignore
-              data-lpignore="true"
-              data-form-type="other"
+              autocomplete="username"
             >
           </label>
 
@@ -101,11 +86,9 @@
               <input
                 v-model="password"
                 :type="showPassword ? 'text' : 'password'"
+                name="password"
                 required
-                autocomplete="new-password"
-                data-1p-ignore
-                data-lpignore="true"
-                data-form-type="other"
+                autocomplete="current-password"
               >
               <button
                 type="button"
@@ -121,7 +104,7 @@
           <div class="lg-row">
             <label class="lg-check">
               <input v-model="rememberMe" type="checkbox">
-              <span>记住我</span>
+              <span>记住账号</span>
             </label>
             <a href="javascript:void(0)" @click="showToast('如需重置密码，请联系管理员', 'info')">忘记密码？</a>
           </div>
@@ -137,7 +120,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
@@ -148,10 +131,14 @@ import { Sun, Moon, Eye, EyeOff, Loader2 } from 'lucide-vue-next'
 const router = useRouter()
 const { showToast } = useToast()
 
-const username = ref('admin')
-const password = ref('Amx#Admin2026')
-const currentRole = ref('admin')
-const rememberMe = ref(true)
+const rememberedUsernameKey = 'agentmatrix.login.username'
+const rememberedUsername = localStorage.getItem(rememberedUsernameKey) || ''
+const username = ref(rememberedUsername)
+const password = ref('')
+const rememberMe = ref(!!rememberedUsername)
+watch(rememberMe, (remember) => {
+  if (!remember) localStorage.removeItem(rememberedUsernameKey)
+})
 const showPassword = ref(false)
 const submitting = ref(false)
 const theme = ref(localStorage.getItem('theme') || 'dark')
@@ -173,12 +160,6 @@ function toggleTheme() {
   localStorage.setItem('theme', theme.value)
 }
 
-function selectRole(user, pass) {
-  username.value = user
-  password.value = pass
-  currentRole.value = user === 'admin' ? 'admin' : 'dev'
-}
-
 async function handleLogin() {
   if (!username.value.trim() || !password.value.trim()) {
     showToast('请输入账号和密码', 'error')
@@ -191,6 +172,11 @@ async function handleLogin() {
       password: password.value
     })
     if (res && res.success && res.data) {
+      if (rememberMe.value) {
+        localStorage.setItem(rememberedUsernameKey, username.value.trim())
+      } else {
+        localStorage.removeItem(rememberedUsernameKey)
+      }
       localStorage.setItem('user', JSON.stringify(res.data))
       password.value = ''
       showToast('登录成功，正在进入控制台...', 'success', 1200)
