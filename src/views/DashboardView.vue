@@ -897,7 +897,7 @@ import AssistantDock from '../components/AssistantDock.vue'
 import { setAssistantPage } from '../composables/useAssistantContext'
 import {
   LayoutDashboard, Bot, LayoutTemplate, Wrench, BookOpen, Link2, Network, Users, ShieldCheck, KeyRound,
-  Circle, PanelLeftClose, LogOut, Sun, Moon, ChevronDown, WandSparkles
+  Circle, PanelLeftClose, LogOut, Sun, Moon, ChevronDown, WandSparkles, ClipboardCheck
 } from 'lucide-vue-next'
 import {
   GATEWAY_SECTIONS, GATEWAY_TAB_PREFIX, GATEWAY_TABS, lastGatewayTab, rememberGatewayTab
@@ -914,6 +914,7 @@ const navIcons = {
   gateway: Network,
   users: Users,
   roles: ShieldCheck,
+  'assistant-eval': ClipboardCheck,
   security: KeyRound
 }
 
