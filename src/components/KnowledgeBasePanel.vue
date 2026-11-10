@@ -3164,7 +3164,7 @@ async function executeUpload() {
     pendingFiles.value = []
     loadDocuments()
   } else {
-    showToast(res.message || '文档上传失败', 'error')
+    showToast(res.message || '文档上传失败', 'error', 6000)
   }
 }
 
