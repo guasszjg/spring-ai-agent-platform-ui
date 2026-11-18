@@ -1190,7 +1190,7 @@ input:checked + .slider-toggle:before {
 .badge-blue,
 .tab-badge,
 .tab-badge.badge-active,
-.active-badge-tag,
+.active-badge-tag:not(.embedding-active-badge),
 .hero-state-pill,
 .badge-recall-test,
 .param-val-badge,

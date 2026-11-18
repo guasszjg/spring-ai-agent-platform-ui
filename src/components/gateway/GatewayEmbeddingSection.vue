@@ -76,7 +76,7 @@
               </div>
             </td>
             <td>
-              <span v-if="e.isActive" class="active-badge-tag"><i class="fa-solid fa-circle-check"></i> 当前生效中</span>
+              <span v-if="e.isActive" class="active-badge-tag embedding-active-badge"><i class="fa-solid fa-circle-check"></i> 当前生效中</span>
               <button v-else class="btn-activate-action" title="设为当前生效的向量模型" @click="activateEmbedding(e)">
                 <i class="fa-solid fa-bolt"></i> 设为生效
               </button>
@@ -510,3 +510,11 @@ onMounted(refresh)
 </script>
 
 <style scoped src="../../assets/gateway.css"></style>
+
+<style scoped>
+.active-badge-tag.embedding-active-badge {
+  border-color: color-mix(in srgb, var(--accent-emerald) 45%, transparent);
+  background: color-mix(in srgb, var(--accent-emerald) 15%, transparent);
+  font-weight: 700;
+}
+</style>

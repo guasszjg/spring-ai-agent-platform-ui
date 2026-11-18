@@ -448,7 +448,7 @@
               <span class="search-method-badge" :class="selectedKb?.searchMethod || 'hybrid_search'">
                 <i :class="getSearchMethodIcon(selectedKb?.searchMethod)"></i> {{ getSearchMethodLabel(selectedKb?.searchMethod, selectedKb) }} (Top {{ selectedKb?.topK || 3 }})
               </span>
-              <span class="model-badge" title="Embedding 向量模型">
+              <span class="model-badge" title="知识库索引使用的 Embedding 模型">
                 <i class="fa-solid fa-cube"></i> {{ getEmbeddingModelLabel(selectedKb) }}
               </span>
               <span v-if="selectedKb?.rerankEnabled && selectedKb?.rerankMode === 'reranking_model'" class="indexing-badge" title="使用 Rerank 模型排序">
@@ -462,7 +462,7 @@
               v-if="canManageKb(selectedKb) && selectedKb?.provider === 'SPRING_AI'"
               class="btn-secondary"
               :disabled="rebuildRunning"
-              :title="rebuildRunning ? '正在后台重建，可以离开页面' : '用上传时保存的原件重新解析、切片和向量化全部文档'"
+              :title="rebuildRunning ? '正在后台重建，可以离开页面' : '重新解析文件文档，并为文档和 FAQ 重新生成向量'"
               @click="startRebuildIndex"
             >
               <i :class="rebuildRunning ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-rotate'"></i>
@@ -2231,9 +2231,8 @@ async function startRebuildIndex() {
   const kb = selectedKb.value
   if (!kb?.id || rebuildRunning.value) return
   const ok = window.confirm(
-    `重建「${kb.name}」的索引？\n\n用上传时保存的原件逐个重新解析、切片和向量化（共 ${kb.documentCount || 0} 个文档）：` +
-    '切片会带上「文档名 › 章节」标题，并去掉页眉页脚和目录，检索更准。\n\n' +
-    '后台处理，期间检索照常可用；会重新调用向量模型。问答 FAQ 不受影响。'
+    `重建「${kb.name}」的索引？\n\n将重新解析 ${kb.documentCount || 0} 个文件文档，并为文件和 ${kb.faqCount || 0} 条 FAQ 重新生成向量。\n\n` +
+    '任务在后台执行。全部重建成功后，知识库会更新索引使用的模型名称。'
   )
   if (!ok) return
   const res = await http.post(`/api/knowledge-bases/${kb.id}/rebuild-index`)
@@ -2259,15 +2258,31 @@ async function pollRebuild(kbId, quiet = false) {
     watchRebuild(kbId)
     return
   }
-  if (quiet || before !== 'RUNNING') return
   const s = res.data
-  const extra = (s.skipped ? `，跳过 ${s.skipped} 个` : '') + (s.failed ? `，失败 ${s.failed} 个` : '')
-  showToast(`索引重建完成：${s.rebuilt} 个文档，共 ${s.chunks} 个切片${extra}`, s.failed ? 'warning' : 'success', 5000)
+  if (quiet && s.state === 'DONE') {
+    await refreshRebuiltEmbedding(kbId)
+  }
+  if (quiet || before !== 'RUNNING') return
+  const extra = (s.skipped ? `，跳过 ${s.skipped} 项` : '') + (s.failed ? `，失败 ${s.failed} 项` : '')
+  const outcome = s.state === 'FAILED' ? '索引重建失败' : '索引重建完成'
+  showToast(`${outcome}：${s.rebuilt} 个文档（${s.chunks} 个切片）、${s.rebuiltFaqs ?? 0} 条 FAQ${extra}`,
+    s.state === 'FAILED' || s.failed || s.skipped ? 'warning' : 'success', 5000)
   if (s.errors?.length) {
     console.warn('重建索引提示：', s.errors)
     showToast(s.errors.slice(0, 3).join('；'), 'warning', 8000)
   }
   loadDocuments()
+  await refreshRebuiltEmbedding(kbId)
+}
+
+async function refreshRebuiltEmbedding(kbId) {
+  const refreshed = await http.get(`/api/knowledge-bases/${kbId}`)
+  if (refreshed.success && refreshed.data && selectedKb.value?.id === kbId) {
+    Object.assign(selectedKb.value, {
+      embeddingModel: refreshed.data.embeddingModel,
+      embeddingProvider: refreshed.data.embeddingProvider
+    })
+  }
 }
 
 // 打开知识库时看一眼有没有正在进行的重建（例如刚才离开过页面）
