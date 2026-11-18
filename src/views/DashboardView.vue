@@ -1797,16 +1797,17 @@ async function copyAgent(agent) {
 function chartTheme() {
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light'
   return {
-    text: isDark ? '#8a857c' : '#8e897f',
+    text: isDark ? '#b5b0a6' : '#6b655c',
     grid: isDark ? 'rgba(240,230,215,0.06)' : 'rgba(60,45,30,0.06)',
-    primary: isDark ? '#e08a6d' : '#d97757',
-    primaryFill: isDark ? 'rgba(224,138,109,0.12)' : 'rgba(217,119,87,0.10)',
-    secondary: isDark ? '#6b665e' : '#c2bbae',
+    input: isDark ? '#efaa8c' : '#ba583a',
+    inputFill: isDark ? 'rgba(239,170,140,0.15)' : 'rgba(186,88,58,0.12)',
+    output: isDark ? '#8caff5' : '#426bb6',
+    latency: isDark ? '#69c1a9' : '#2d8876',
+    surface: isDark ? '#262624' : '#ffffff',
     empty: isDark ? 'rgba(240,230,215,0.07)' : 'rgba(60,45,30,0.07)',
-    // 同一暖色相的明度阶梯，避免多色混杂
-    ramp: isDark
-      ? ['#e08a6d', '#b8674c', '#f0b39c', '#8c4d38', '#f5cfc0', '#6b665e']
-      : ['#d97757', '#e8a58c', '#a8522f', '#f2cdbf', '#6b5c4f', '#c2bbae']
+    modelColors: isDark
+      ? ['#83a9ef', '#68bfa8', '#eda07e', '#b7a0e8', '#e0b772', '#db8fb2', '#72b8cb', '#a8b877']
+      : ['#557ec7', '#3d9b87', '#ce7857', '#8a6bbe', '#b78734', '#b95e8b', '#388ba5', '#728746']
   }
 }
 
@@ -1847,8 +1848,8 @@ function renderCharts() {
     data: {
       labels: trend.map((p) => p.label),
       datasets: [
-        { ...line, label: `输入${unit ? ' (' + unit + ')' : ''}`, data: prompt.map((v) => Number((v / divisor).toFixed(2))), borderColor: colors.primary, backgroundColor: colors.primaryFill, fill: true },
-        { ...line, label: `输出${unit ? ' (' + unit + ')' : ''}`, data: completion.map((v) => Number((v / divisor).toFixed(2))), borderColor: colors.secondary, backgroundColor: 'transparent', fill: false }
+        { ...line, label: `输入${unit ? ' (' + unit + ')' : ''}`, data: prompt.map((v) => Number((v / divisor).toFixed(2))), borderColor: colors.input, backgroundColor: colors.inputFill, fill: true },
+        { ...line, label: `输出${unit ? ' (' + unit + ')' : ''}`, data: completion.map((v) => Number((v / divisor).toFixed(2))), borderColor: colors.output, backgroundColor: colors.output, borderDash: [5, 3], fill: false }
       ]
     },
     options: chartBaseOptions(colors)
@@ -1859,7 +1860,16 @@ function renderCharts() {
   if (donutChart) donutChart.destroy()
   donutChart = new Chart(donutCanvas.value, {
     type: 'doughnut',
-    data: { labels: labels.length ? labels : ['暂无数据'], datasets: [{ data: labels.length ? labels.map((k) => modelMap[k]) : [1], backgroundColor: labels.length ? labels.map((_, i) => colors.ramp[i % colors.ramp.length]) : [colors.empty], borderWidth: 0, hoverOffset: 4 }] },
+    data: {
+      labels: labels.length ? labels : ['暂无数据'],
+      datasets: [{
+        data: labels.length ? labels.map(k => modelMap[k]) : [1],
+        backgroundColor: labels.length ? labels.map((_, i) => colors.modelColors[i % colors.modelColors.length]) : [colors.empty],
+        borderColor: colors.surface,
+        borderWidth: labels.length > 1 ? 2 : 0,
+        hoverOffset: 4
+      }]
+    },
     options: { responsive: true, maintainAspectRatio: false, cutout: '78%', plugins: { legend: { position: 'right', labels: { color: colors.text, font: { size: 12 }, usePointStyle: true, pointStyle: 'circle', boxWidth: 6, boxHeight: 6, padding: 14 } }, tooltip: { enabled: labels.length > 0 } } }
   })
 
@@ -1867,7 +1877,7 @@ function renderCharts() {
   if (latencyChart) latencyChart.destroy()
   latencyChart = new Chart(latencyCanvas.value, {
     type: 'bar',
-    data: { labels: latency.map((r) => r.category), datasets: [{ label: '平均响应 (ms)', data: latency.map((r) => r.avgLatencyMs || 0), backgroundColor: colors.primary, borderRadius: 4, maxBarThickness: 28 }] },
+    data: { labels: latency.map((r) => r.category), datasets: [{ label: '平均响应 (ms)', data: latency.map((r) => r.avgLatencyMs || 0), backgroundColor: colors.latency, borderRadius: 4, maxBarThickness: 28 }] },
     options: chartBaseOptions(colors, { legend: false })
   })
 }
