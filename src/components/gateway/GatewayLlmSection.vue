@@ -67,7 +67,11 @@
                   <img :src="vendorLogo(p)" :alt="vendorLabel(p.vendor)" class="gateway-vendor-logo">
                 </div>
                 <div>
-                  <div class="table-agent-title">{{ p.name }}</div>
+                  <div class="gateway-channel-title">
+                    <span class="table-agent-title">{{ p.name }}</span>
+                    <span v-if="p.id === savedDefaultProviderId" class="gateway-route-tag gateway-route-primary">默认通道</span>
+                    <span v-else-if="p.id === savedFallbackProviderId" class="gateway-route-tag gateway-route-fallback">降级备用</span>
+                  </div>
                   <div class="table-agent-code">
                     <span>{{ vendorLabel(p.vendor) }}</span>
                     <span v-if="p.protocol === 'CUSTOM_HTTP'" class="gateway-proto-badge proto-custom">自定义 HTTP</span>
@@ -434,6 +438,16 @@ const form = reactive({
 })
 
 const providers = computed(() => overview.value.providers || [])
+const savedDefaultProviderId = computed(() => {
+  const id = overview.value.policy?.defaultProviderId
+  return providers.value.find(p => p.id === id && p.enabled && p.configured)?.id
+})
+const savedFallbackProviderId = computed(() => {
+  const savedPolicy = overview.value.policy
+  const id = savedPolicy?.fallbackProviderId
+  if (!savedPolicy?.failoverEnabled || id === savedDefaultProviderId.value) return
+  return providers.value.find(p => p.id === id && p.enabled && p.configured)?.id
+})
 const assistantProvider = computed(() => providers.value.find(p => p.id === policy.assistantProviderId) || null)
 const assistantModelOptions = computed(() => (assistantProvider.value?.modelList || [])
   .filter(m => m && m !== assistantProvider.value.defaultModel))
@@ -902,3 +916,33 @@ onMounted(refresh)
 </script>
 
 <style scoped src="../../assets/gateway.css"></style>
+
+<style scoped>
+.gateway-channel-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.gateway-route-tag {
+  padding: 2px 7px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.gateway-route-primary {
+  background: #23734d;
+  color: #fff;
+}
+
+.gateway-route-fallback {
+  background: color-mix(in srgb, var(--accent-emerald) 16%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--accent-emerald) 38%, var(--bg-card));
+  color: color-mix(in srgb, var(--accent-emerald) 60%, var(--text-primary));
+}
+</style>
