@@ -444,7 +444,8 @@
               <div v-if="msg.meta && msg.meta.failoverFrom" class="msg-failover-note">
                 <i class="fa-solid fa-triangle-exclamation"></i> 主通道「{{ msg.meta.failoverFrom }}」调用失败，本次已切换到备用通道（{{ msg.meta.model }}）回答，原因见后端日志
               </div>
-              <div v-if="msg.meta || (msg.copyText && !msg.streaming)" class="msg-footer">
+              <div class="msg-footer">
+                <time class="msg-timestamp" :datetime="msg.createdAt">{{ formatLocalTime(msg.createdAt) }}</time>
                 <button
                   v-if="msg.copyText && !msg.streaming"
                   type="button"
@@ -887,7 +888,7 @@
                 <span class="pv-source">{{ v.sourceLabel }}</span>
               </div>
               <div v-if="v.note" class="pv-item-note">{{ v.note }}</div>
-              <div class="pv-item-meta">{{ formatVersionTime(v.createdAt) }}<template v-if="v.createdBy"> · {{ v.createdBy }}</template> · {{ v.length }} 字</div>
+              <div class="pv-item-meta">{{ formatLocalTime(v.createdAt) }}<template v-if="v.createdBy"> · {{ v.createdBy }}</template> · {{ v.length }} 字</div>
             </button>
           </div>
           <div class="pv-detail">
@@ -896,7 +897,7 @@
                 <div class="pv-detail-title">
                   <strong>v{{ selectedVersion.versionNo }}</strong>
                   <span class="pv-source">{{ selectedVersion.sourceLabel }}</span>
-                  <span class="pv-item-meta">{{ formatVersionTime(selectedVersion.createdAt) }}<template v-if="selectedVersion.createdBy"> · {{ selectedVersion.createdBy }}</template></span>
+                  <span class="pv-item-meta">{{ formatLocalTime(selectedVersion.createdAt) }}<template v-if="selectedVersion.createdBy"> · {{ selectedVersion.createdBy }}</template></span>
                 </div>
                 <div class="pv-tabs">
                   <button type="button" :class="{ on: versionView === 'content' }" @click="versionView = 'content'">内容</button>
@@ -1603,13 +1604,18 @@ async function copyMessage(msg, index) {
   copiedTimer = setTimeout(() => { copiedIndex.value = null }, 1500)
 }
 
+function appendChatMessage(message) {
+  const count = messages.value.push({ ...message, createdAt: new Date().toISOString() })
+  return messages.value[count - 1]
+}
+
 async function sendChat() {
   if (!agent.value || !inputText.value.trim() || sending.value) return
   const text = inputText.value.trim()
   inputText.value = ''
   // 只带本次问题之前的最近 N 轮（本次问题单独作为 message 发送）
   const priorHistory = memoryTurns.value ? history.value.slice(-memoryTurns.value * 2) : []
-  messages.value.push({ role: 'user', html: escapeHtml(text), copyText: text })
+  appendChatMessage({ role: 'user', html: escapeHtml(text), copyText: text })
   history.value.push({ role: 'user', content: text })
   sending.value = true
   await nextTick()
@@ -1645,7 +1651,7 @@ async function sendChat() {
     if (res.data.conversationId) conversationId.value = res.data.conversationId
     const reply = res.data.reply
     const tool = res.data.toolCalled || null
-    messages.value.push({
+    appendChatMessage({
       role: 'assistant',
       html: formatHtml(reply, false),
       copyText: markdownToPlainText(cleanAnswer(reply)),
@@ -1659,7 +1665,7 @@ async function sendChat() {
     speedText.value = `↑ 0.1 K/s  ↓ ${(Math.random() * 2.2 + 1.1).toFixed(1)} K/s`
   } else {
     const failure = `对话异常: ${res.message || '未知错误'}`
-    messages.value.push({ role: 'assistant', html: failure, copyText: failure })
+    appendChatMessage({ role: 'assistant', html: escapeHtml(failure), copyText: failure })
   }
   await nextTick()
   if (streamRef.value) streamRef.value.scrollTop = streamRef.value.scrollHeight
@@ -1696,8 +1702,7 @@ async function sendStreaming(payload) {
 
   const ensureMessage = () => {
     if (!msg) {
-      messages.value.push({ role: 'assistant', html: '', tool: null, meta: null, streaming: true })
-      msg = messages.value[messages.value.length - 1]
+      msg = appendChatMessage({ role: 'assistant', html: '', tool: null, meta: null, streaming: true })
       streamingActive.value = true
     }
     return msg
@@ -1757,7 +1762,7 @@ async function sendStreaming(payload) {
     if (msg && answer) {
       msg.html = formatHtml(answer, false) + `<div class="msg-stream-error">（输出中断：${escapeHtml(reason)}）</div>`
     } else {
-      messages.value.push({ role: 'assistant', html: `对话异常: ${escapeHtml(reason)}`, copyText: `对话异常: ${reason}` })
+      appendChatMessage({ role: 'assistant', html: `对话异常: ${escapeHtml(reason)}`, copyText: `对话异常: ${reason}` })
     }
   }
   scrollToBottom()
@@ -1949,7 +1954,7 @@ function diffLines(oldText, newText) {
   return out
 }
 
-function formatVersionTime(value) {
+function formatLocalTime(value) {
   if (!value) return ''
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return String(value)

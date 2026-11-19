@@ -2036,6 +2036,7 @@ input:checked + .slider-toggle:before {
 }
 
 .chat-msg-user .msg-bubble {
+  align-self: flex-end;
   background: var(--accent-blue);
   color: white;
   border-top-right-radius: 4px;
@@ -2222,7 +2223,7 @@ input:checked + .slider-toggle:before {
   min-width: 0;
 }
 
-/* 消息下方的一行：复制按钮 + 模型和耗时 */
+/* 消息下方的日期时间、复制按钮及模型指标 */
 .msg-footer {
   display: flex;
   flex-wrap: wrap;
@@ -2233,6 +2234,26 @@ input:checked + .slider-toggle:before {
 
 .chat-msg-user .msg-footer {
   justify-content: flex-end;
+}
+
+.msg-timestamp {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (hover: hover) {
+  .chat-msg-user .msg-footer {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .chat-msg-user:hover .msg-footer,
+  .chat-msg-user:focus-within .msg-footer {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .msg-copy-btn {
