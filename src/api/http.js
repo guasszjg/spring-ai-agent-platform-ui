@@ -123,6 +123,8 @@ export const http = {
   put: (url, body) => request('PUT', url, { body }),
   patch: (url, body) => request('PATCH', url, { body }),
   del: (url) => request('DELETE', url),
+  // 与 del 相同；部分页面按 http.delete 调用
+  delete: (url) => request('DELETE', url),
   upload: async (url, formData) => {
     try {
       const headers = {}

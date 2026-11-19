@@ -2942,7 +2942,7 @@ async function clearSemanticCache() {
   if (!selectedKb.value) return
   clearingCache.value = true
   try {
-    const res = await http.delete(`/api/knowledge-bases/${selectedKb.value.id}/cache/clear`)
+    const res = await http.post(`/api/knowledge-bases/${selectedKb.value.id}/cache/clear`)
     if (res.success) {
       showToast('语义缓存已成功清空', 'success')
     } else {
