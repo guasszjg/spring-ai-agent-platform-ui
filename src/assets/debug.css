@@ -2619,6 +2619,11 @@ input:checked + .slider-toggle:before {
 .pv-warn {
   color: #d97706;
 }
+.pv-route-change {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-secondary);
+}
 
 .pv-note-input {
   width: 100%;

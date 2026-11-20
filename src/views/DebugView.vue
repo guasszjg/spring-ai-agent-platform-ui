@@ -10,8 +10,8 @@
           <h2 class="header-agent-title">
             <AgentAvatar v-if="agent" :name="agent.name" :size="28" />
             <span>{{ agent ? agent.name : '智能体加载中...' }}</span>
-            <span v-if="pageTab === 'orchestrate'" class="header-tag-pill" :class="promptDirty ? 'draft' : 'published'">
-              {{ promptDirty ? '未发布' : '已发布' }}
+            <span v-if="pageTab === 'orchestrate'" class="header-tag-pill" :class="draftDirty ? 'draft' : 'published'">
+              {{ draftDirty ? '未发布' : '已发布' }}
             </span>
           </h2>
           <div class="debug-tabs">
@@ -26,15 +26,16 @@
         <button class="btn-theme-toggle" @click="toggleTheme">
           <i :class="theme === 'light' ? 'fa-solid fa-sun' : 'fa-solid fa-moon'"></i>
         </button>
-        <router-link
-          to="/dashboard?tab=gateway-llm"
-          class="model-selector-pill"
-          title="模型已在网关页选定，点击前往修改"
-        >
-          <i class="fa-solid fa-microchip" style="color: var(--accent-purple);"></i>
-          <span class="model-current-name">{{ routedLabel }}</span>
-          <span class="model-type-badge">CHAT</span>
-        </router-link>
+        <ModelRoutePicker
+          :options="routeOptions"
+          :draft="routeDraft"
+          :published="publishedRoute"
+          :loading="routeOptionsLoading"
+          :can-manage-gateway="isSuperAdmin"
+          @update:draft="onRouteDraftChange"
+          @refresh="loadRouteOptions"
+          @reset="resetRouteDraft"
+        />
         <div v-if="pageTab === 'orchestrate'" class="model-settings-wrap" ref="settingsWrap">
           <button class="btn-model-settings" type="button" title="模型设置" @click="toggleSettings">
             <i class="fa-solid fa-sliders"></i>
@@ -149,8 +150,8 @@
         <button
           v-if="pageTab === 'orchestrate'"
           class="btn-publish"
-          :disabled="!agent || !promptDirty"
-          :title="promptDirty ? '将当前草稿发布为线上系统提示词' : '没有未发布的更改'"
+          :disabled="!agent || !draftDirty"
+          :title="draftDirty ? '将当前草稿（提示词、模型通道）发布上线' : '没有未发布的更改'"
           @click="openPublishDialog"
         >
           <span>发布上线</span>
@@ -441,6 +442,9 @@
               <div v-if="msg.streaming && streamWaitSec" class="msg-stream-wait">
                 <i class="fa-solid fa-circle-notch fa-spin"></i> 等待模型继续输出… {{ streamWaitSec }}s（模型可能在思考、联网搜索，或通道繁忙排队中）
               </div>
+              <div v-if="msg.meta && msg.meta.routeNotice" class="msg-failover-note">
+                <i class="fa-solid fa-triangle-exclamation"></i> {{ msg.meta.routeNotice }}
+              </div>
               <div v-if="msg.meta && msg.meta.failoverFrom" class="msg-failover-note">
                 <i class="fa-solid fa-triangle-exclamation"></i> 主通道「{{ msg.meta.failoverFrom }}」调用失败，本次已切换到备用通道（{{ msg.meta.model }}）回答，原因见后端日志
               </div>
@@ -460,7 +464,7 @@
                   <span v-if="copiedIndex === i">已复制</span>
                 </button>
                 <div v-if="msg.meta" class="msg-meta-info">
-                  <span><i class="fa-solid fa-microchip"></i> {{ msg.meta.model }}</span>
+                  <span :title="msg.meta.channel ? '通道：' + msg.meta.channel : ''"><i class="fa-solid fa-microchip"></i> {{ msg.meta.model }}</span>
                   <span v-if="msg.meta.firstTokenMs != null" title="从发送到看到第一个字"><i class="fa-solid fa-bolt"></i> 首字 {{ msg.meta.firstTokenMs }}ms</span>
                   <span title="从发送到回答全部完成"><i class="fa-regular fa-clock"></i> {{ msg.meta.latencyMs }}ms</span>
                   <span><i class="fa-solid fa-ticket"></i> {{ msg.meta.tokensUsed }} Tokens</span>
@@ -490,9 +494,9 @@
     <AgentApiPanel
       v-if="pageTab === 'api' && agent"
       :agent="agent"
-      :routed-channel="routedChannel"
-      :routed-model="routedModel"
-      :routed-label="routedLabel"
+      :routed-channel="publishedRouteInfo.primary ? publishedRouteInfo.primary.name : ''"
+      :routed-model="publishedRouteInfo.model"
+      :routed-label="publishedRouteInfo.primary ? publishedRouteInfo.primary.name + (publishedRouteInfo.model ? ' · ' + publishedRouteInfo.model : '') : ''"
       @agent-updated="onAgentUpdated"
     />
 
@@ -958,7 +962,11 @@
               <span v-if="promptDirty" class="pv-warn">当前草稿中未发布的修改会被替换。</span>
             </template>
             <template v-else>
-              当前草稿将成为线上系统提示词，并记录为版本 v{{ nextVersionNo }}；工具与模型参数一并保存。
+              <template v-if="promptDirty">当前草稿将成为线上系统提示词，并记录为版本 v{{ nextVersionNo }}；工具与模型参数一并保存。</template>
+              <template v-else>系统提示词没有变化，不生成新版本；工具与模型参数一并保存。</template>
+              <span v-if="routeDirty" class="pv-route-change">
+                模型通道改为：{{ routeSummary(draftRouteInfo) }}（原来：{{ routeSummary(publishedRouteInfo) }}）。
+              </span>
             </template>
           </p>
           <div class="tool-form-group">
@@ -1003,6 +1011,8 @@ import ToolGlyph from '../components/ToolGlyph.vue'
 import AgentMascot from '../components/AgentMascot.vue'
 import AgentAvatar from '../components/AgentAvatar.vue'
 import AssistantDock from '../components/AssistantDock.vue'
+import ModelRoutePicker from '../components/ModelRoutePicker.vue'
+import { describeRoute, modelOn, routeChoiceFromAgent, sameRouteChoice, emptyRouteChoice } from '../utils/chatRoute'
 import { clearAssistantResource, setAssistantPage, setAssistantResource } from '../composables/useAssistantContext'
 import { copyToClipboard } from '../utils/clipboard'
 import { Check, Copy, User } from 'lucide-vue-next'
@@ -1058,32 +1068,83 @@ function onAgentUpdated(updatedAgent) {
 const prompt = ref('')
 const publishedPrompt = ref('')
 const promptDirty = computed(() => prompt.value !== publishedPrompt.value)
-const routedChannel = ref('')
-const routedModel = ref('')
-const routedSupportsTools = ref(true)
+
+// ==================== 模型通道（主通道 / 备用通道） ====================
+// routeDraft 是本窗口的选择，只随调试请求发送；publishedRoute 是智能体已发布的设置。
+// 刷新或重新进入页面时草稿回到已发布的设置，点「发布上线」才保存。
+const isSuperAdmin = currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'System Admin' || currentUser.username === 'admin'
+const routeOptions = ref({ channels: [], platform: null })
+const routeOptionsLoading = ref(false)
+const routeDraft = ref(emptyRouteChoice())
+const publishedRoute = ref(emptyRouteChoice())
+const routeDirty = computed(() => !sameRouteChoice(routeDraft.value, publishedRoute.value))
+const draftDirty = computed(() => promptDirty.value || routeDirty.value)
+const draftRouteInfo = computed(() => describeRoute(routeOptions.value, routeDraft.value))
+const publishedRouteInfo = computed(() => describeRoute(routeOptions.value, publishedRoute.value))
+const routedChannel = computed(() => draftRouteInfo.value.primary?.name || '')
+const routedModel = computed(() => draftRouteInfo.value.model || '')
+const routedSupportsTools = computed(() => draftRouteInfo.value.supportsTools)
 const routedLabel = computed(() => {
-  if (routedChannel.value && routedModel.value) {
-    return `${routedChannel.value} · ${routedModel.value}`
-  }
-  if (routedChannel.value) return routedChannel.value
-  if (routedModel.value) return routedModel.value
-  return '未配置网关'
+  if (routedChannel.value && routedModel.value) return `${routedChannel.value} · ${routedModel.value}`
+  return routedChannel.value || routedModel.value || '未配置网关'
 })
 
-watch(pageTab, async (newTab) => {
-  if (newTab === 'api') {
-    const overviewRes = await http.get('/api/model-gateway/active-route')
-    if (overviewRes.success) {
-      applyGatewayRoute(overviewRes.data)
-      if (agent.value && routedModel.value && agent.value.modelName !== routedModel.value) {
-        agent.value.modelName = routedModel.value
-        http.put(`/api/agents/${agent.value.id}`, {
-          ...agent.value,
-          modelName: routedModel.value
-        }).catch(() => {})
-      }
-    }
+function routeSummary(info) {
+  const primary = info.primary ? `${info.primary.name}${info.model ? ' · ' + info.model : ''}` : '无'
+  const fallback = info.fallback ? info.fallback.name : '不切换'
+  return `主「${info.followPlatform ? '平台默认 ' : ''}${primary}」，备用「${info.fallbackFollow && info.fallback ? '平台 ' : ''}${fallback}」`
+}
+
+// 智能体选了主通道时，模型不在通道列表里就按通道默认模型显示，草稿和已发布用同一个值，避免一进页面就显示「未发布」
+function normalizedChoice(choice) {
+  const c = { ...choice }
+  if (c.primaryProviderId) {
+    const channel = routeOptions.value.channels.find(x => x.id === c.primaryProviderId)
+    if (channel && channel.selectable) c.modelName = modelOn(channel, c.modelName)
   }
+  return c
+}
+
+async function loadRouteOptions() {
+  routeOptionsLoading.value = true
+  try {
+    const res = await http.get('/api/model-gateway/chat-route-options')
+    if (res.success && res.data) {
+      routeOptions.value = { channels: res.data.channels || [], platform: res.data.platform || null }
+    } else if (res.message) {
+      showToast(res.message, 'error')
+    }
+  } finally {
+    routeOptionsLoading.value = false
+  }
+}
+
+function syncRouteFromAgent(a) {
+  const saved = normalizedChoice(routeChoiceFromAgent(a))
+  publishedRoute.value = saved
+  routeDraft.value = { ...saved }
+}
+
+function onRouteDraftChange(next) {
+  routeDraft.value = next
+}
+
+function resetRouteDraft() {
+  routeDraft.value = { ...publishedRoute.value }
+}
+
+// 随调试请求发送的通道草稿；跟随平台默认时模型沿用智能体已发布的模型名
+function routeDraftPayload() {
+  const d = routeDraft.value
+  return {
+    primaryProviderId: d.primaryProviderId || null,
+    fallbackProviderId: d.fallbackProviderId || null,
+    modelName: d.primaryProviderId ? d.modelName : (agent.value?.modelName || null)
+  }
+}
+
+watch(pageTab, (newTab) => {
+  if (newTab === 'api') loadRouteOptions()
 })
 const inputText = ref('')
 const sending = ref(false)
@@ -1631,6 +1692,7 @@ async function sendChat() {
   const payload = {
     message: text,
     prompt: prompt.value,
+    routeDraft: routeDraftPayload(),
     history: priorHistory,
     generation: buildGeneration(appliedSettings),
     conversationId: conversationId.value || undefined,
@@ -1659,7 +1721,7 @@ async function sendChat() {
       skills: res.data.skillsLoaded || [],
       searches: res.data.knowledgeSearches || [],
       images: res.data.images || [],
-      meta: { model: res.data.model || routedModel.value, latencyMs: res.data.latencyMs || 240, tokensUsed: res.data.tokensUsed || 150, cachedPromptTokens: res.data.cachedPromptTokens || 0, failoverFrom: res.data.failoverFrom || '' }
+      meta: { model: res.data.model || routedModel.value, latencyMs: res.data.latencyMs || 240, tokensUsed: res.data.tokensUsed || 150, cachedPromptTokens: res.data.cachedPromptTokens || 0, failoverFrom: res.data.failoverFrom || '', channel: res.data.channel || '', routeNotice: res.data.routeNotice || '' }
     })
     history.value.push({ role: 'assistant', content: reply })
     speedText.value = `↑ 0.1 K/s  ↓ ${(Math.random() * 2.2 + 1.1).toFixed(1)} K/s`
@@ -1741,7 +1803,9 @@ async function sendStreaming(payload) {
           tokensUsed: data?.tokensUsed ?? 0,
           cachedPromptTokens: data?.cachedPromptTokens ?? 0,
           firstTokenMs,
-          failoverFrom: data?.failoverFrom || ''
+          failoverFrom: data?.failoverFrom || '',
+          channel: data?.channel || '',
+          routeNotice: data?.routeNotice || ''
         }
         if (data?.conversationId) conversationId.value = data.conversationId
         history.value.push({ role: 'assistant', content: reply })
@@ -1779,12 +1843,15 @@ function optimizePrompt() {
 
 async function publish(note) {
   if (!agent.value) return false
-  const currentModel = routedModel.value || agent.value.modelName
+  const draft = routeDraft.value
   const res = await http.put(`/api/agents/${agent.value.id}`, {
     ...agent.value,
     promptChangeSource: 'PUBLISH',
     promptChangeNote: note || undefined,
-    modelName: currentModel,
+    // 空字符串表示改回跟随平台默认；跟随平台时不改智能体的模型名
+    primaryProviderId: draft.primaryProviderId || '',
+    fallbackProviderId: draft.fallbackProviderId || '',
+    modelName: draft.primaryProviderId ? draft.modelName : agent.value.modelName,
     systemPrompt: prompt.value,
     temperature: Number(appliedSettings.temperature.value),
     topP: Number(appliedSettings.topP.value),
@@ -1796,6 +1863,7 @@ async function publish(note) {
   if (res.success) {
     agent.value = res.data
     publishedPrompt.value = prompt.value
+    syncRouteFromAgent(res.data)
     if (agent.value?.id) {
       localStorage.setItem(toolsStorageKey(agent.value.id), JSON.stringify(tools))
     }
@@ -1860,7 +1928,7 @@ function loadVersionToDraft() {
 }
 
 function openPublishDialog() {
-  if (!agent.value || !promptDirty.value) return
+  if (!agent.value || !draftDirty.value) return
   Object.assign(publishDialog, { open: true, mode: 'publish', note: '', version: null })
   nextTick(() => noteInputRef.value && noteInputRef.value.focus())
 }
@@ -1984,12 +2052,6 @@ function onUp() {
   drag.active = false
   document.body.style.cursor = ''
   if (leftWidth.value) localStorage.setItem('debugPaneWidth', String(leftWidth.value))
-}
-
-function applyGatewayRoute(route) {
-  routedChannel.value = route?.channel || ''
-  routedModel.value = route?.model || ''
-  routedSupportsTools.value = route?.supportsTools !== 'false'
 }
 
 function createDefaultSettings() {
@@ -2170,15 +2232,14 @@ onMounted(async () => {
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp)
   document.addEventListener('mousedown', onDocClick)
-    const overviewRes = await http.get('/api/model-gateway/active-route')
-    if (overviewRes.success) applyGatewayRoute(overviewRes.data)
   setAssistantPage('debug')
-  const res = await http.get(`/api/agents/${route.params.id}`)
+  const [res] = await Promise.all([http.get(`/api/agents/${route.params.id}`), loadRouteOptions()])
   if (res.success && res.data) {
     agent.value = res.data
     setAssistantResource('AGENT', res.data.id, res.data.name)
     prompt.value = res.data.systemPrompt || ''
     publishedPrompt.value = prompt.value
+    syncRouteFromAgent(res.data)
     loadPromptVersions()
     applyAgentSettings(res.data)
     loadPersistedSettings(res.data.id)
@@ -2189,14 +2250,6 @@ onMounted(async () => {
     await loadKnowledgeCatalog()
     if (boundSkillIds.value.length) loadSkillOptions()
     resetChat()
-
-    if (routedModel.value && agent.value.modelName !== routedModel.value) {
-      agent.value.modelName = routedModel.value
-      http.put(`/api/agents/${agent.value.id}`, {
-        ...agent.value,
-        modelName: routedModel.value
-      }).catch(err => console.warn('Auto sync agent modelName failed:', err))
-    }
   } else {
     showToast('未能加载智能体信息', 'error')
   }
