@@ -157,15 +157,19 @@
               <span v-if="m.role !== 'user'" class="ad-msg-avatar"><AgentMascot :size="22" :animated="!!m.streaming" /></span>
               <div class="ad-msg-main">
                 <div v-if="m.tools && m.tools.length" class="ad-tools">
-                  <span v-for="t in m.tools" :key="t.id" class="ad-tool" :class="t.status">
+                  <span v-for="t in m.tools" :key="t.id" class="ad-tool" :class="t.status" :title="t.detail ? `${t.label}：${t.detail}` : t.label">
                     <LoaderCircle v-if="t.status === 'running'" :size="13" :stroke-width="2" class="ad-spin" />
                     <Check v-else-if="t.status === 'done'" :size="13" :stroke-width="2.2" />
                     <CircleAlert v-else :size="13" :stroke-width="2" />
-                    {{ t.status === 'running' ? '正在' + t.label + '…' : t.label }}
+                    <span>{{ t.status === 'running' ? '正在' + t.label + '…' : t.label }}</span>
+                    <span v-if="t.detail" class="ad-tool-detail">{{ t.detail }}</span>
                   </span>
                 </div>
                 <div v-if="m.html" class="ad-bubble" :class="{ degraded: m.degraded, 'md-body': m.role === 'assistant' }" @click="onBubbleClick" v-html="m.html"></div>
-                <div v-else-if="m.streaming" class="ad-bubble ad-typing"><i></i><i></i><i></i></div>
+                <div v-else-if="m.streaming" class="ad-bubble ad-typing">
+                  <span class="ad-typing-label">{{ m.tools && m.tools.length ? '正在整理结果' : '正在思考分析' }}</span>
+                  <i></i><i></i><i></i>
+                </div>
                 <!-- 操作卡片：写操作不直接执行，用户确认后才执行 -->
                 <div
                   v-for="card in m.actions || []"
@@ -267,6 +271,12 @@
                 <div v-if="m.meta || (m.id && !m.streaming && !m.degraded)" class="ad-meta-row">
                   <span v-if="m.meta" class="ad-meta">{{ m.meta }}</span>
                   <span v-if="m.id && !m.streaming && !m.degraded" class="ad-feedback">
+                    <button
+                      type="button"
+                      :class="{ on: m.copied }"
+                      :title="m.copied ? '已复制' : '复制回答'"
+                      @click="copyReply(m)"
+                    ><component :is="m.copied ? Check : Copy" :size="13" :stroke-width="1.9" /></button>
                     <button
                       type="button"
                       :class="{ on: m.feedback === 'UP' }"
@@ -661,7 +671,12 @@ function fromStoredMessage(m, actions = []) {
   }
   let tools = []
   try {
-    tools = (JSON.parse(m.toolCalls || '[]') || []).map((t, i) => ({ id: `${m.id}-${i}`, label: t.label, status: t.ok ? 'done' : 'failed' }))
+    tools = (JSON.parse(m.toolCalls || '[]') || []).map((t, i) => ({
+      id: `${m.id}-${i}`,
+      label: t.label,
+      status: t.ok ? 'done' : 'failed',
+      detail: t.detail || ''
+    }))
   } catch { /* 忽略损坏的工具记录 */ }
   return {
     id: m.id,
@@ -740,8 +755,12 @@ function scheduleRender(msg) {
 
 function upsertTool(msg, data) {
   const existing = msg.tools.find(t => t.id === data.id)
-  if (existing) existing.status = data.status
-  else msg.tools.push({ id: data.id, label: data.label || data.name, status: data.status })
+  if (existing) {
+    existing.status = data.status
+    if (data.detail) existing.detail = data.detail
+  } else {
+    msg.tools.push({ id: data.id, label: data.label || data.name, status: data.status, detail: data.detail || '' })
+  }
   scrollToBottom()
 }
 
@@ -879,6 +898,15 @@ async function copySecret(card) {
   } catch {
     card.error = '复制失败，请手动选中复制'
   }
+}
+
+async function copyReply(m) {
+  if (!m || !m.content) return
+  try {
+    await navigator.clipboard.writeText(m.content)
+    m.copied = true
+    setTimeout(() => { m.copied = false }, 2000)
+  } catch { /* 浏览器不支持或未授权剪贴板时静默忽略 */ }
 }
 
 function onBubbleClick(e) {
@@ -1316,8 +1344,15 @@ async function sendFeedback(m, rating) {
 
 .ad-typing {
   display: inline-flex;
+  align-items: center;
   gap: 5px;
-  padding: 13px 14px;
+  padding: 10px 14px;
+}
+
+.ad-typing-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-right: 3px;
 }
 
 .ad-typing i {
@@ -1465,6 +1500,17 @@ async function sendFeedback(m, rating) {
 
 .ad-tool.failed {
   color: var(--warning, #b7791f);
+}
+
+.ad-tool-detail {
+  color: var(--text-muted);
+  font-size: 11px;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-left: 5px;
+  border-left: 1px solid var(--border-color);
 }
 
 .ad-spin {
