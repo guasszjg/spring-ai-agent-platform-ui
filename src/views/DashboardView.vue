@@ -422,9 +422,9 @@
 
                 <!-- 核心技术规格 -->
                 <div class="agent-card-specs">
-                  <span class="spec-badge spec-model" :title="'调度模型: ' + routedModelLabel">
+                  <span class="spec-badge spec-model" :class="{ 'spec-model-warn': agentRoute(a).primaryUnavailable }" :title="agentRouteTitle(a)">
                     <i class="fa-solid fa-microchip"></i>
-                    <span>{{ routedModelLabel }}</span>
+                    <span>{{ agentRouteLabel(a) }}</span>
                   </span>
                   <span class="spec-badge" :title="'采样温度: ' + (a.temperature != null ? a.temperature : 0.7)">
                     <i class="fa-solid fa-temperature-half"></i>
@@ -529,7 +529,7 @@
                       <span class="spec-badge"><i class="fa-solid fa-layer-group"></i> {{ a.category || '通用' }}</span>
                     </td>
                     <td>
-                      <span class="spec-badge spec-model"><i class="fa-solid fa-microchip"></i> {{ routedModelLabel }}</span>
+                      <span class="spec-badge spec-model" :class="{ 'spec-model-warn': agentRoute(a).primaryUnavailable }" :title="agentRouteTitle(a)"><i class="fa-solid fa-microchip"></i> {{ agentRouteLabel(a) }}</span>
                     </td>
                     <td>
                       <div class="table-prompt-cell" :title="'System Prompt 完整内容 (鼠标悬停查看):\n' + (a.systemPrompt || '暂无设定')">
@@ -688,8 +688,8 @@
             </div>
             <div class="form-group">
               <label class="form-label">调度大模型</label>
-              <div class="form-control-styled" style="display:flex;align-items:center;min-height:40px;">{{ routedModelLabel }}</div>
-              <p class="section-hint" style="margin-top:6px;">由模型网关的默认通道决定，请到「模型网关」中修改</p>
+              <div class="form-control-styled" style="display:flex;align-items:center;min-height:40px;">{{ formRouteLabel }}</div>
+              <p class="section-hint" style="margin-top:6px;">{{ formRouteHint }}</p>
             </div>
           </div>
           <div class="form-row-2">
@@ -895,6 +895,7 @@ import AgentAvatar from '../components/AgentAvatar.vue'
 import TemplatePicker from '../components/TemplatePicker.vue'
 import AssistantDock from '../components/AssistantDock.vue'
 import { setAssistantPage } from '../composables/useAssistantContext'
+import { describeRoute, routeChoiceFromAgent } from '../utils/chatRoute'
 import {
   LayoutDashboard, Bot, LayoutTemplate, Wrench, BookOpen, Link2, Network, Users, ShieldCheck, KeyRound,
   Circle, PanelLeftClose, LogOut, Sun, Moon, ChevronDown, WandSparkles, ClipboardCheck
@@ -1015,6 +1016,36 @@ const routedModelLabel = computed(() => {
   if (routedChannel.value && routedModel.value) return `${routedChannel.value} · ${routedModel.value}`
   if (routedModel.value) return routedModel.value
   return '未配置网关'
+})
+
+// 每个智能体实际使用的通道：自选了主通道的按自选（不可用时与后端一致改用平台默认），否则跟随平台默认
+const routeOptions = ref(null)
+function agentRoute(a) {
+  if (!routeOptions.value || !a) return { primary: null, model: '', followPlatform: true, primaryUnavailable: '' }
+  return describeRoute(routeOptions.value, routeChoiceFromAgent(a))
+}
+function agentRouteLabel(a) {
+  if (!routeOptions.value) return routedModelLabel.value
+  const r = agentRoute(a)
+  if (!r.primary) return '未配置网关'
+  return r.model ? `${r.primary.name} · ${r.model}` : r.primary.name
+}
+function agentRouteTitle(a) {
+  const r = agentRoute(a)
+  let title = `调度模型: ${agentRouteLabel(a)}`
+  if (!routeOptions.value) return title
+  if (r.primaryUnavailable) title += `\n已选主通道${r.primaryUnavailable}，当前改用平台默认`
+  else title += r.followPlatform ? '\n跟随平台默认通道' : '\n智能体自选通道'
+  if (r.fallback) title += `\n备用通道: ${r.fallback.name}${r.fallbackFollow ? '（跟随平台）' : ''}`
+  return title
+}
+const formAgent = computed(() => (form.id ? agents.value.find(x => x.id === form.id) : null))
+const formRouteLabel = computed(() => (formAgent.value ? agentRouteLabel(formAgent.value) : routedModelLabel.value))
+const formRouteHint = computed(() => {
+  if (!formAgent.value) return '新智能体跟随平台默认通道；创建后可在调试页选择通道'
+  const r = agentRoute(formAgent.value)
+  if (r.primaryUnavailable) return `已选主通道${r.primaryUnavailable}，当前改用平台默认。请到调试页重新选择`
+  return r.followPlatform ? '跟随平台默认通道。可在调试页右上角选择通道，发布后生效' : '智能体自选的通道。可在调试页右上角修改，发布后生效'
 })
 const agentModalOpen = ref(false)
 const deleteModalOpen = ref(false)
@@ -1671,7 +1702,13 @@ async function loadTemplates() {
 }
 
 async function loadGatewayRoute() {
-  const res = await http.get('/api/model-gateway/active-route')
+  const [res, options] = await Promise.all([
+    http.get('/api/model-gateway/active-route'),
+    http.get('/api/model-gateway/chat-route-options')
+  ])
+  if (options.success && options.data) {
+    routeOptions.value = { channels: options.data.channels || [], platform: options.data.platform || null }
+  }
   if (!res.success || !res.data) return
   routedChannel.value = res.data.channel || ''
   routedModel.value = res.data.model || ''
@@ -1919,6 +1956,8 @@ onActivated(() => {
   if (currentTab.value === 'agents') {
     loadStats()
     loadAgents()
+    // 从调试页发布回来时通道选择可能变了，通道状态也可能在模型网关里改过
+    loadGatewayRoute()
   } else if (currentTab.value === 'tools') {
     toolsPanelRef.value?.loadTools?.()
   }

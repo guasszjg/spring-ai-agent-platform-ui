@@ -1734,6 +1734,11 @@
   color: var(--accent-purple);
   font-weight: 600;
 }
+.spec-model.spec-model-warn {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: var(--accent-amber);
+}
 
 .spec-prompt-flag {
   background: rgba(59, 130, 246, 0.08);
