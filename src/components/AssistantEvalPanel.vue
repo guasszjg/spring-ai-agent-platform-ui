@@ -5,18 +5,98 @@
       <div>
         <h2>助手评测</h2>
         <p class="ev-sub">
-          共 {{ caseCount }} 条用例，以超级管理员 / 开发者 / 只读观察员三种虚拟身份提问，按规则检查工具选择、参数、操作卡片与回答内容。
+          共 {{ caseCount }} 条用例（100% 覆盖平台能力清单及同义改写/越权场景），以超级管理员 / 开发者 / 只读观察员三种虚拟身份提问，按规则检查工具选择、参数、操作卡片、数据核对与防编造标记。
           评测只生成卡片不执行，结束后自动清理，不计入用量统计。
         </p>
       </div>
-      <button type="button" class="btn-primary ev-run" :disabled="starting || hasRunning" @click="startRun">
-        <i :class="hasRunning ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-play'"></i>
-        {{ hasRunning ? '评测进行中…' : '运行评测' }}
+      <div class="ev-header-actions">
+        <label class="ev-judge-toggle" title="仅对「使用问答」类带参考答案的用例额外用模型语义评分，日常评测默认关闭以节省 token">
+          <input v-model="judgeEnabled" type="checkbox" :disabled="starting || hasRunning">
+          <span>文档类模型评分</span>
+        </label>
+        <button type="button" class="btn-primary ev-run" :disabled="starting || hasRunning" @click="startRun">
+          <i :class="hasRunning ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-play'"></i>
+          {{ hasRunning ? '评测进行中…' : '运行评测' }}
+        </button>
+      </div>
+    </div>
+    <p class="ev-cost">每次全量运行会真实调用当前助手模型通道；开启「文档类模型评分」会产生额外评分 token 消耗并在记录中单独展示。</p>
+
+    <!-- 视图切换：运行记录 / 通道对比 / 待复盘 -->
+    <div class="ev-tabs">
+      <button type="button" :class="{ on: activeTab === 'runs' }" @click="activeTab = 'runs'">
+        运行记录 <span>{{ runs.length }}</span>
+      </button>
+      <button type="button" :class="{ on: activeTab === 'compare' }" @click="openCompare">
+        按通道对比 <span>{{ comparisons.length }}</span>
+      </button>
+      <button type="button" :class="{ on: activeTab === 'review' }" @click="openReview">
+        待复盘 <span>{{ reviewItems.length }}</span>
       </button>
     </div>
-    <p class="ev-cost">每次运行会真实调用模型通道，约消耗 20～40 万 token（按 deepseek-flash 约 1 元），耗时 5～10 分钟。</p>
 
-    <div class="ev-layout">
+    <!-- 1. 按通道对比 -->
+    <div v-if="activeTab === 'compare'" class="table-view-card ev-compare">
+      <div class="ev-card-title">不同模型通道 / 模型的最近全量通过率对比</div>
+      <div v-if="!comparisons.length" class="ev-empty">暂无已完成的评测记录，请先在不同通道下运行一次评测</div>
+      <div v-else class="ev-table-wrap">
+        <table class="ev-table">
+          <thead>
+            <tr>
+              <th>通道</th>
+              <th>模型</th>
+              <th>总通过率</th>
+              <th v-for="cat in compareCategories" :key="cat">{{ cat }}</th>
+              <th>模型评分 Token</th>
+              <th>完成时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in comparisons" :key="row.runId">
+              <td><strong>{{ row.channelName || '默认通道' }}</strong></td>
+              <td><code>{{ row.model || '—' }}</code></td>
+              <td><strong :class="rateClass(row.passRate)">{{ row.passRate == null ? '—' : row.passRate + '%' }}</strong></td>
+              <td v-for="cat in compareCategories" :key="cat">
+                <span :class="rateClass(row.categoryRates && row.categoryRates[cat])">
+                  {{ row.categoryRates && row.categoryRates[cat] != null ? row.categoryRates[cat] + '%' : '—' }}
+                </span>
+              </td>
+              <td>{{ row.judgeEnabled ? formatNumber(row.judgeTokens) : '关闭' }}</td>
+              <td>{{ formatTime(row.finishedAt) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 2. 待复盘列表（用户点没用 / 工具失败 / 回答校验告警） -->
+    <div v-else-if="activeTab === 'review'" class="table-view-card ev-review">
+      <div class="ev-card-title">待复盘对话（来源：用户点「没用」、工具返回失败、回答校验命中）</div>
+      <div v-if="!reviewItems.length" class="ev-empty">暂无需要复盘的异常对话</div>
+      <div v-else class="ev-review-list">
+        <div v-for="item in reviewItems" :key="item.messageId" class="ev-review-item">
+          <div class="ev-review-head">
+            <span class="ev-review-q">{{ item.question || '（无原提问）' }}</span>
+            <div class="ev-review-tags">
+              <span v-for="reason in item.reasons" :key="reason" class="ev-tag" :class="reason.toLowerCase()">{{ reasonLabel(reason) }}</span>
+              <span v-for="flag in item.verificationFlags || []" :key="flag" class="ev-tag flag">{{ flag }}</span>
+            </div>
+            <button type="button" class="btn-secondary ev-draft-btn" @click="convertToDraft(item)">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> 转评测用例草稿
+            </button>
+          </div>
+          <div class="ev-review-ans">{{ item.answer }}</div>
+          <div class="ev-review-meta">
+            <span>模型：{{ item.model || '—' }}</span>
+            <span>模式：{{ item.mode === 'CHAT' ? '问答' : '执行' }}</span>
+            <span>时间：{{ formatTime(item.createdAt) }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. 运行记录（默认视图） -->
+    <div v-else class="ev-layout">
       <!-- 运行记录 -->
       <div class="table-view-card ev-runs">
         <div class="ev-card-title">运行记录</div>
@@ -50,8 +130,8 @@
             <div><span>通过率</span><strong :class="rateClass(summaryRate)">{{ summaryRate == null ? '—' : summaryRate + '%' }}</strong></div>
             <div><span>通过 / 失败</span><strong>{{ selected.passed }} / {{ selected.failed }}</strong></div>
             <div><span>跳过 / 错误</span><strong>{{ selected.skipped }} / {{ selected.errored }}</strong></div>
-            <div><span>模型</span><strong class="ev-small">{{ selected.model || '—' }}</strong></div>
-            <div><span>Token</span><strong class="ev-small">{{ formatNumber((selected.promptTokens || 0) + (selected.completionTokens || 0)) }}</strong></div>
+            <div><span>模型 / 通道</span><strong class="ev-small">{{ (selected.channelName ? selected.channelName + ' · ' : '') + (selected.model || '—') }}</strong></div>
+            <div><span>Token</span><strong class="ev-small">{{ formatNumber((selected.promptTokens || 0) + (selected.completionTokens || 0)) }}<template v-if="selected.judgeTokens"> (+{{ formatNumber(selected.judgeTokens) }} 评分)</template></strong></div>
             <div><span>耗时</span><strong class="ev-small">{{ formatDuration(selected.durationMs) }}</strong></div>
           </div>
           <p v-if="selected.error" class="ev-error">{{ selected.error }}</p>
@@ -104,6 +184,17 @@
         </template>
       </div>
     </div>
+    <!-- 待复盘一键转换的评测用例草稿弹窗 -->
+    <div v-if="draftCaseJson" class="ev-modal-mask" @click.self="draftCaseJson = ''">
+      <div class="ev-modal">
+        <div class="ev-modal-head">
+          <strong>评测用例草稿（可追加至 resources/assistant/eval/cases.json）</strong>
+          <button type="button" class="btn-secondary" @click="copyDraft">复制 JSON</button>
+          <button type="button" class="btn-secondary" @click="draftCaseJson = ''">关闭</button>
+        </div>
+        <pre class="ev-draft-pre">{{ draftCaseJson }}</pre>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -118,9 +209,56 @@ const runs = ref([])
 const selected = ref(null)
 const caseCount = ref(0)
 const starting = ref(false)
+const judgeEnabled = ref(false)
+const activeTab = ref('runs')
+const comparisons = ref([])
+const reviewItems = ref([])
+const draftCaseJson = ref('')
 const filter = ref('problem')
 const expanded = ref({})
 let pollTimer = null
+
+const compareCategories = computed(() => {
+  const set = new Set()
+  for (const row of comparisons.value) {
+    Object.keys(row.categoryRates || {}).forEach(k => set.add(k))
+  }
+  return Array.from(set)
+})
+
+function reasonLabel(r) {
+  return { USER_DOWN: '用户点没用', TOOL_FAILED: '工具执行失败', VERIFICATION_FLAG: '回答校验命中' }[r] || r
+}
+
+async function openCompare() {
+  activeTab.value = 'compare'
+  const res = await http.get('/api/assistant/evals/compare')
+  if (res && res.success) comparisons.value = res.data || []
+}
+
+async function openReview() {
+  activeTab.value = 'review'
+  const res = await http.get('/api/assistant/evals/review-queue')
+  if (res && res.success) reviewItems.value = res.data || []
+}
+
+async function convertToDraft(item) {
+  const res = await http.post(`/api/assistant/evals/review-queue/${encodeURIComponent(item.messageId)}/draft-case`)
+  if (res && res.success && res.data) {
+    draftCaseJson.value = JSON.stringify(res.data, null, 2)
+  } else {
+    showToast((res && res.message) || '转换草稿失败', 'error')
+  }
+}
+
+async function copyDraft() {
+  try {
+    await navigator.clipboard.writeText(draftCaseJson.value)
+    showToast('已复制用例草稿 JSON', 'success')
+  } catch {
+    showToast('复制失败，请手动选中复制', 'error')
+  }
+}
 
 const filters = [
   { value: 'problem', label: '未通过' },
@@ -209,12 +347,13 @@ async function selectRun(id) {
 
 async function startRun() {
   starting.value = true
-  const res = await http.post('/api/assistant/evals/runs', {})
+  const res = await http.post('/api/assistant/evals/runs', { judgeEnabled: judgeEnabled.value })
   starting.value = false
   if (!res || !res.success) {
     showToast((res && res.message) || '发起评测失败', 'error')
     return
   }
+  activeTab.value = 'runs'
   showToast('评测已开始，完成后可在这里查看结果', 'success')
   await loadRuns()
   await selectRun(res.data.id)
@@ -233,8 +372,14 @@ function schedulePoll() {
 }
 
 async function refresh() {
-  const cases = await http.get('/api/assistant/evals/cases')
+  const [cases, cmp, rev] = await Promise.all([
+    http.get('/api/assistant/evals/cases'),
+    http.get('/api/assistant/evals/compare').catch(() => null),
+    http.get('/api/assistant/evals/review-queue').catch(() => null)
+  ])
   if (cases && cases.success) caseCount.value = (cases.data || []).length
+  if (cmp && cmp.success) comparisons.value = cmp.data || []
+  if (rev && rev.success) reviewItems.value = rev.data || []
   await loadRuns()
   if (runs.value.length && (!selected.value || !runs.value.some(r => r.id === selected.value.id))) {
     await selectRun(runs.value[0].id)
@@ -315,6 +460,33 @@ defineExpose({ refresh })
 .ev-row code.bad { color: var(--danger, #c0392b); }
 .ev-answer { white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow-y: auto; line-height: 1.55; }
 .ev-muted { color: var(--text-muted); }
+
+.ev-header-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.ev-judge-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; user-select: none; }
+.ev-tabs { display: flex; gap: 8px; }
+.ev-tabs button { border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); border-radius: 999px; padding: 5px 14px; font-size: 13px; cursor: pointer; }
+.ev-tabs button.on { border-color: var(--brand-line, var(--border-hover)); color: var(--brand-text, var(--text-primary)); background: var(--brand-soft, var(--surface-active)); font-weight: 600; }
+.ev-tabs span { margin-left: 4px; color: var(--text-muted); font-size: 12px; }
+.ev-compare, .ev-review { padding: 14px 16px; }
+.ev-table-wrap { overflow-x: auto; }
+.ev-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ev-table th, .ev-table td { padding: 8px 10px; border-bottom: 1px solid var(--border-color); text-align: left; white-space: nowrap; }
+.ev-table th { color: var(--text-muted); font-weight: 600; font-size: 12px; }
+.ev-review-list { display: flex; flex-direction: column; gap: 10px; }
+.ev-review-item { border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.ev-review-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ev-review-q { flex: 1; font-weight: 600; font-size: 13.5px; min-width: 200px; }
+.ev-review-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.ev-tag { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: rgba(183, 121, 31, 0.12); color: var(--warning, #b7791f); }
+.ev-tag.user_down, .ev-tag.flag { background: rgba(220, 38, 38, 0.12); color: #dc2626; }
+.ev-draft-btn { font-size: 12px; padding: 4px 10px; }
+.ev-review-ans { font-size: 12.5px; color: var(--text-secondary); white-space: pre-wrap; max-height: 120px; overflow-y: auto; background: var(--surface-subtle); padding: 8px 10px; border-radius: 8px; }
+.ev-review-meta { display: flex; gap: 14px; font-size: 11.5px; color: var(--text-muted); }
+.ev-modal-mask { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); display: flex; align-items: center; justify-content: center; z-index: 1200; }
+.ev-modal { width: min(680px, 92vw); max-height: 82vh; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.ev-modal-head { display: flex; align-items: center; gap: 8px; }
+.ev-modal-head strong { flex: 1; font-size: 13.5px; }
+.ev-draft-pre { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--surface-subtle); font-size: 12px; overflow: auto; max-height: 60vh; }
 
 @media (max-width: 1100px) {
   .ev-layout { grid-template-columns: 1fr; }

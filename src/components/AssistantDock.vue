@@ -170,22 +170,22 @@
                   <span class="ad-typing-label">{{ m.tools && m.tools.length ? '正在整理结果' : '正在思考分析' }}</span>
                   <i></i><i></i><i></i>
                 </div>
-                <!-- 操作卡片：写操作不直接执行，用户确认后才执行 -->
+                <!-- 操作卡片：写操作不直接执行，用户确认后才执行（支持 A/B/C/D 四级风险管控） -->
                 <div
                   v-for="card in m.actions || []"
                   :key="card.id"
                   class="ad-card"
-                  :class="['status-' + cardStatus(card).toLowerCase()]"
+                  :class="['status-' + cardStatus(card).toLowerCase(), 'risk-' + (card.riskLevel || 'A').toLowerCase()]"
                 >
                   <div class="ad-card-head">
-                    <span class="ad-card-icon">
-                      <component :is="card.riskLevel === 'W2' ? PencilLine : Plus" :size="14" :stroke-width="2" />
+                    <span class="ad-card-icon" :class="card.riskLevel">
+                      <component :is="cardIcon(card.riskLevel)" :size="14" :stroke-width="2" />
                     </span>
                     <span class="ad-card-title">{{ card.title }}</span>
-                    <span class="ad-card-risk" :class="card.riskLevel">{{ card.riskLevel === 'W2' ? '修改' : '新建' }}</span>
+                    <span class="ad-card-risk" :class="card.riskLevel">{{ riskLabel(card.riskLevel) }}</span>
                   </div>
 
-                  <dl v-if="card.preview && card.preview.fields" class="ad-card-fields">
+                  <dl v-if="card.preview && card.preview.fields && card.preview.fields.length" class="ad-card-fields">
                     <template v-for="f in card.preview.fields" :key="f.label">
                       <dt>{{ f.label }}</dt>
                       <dd v-if="!f.multiline">{{ f.value }}</dd>
@@ -198,7 +198,18 @@
                     </template>
                   </dl>
 
-                  <div v-if="card.preview && card.preview.diff" class="ad-card-diff">
+                  <!-- 多项 B 级修改对比列表 -->
+                  <div v-if="card.preview && card.preview.diffs && card.preview.diffs.length > 1" class="ad-card-diffs">
+                    <div class="ad-card-diff-label">变更项对比（共 {{ card.preview.diffs.length }} 项）</div>
+                    <div v-for="d in card.preview.diffs" :key="d.label" class="ad-card-diff-row">
+                      <span class="diff-key">{{ d.label }}</span>
+                      <span class="diff-before">{{ d.before || '（空）' }}</span>
+                      <span class="diff-arrow">→</span>
+                      <span class="diff-after">{{ d.after || '（空）' }}</span>
+                    </div>
+                  </div>
+                  <!-- 单项修改双栏对比（如提示词 / 知识库绑定） -->
+                  <div v-else-if="card.preview && card.preview.diff" class="ad-card-diff">
                     <div class="ad-card-diff-label">{{ card.preview.diff.label }}</div>
                     <div class="ad-card-diff-cols">
                       <div class="before">
@@ -218,7 +229,37 @@
                     >{{ card.expanded && card.expanded.__diff ? '收起' : '展开全部' }}</button>
                   </div>
 
+                  <!-- D 级高危影响范围 -->
+                  <div v-if="card.preview && card.preview.impacts && card.preview.impacts.length" class="ad-card-impacts">
+                    <div class="ad-card-impacts-title"><ShieldAlert :size="13" :stroke-width="2" /> 影响范围</div>
+                    <ul>
+                      <li v-for="(imp, idx) in card.preview.impacts" :key="idx">{{ imp }}</li>
+                    </ul>
+                  </div>
+
                   <p v-if="card.preview && card.preview.note" class="ad-card-note">{{ card.preview.note }}</p>
+
+                  <!-- D 级卡片内密码框（密钥/密码直传后端，不经过模型、不落库） -->
+                  <div v-if="cardStatus(card) === 'PENDING' && card.preview && card.preview.secretInput" class="ad-card-guard-input">
+                    <label>{{ card.preview.secretInput.label }}<span v-if="card.preview.secretInput.required" class="req">*</span></label>
+                    <input
+                      v-model="card.secretInputVal"
+                      type="password"
+                      autocomplete="new-password"
+                      :placeholder="card.preview.secretInput.placeholder || '请输入密钥或密码'"
+                    >
+                  </div>
+
+                  <!-- D 级高危操作人工输入名称确认 -->
+                  <div v-if="cardStatus(card) === 'PENDING' && card.riskLevel === 'D' && card.preview && card.preview.confirmTargetName" class="ad-card-guard-input danger">
+                    <label>请输入完整名称 <code>{{ card.preview.confirmTargetName }}</code> 以确认高危操作</label>
+                    <input
+                      v-model="card.confirmNameInput"
+                      type="text"
+                      autocomplete="off"
+                      :placeholder="'手动输入：' + card.preview.confirmTargetName"
+                    >
+                  </div>
 
                   <div class="ad-card-foot">
                     <template v-if="cardStatus(card) === 'PENDING'">
@@ -231,12 +272,13 @@
                         <button
                           type="button"
                           class="btn-confirm"
-                          :disabled="card.busy || !!blockedBy(card)"
-                          :title="blockedBy(card) ? '请先确认上一张卡片' : ''"
+                          :class="{ danger: card.riskLevel === 'D' }"
+                          :disabled="card.busy || !!blockedBy(card) || !canConfirmCard(card)"
+                          :title="confirmDisableReason(card)"
                           @click="confirmAction(card)"
                         >
                           <LoaderCircle v-if="card.busy" :size="13" :stroke-width="2" class="ad-spin" />
-                          {{ card.riskLevel === 'W2' ? '确认修改' : '确认创建' }}
+                          {{ confirmButtonText(card.riskLevel) }}
                         </button>
                       </div>
                     </template>
@@ -254,6 +296,9 @@
                     </span>
                     <span v-else class="ad-card-result muted">{{ statusText(cardStatus(card)) }}</span>
                   </div>
+                  <p v-if="cardStatus(card) === 'EXECUTED' && card.result && card.result.readback" class="ad-card-readback">
+                    实际生效：{{ card.result.readback }}
+                  </p>
                   <!-- 新签发的 API Key：只在确认后的这次响应中返回，不落库、刷新或切换会话后无法再次查看 -->
                   <div v-if="card.secret" class="ad-card-secret">
                     <div class="ad-card-secret-row">
@@ -297,6 +342,10 @@
         </div>
 
         <footer class="ad-foot">
+          <div v-if="!agentModeEnabled && agentModeDisabledReason" class="ad-tier-banner">
+            <CircleAlert :size="13" :stroke-width="2" />
+            <span>{{ agentModeDisabledReason }}</span>
+          </div>
           <div v-if="contextLabel" class="ad-context" :class="{ off: !includeContext }">
             <Crosshair :size="12" :stroke-width="2" />
             <span class="ad-context-text">{{ includeContext ? '关于' : '不关联' }} {{ contextLabel }}</span>
@@ -347,9 +396,9 @@
                 type="button"
                 role="radio"
                 :aria-checked="chatMode === opt.value"
-                :class="{ on: chatMode === opt.value }"
-                :title="opt.hint"
-                :disabled="sending"
+                :class="{ on: chatMode === opt.value, locked: opt.value === 'AGENT' && !agentModeEnabled }"
+                :title="opt.value === 'AGENT' && !agentModeEnabled ? agentModeDisabledReason : opt.hint"
+                :disabled="sending || (opt.value === 'AGENT' && !agentModeEnabled)"
                 @click="setChatMode(opt.value)"
               >
                 <component :is="opt.icon" :size="13" :stroke-width="2" />
@@ -370,7 +419,7 @@ import {
   Workflow, BookOpen, Network, Wrench, KeyRound, Stethoscope, ArrowUp, SquarePen, X,
   PanelRight, PictureInPicture2, Maximize2, Minimize2, History, Square, LoaderCircle, Check,
   CircleAlert, Trash2, MessageSquare, Zap, ThumbsUp, ThumbsDown, ExternalLink, PencilLine, Plus, Clock,
-  Copy, Crosshair, Link2
+  Copy, Crosshair, Link2, Play, ShieldAlert
 } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { http } from '../api/http'
@@ -405,6 +454,24 @@ const modeOptions = [
   { value: 'CHAT', label: '问答', icon: MessageSquare, hint: '只回答使用问题，不查询平台数据，回复更快' }
 ]
 const chatMode = ref('AGENT')
+const agentModeEnabled = ref(true)
+const agentModeDisabledReason = ref('')
+
+async function loadAssistantCapabilities() {
+  try {
+    const res = await http.get('/api/assistant/capabilities')
+    if (res && res.success && res.data) {
+      const enabled = res.data.agentModeEnabled !== false
+      agentModeEnabled.value = enabled
+      agentModeDisabledReason.value = enabled ? '' : (res.data.reason || '当前模型不支持执行模式，请在模型网关为助手选择 7B 以上、支持工具调用的模型')
+      if (!enabled) {
+        chatMode.value = 'CHAT'
+      } else {
+        loadChatMode()
+      }
+    }
+  } catch { /* 接口异常时保持默认 */ }
+}
 
 function loadChatMode() {
   try {
@@ -414,6 +481,7 @@ function loadChatMode() {
 }
 
 function setChatMode(value) {
+  if (value === 'AGENT' && !agentModeEnabled.value) return
   chatMode.value = value
   try { localStorage.setItem(MODE_KEY, value) } catch { /* 忽略 */ }
 }
@@ -621,6 +689,7 @@ const examples = computed(() => {
 
 function openPanel() {
   open.value = true
+  loadAssistantCapabilities()
   nextTick(() => inputRef.value && inputRef.value.focus())
 }
 
@@ -863,20 +932,77 @@ function toggleField(card, key) {
   card.expanded = { ...(card.expanded || {}), [key]: !(card.expanded && card.expanded[key]) }
 }
 
-async function actOnCard(card, verb) {
+function cardIcon(risk) {
+  if (risk === 'D') return ShieldAlert
+  if (risk === 'C') return Play
+  if (risk === 'B' || risk === 'W2') return PencilLine
+  return Plus
+}
+
+function riskLabel(risk) {
+  if (risk === 'D') return '高危'
+  if (risk === 'C') return '运行'
+  if (risk === 'B' || risk === 'W2') return '修改'
+  return '新建'
+}
+
+function confirmButtonText(risk) {
+  if (risk === 'D') return '确认执行（高危）'
+  if (risk === 'C') return '确认运行'
+  if (risk === 'B' || risk === 'W2') return '确认修改'
+  return '确认创建'
+}
+
+function canConfirmCard(card) {
+  if (card.riskLevel === 'D' && card.preview && card.preview.confirmTargetName) {
+    if ((card.confirmNameInput || '').trim() !== card.preview.confirmTargetName) return false
+  }
+  const sec = card.preview && card.preview.secretInput
+  if (sec) {
+    const val = (card.secretInputVal || '').trim()
+    if (sec.required && !val) return false
+    if (val && sec.minLength && val.length < sec.minLength) return false
+  }
+  return true
+}
+
+function confirmDisableReason(card) {
+  if (blockedBy(card)) return '请先确认上一张卡片'
+  if (card.riskLevel === 'D' && card.preview && card.preview.confirmTargetName
+    && (card.confirmNameInput || '').trim() !== card.preview.confirmTargetName) {
+    return `请先输入完整名称「${card.preview.confirmTargetName}」`
+  }
+  const sec = card.preview && card.preview.secretInput
+  if (sec && sec.required && !(card.secretInputVal || '').trim()) {
+    return `请先填写${sec.label}`
+  }
+  return ''
+}
+
+async function actOnCard(card, verb, body) {
   card.busy = true
   card.error = ''
-  const res = await http.post(`/api/assistant/actions/${encodeURIComponent(card.id)}/${verb}`)
+  const res = body
+    ? await http.post(`/api/assistant/actions/${encodeURIComponent(card.id)}/${verb}`, body)
+    : await http.post(`/api/assistant/actions/${encodeURIComponent(card.id)}/${verb}`)
   card.busy = false
   if (res && res.success && res.data) {
     const { expanded } = card
-    Object.assign(card, res.data, { expanded })
+    Object.assign(card, res.data, { expanded, confirmNameInput: '', secretInputVal: '' })
   } else {
     card.error = (res && res.message) || '操作失败，请稍后重试'
   }
 }
 
-const confirmAction = (card) => actOnCard(card, 'confirm')
+const confirmAction = (card) => {
+  const body = (card.riskLevel === 'D' || (card.preview && card.preview.secretInput))
+    ? {
+        confirmName: (card.confirmNameInput || '').trim() || null,
+        secretValue: (card.secretInputVal || '').trim() || null
+      }
+    : undefined
+  return actOnCard(card, 'confirm', body)
+}
 
 // 依赖的前序卡片（多步编排）尚未执行成功时，返回其标题；前序卡片不在当前界面时以服务端校验为准
 function blockedBy(card) {
@@ -1632,9 +1758,162 @@ async function sendFeedback(m, rating) {
   background: var(--surface-subtle);
 }
 
-.ad-card-risk.W2 {
+.ad-card-risk.W2,
+.ad-card-risk.B {
   color: var(--warning, #b7791f);
   background: rgba(183, 121, 31, 0.1);
+}
+
+.ad-card-risk.C {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.ad-card-risk.D {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.12);
+  font-weight: 600;
+}
+
+.ad-card.risk-d.status-pending {
+  border-color: rgba(220, 38, 38, 0.45);
+}
+
+.ad-card-icon.D {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.12);
+}
+
+.ad-card-icon.C {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.ad-card-diffs {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ad-card-diff-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: var(--surface-subtle);
+  font-size: 12px;
+}
+
+.ad-card-diff-row .diff-key {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.ad-card-diff-row .diff-before {
+  color: #b91c1c;
+  text-decoration: line-through;
+}
+
+.ad-card-diff-row .diff-arrow {
+  color: var(--text-muted);
+}
+
+.ad-card-diff-row .diff-after {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.ad-card-impacts {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  background: rgba(220, 38, 38, 0.06);
+  color: #991b1b;
+  font-size: 12px;
+}
+
+.ad-card-impacts-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.ad-card-impacts ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.ad-card-guard-input {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.ad-card-guard-input .req {
+  color: #dc2626;
+  margin-left: 2px;
+}
+
+.ad-card-guard-input code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(220, 38, 38, 0.1);
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.ad-card-guard-input input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12.5px;
+}
+
+.ad-card-guard-input.danger input:focus {
+  outline: none;
+  border-color: #dc2626;
+}
+
+.ad-card-actions .btn-confirm.danger {
+  background: #dc2626;
+}
+
+.ad-card-actions .btn-confirm.danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.ad-card-readback {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.ad-tier-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--warning, #b7791f);
+  background: rgba(183, 121, 31, 0.08);
+  border: 1px solid rgba(183, 121, 31, 0.22);
+}
+
+.ad-mode button.locked {
+  opacity: 0.48;
+  cursor: not-allowed;
 }
 
 .ad-card-fields {

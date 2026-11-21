@@ -903,6 +903,7 @@ import {
 import {
   GATEWAY_SECTIONS, GATEWAY_TAB_PREFIX, GATEWAY_TABS, lastGatewayTab, rememberGatewayTab
 } from '../components/gateway/sections'
+import { NAV_MENU_SCHEMA } from '../config/navMenus'
 
 const navIcons = {
   overview: LayoutDashboard,
@@ -1106,130 +1107,38 @@ const pageTitle = computed(() => {
   return 'AgentMatrix'
 })
 
-// Navigation taxonomy structure (4 Primary Enterprise Categories)
+// Navigation taxonomy structure (4 Primary Enterprise Categories, derived from src/config/navMenus.js)
 const navGroups = computed(() => {
-  const groups = [
-    {
-      id: 'metrics',
-      title: '监控',
-      enTitle: 'METRICS',
-      icon: 'fa-solid fa-chart-line',
-      items: [
-        {
-          id: 'overview',
-          name: '概览',
-          title: '概览分析 (Token消耗与指标)',
-          icon: 'fa-solid fa-chart-pie'
+  return NAV_MENU_SCHEMA.map((group) => {
+    const items = group.items
+      .filter((item) => {
+        if (item.superAdminOnly && !isSuperAdmin.value) return false
+        if (item.conditional === 'difyVisible' && !difyNavVisible.value) return false
+        return true
+      })
+      .map((item) => {
+        const mapped = { ...item }
+        if (item.id === 'agents') {
+          mapped.count = stats.value.totalAgents || agents.value.length || 0
         }
-      ]
-    },
-    {
-      id: 'studio',
-      title: '构建',
-      enTitle: 'AGENT STUDIO',
-      icon: 'fa-solid fa-wand-magic-sparkles',
-      items: [
-        {
-          id: 'agents',
-          name: '智能体',
-          title: 'Agents 智能体资产管理',
-          icon: 'fa-solid fa-robot',
-          count: stats.value.totalAgents || agents.value.length || 0
-        },
-        {
-          id: 'templates',
-          name: '场景模板',
-          title: '场景模版中心 (预置行业智能体)',
-          icon: 'fa-solid fa-layer-group'
-        },
-        {
-          id: 'tools',
-          name: '工具',
-          title: '平台工具管理 (全智能体共用)',
-          icon: 'fa-solid fa-screwdriver-wrench'
-        },
-        {
-          id: 'skills',
-          name: '技能库',
-          title: '技能库：把处理流程写成技能，智能体按需加载',
-          icon: 'fa-solid fa-wand-magic-sparkles'
+        if (item.id === 'gateway') {
+          mapped.children = GATEWAY_SECTIONS.map((s) => ({
+            id: GATEWAY_TAB_PREFIX + s.key,
+            name: s.title,
+            status: gatewayStatus.value[s.key]?.state,
+            statusText: gatewayStatus.value[s.key]?.text
+          }))
         }
-      ]
-    },
-    {
-      id: 'knowledge',
-      title: '数据',
-      enTitle: 'DATA & RAG',
-      icon: 'fa-solid fa-database',
-      items: [
-        {
-          id: 'knowledge',
-          name: '自建知识库',
-          title: '平台内置引擎：本地切片、向量化与混合检索',
-          icon: 'fa-solid fa-book-bookmark'
-        },
-        ...(difyNavVisible.value ? [{
-          id: 'knowledge-dify',
-          name: 'Dify 知识库',
-          title: '对接外部 Dify：在平台内管理 Dify 知识库',
-          icon: 'fa-solid fa-link'
-        }] : [])
-      ]
+        return mapped
+      })
+    return {
+      id: group.id,
+      title: !isSuperAdmin.value && group.nonAdminTitle ? group.nonAdminTitle : group.title,
+      enTitle: !isSuperAdmin.value && group.nonAdminEnTitle ? group.nonAdminEnTitle : group.enTitle,
+      icon: !isSuperAdmin.value && group.nonAdminIcon ? group.nonAdminIcon : group.icon,
+      items
     }
-  ]
-
-  // Category 4: Enterprise Governance (Admin) or Platform Rules & Security (Developer / Viewer)
-  const govItems = []
-
-  if (isSuperAdmin.value) {
-    govItems.push({
-      id: 'gateway',
-      name: '模型网关',
-      title: '模型网关：大语言模型、向量模型、Rerank 模型、OCR 与 Dify 引擎',
-      icon: 'fa-solid fa-server',
-      children: GATEWAY_SECTIONS.map((s) => ({
-        id: GATEWAY_TAB_PREFIX + s.key,
-        name: s.title,
-        status: gatewayStatus.value[s.key]?.state,
-        statusText: gatewayStatus.value[s.key]?.text
-      }))
-    })
-    govItems.push({
-      id: 'users',
-      name: '用户',
-      title: '企业租户用户管理 (RBAC)',
-      icon: 'fa-solid fa-users-gear'
-    })
-    govItems.push({
-      id: 'roles',
-      name: '角色与权限',
-      title: '系统固定角色与权限对照矩阵',
-      icon: 'fa-solid fa-shield-halved'
-    })
-    govItems.push({
-      id: 'assistant-eval',
-      name: '助手评测',
-      title: 'AI 助手评测：回归工具选择、参数与越权拒绝',
-      icon: 'fa-solid fa-vial-circle-check'
-    })
-  }
-
-  govItems.push({
-    id: 'security',
-    name: '开放与安全',
-    title: '开放凭证、接入终端、护栏策略与审计',
-    icon: 'fa-solid fa-fingerprint'
   })
-
-  groups.push({
-    id: 'governance',
-    title: isSuperAdmin.value ? '管理' : '规则与安全',
-    enTitle: isSuperAdmin.value ? 'GOVERNANCE' : 'SECURITY',
-    icon: isSuperAdmin.value ? 'fa-solid fa-sliders' : 'fa-solid fa-shield-cat',
-    items: govItems
-  })
-
-  return groups
 })
 
 function triggerTabRefresh(tabId) {

@@ -77,6 +77,22 @@
                     <span v-if="p.protocol === 'CUSTOM_HTTP'" class="gateway-proto-badge proto-custom">自定义 HTTP</span>
                     <span v-else-if="p.vendor === 'CUSTOM'" class="gateway-proto-badge proto-openai">OpenAI 兼容</span>
                     <span v-if="p.protocol !== 'CUSTOM_HTTP' && !p.supportsTools" class="gateway-proto-badge proto-custom" title="不发送工具定义，智能体勾选的工具在这个通道上不生效">无工具调用</span>
+                    <span
+                      v-if="p.protocol !== 'CUSTOM_HTTP' && p.modelSizeTier === 'SMALL_UNDER_7B'"
+                      class="gateway-proto-badge proto-custom"
+                      title="小于 7B 模型：平台 AI 助手仅开放问答模式"
+                    >&lt;7B 仅问答</span>
+                    <span
+                      v-else-if="p.protocol !== 'CUSTOM_HTTP' && p.modelSizeTier === 'STANDARD_7B_PLUS'"
+                      class="gateway-proto-badge proto-openai"
+                      title="7B 及以上模型：支持平台 AI 助手执行模式"
+                    >≥7B</span>
+                    <span
+                      v-if="channelEval(p)"
+                      class="gateway-proto-badge"
+                      :class="(channelEval(p).belowThresholdCategories || []).length ? 'proto-custom' : 'proto-openai'"
+                      :title="channelEvalTitle(channelEval(p))"
+                    >评测 {{ channelEval(p).passRate != null ? channelEval(p).passRate + '%' : '—' }}</span>
                     <span v-if="p.contextWindow" class="gateway-proto-badge proto-openai" title="平台按这个窗口收缩知识库内容和历史对话">上下文 {{ formatWindow(p.contextWindow) }}</span>
                   </div>
                 </div>
@@ -277,6 +293,25 @@
               <p class="gateway-field-hint" style="margin-top: 0;">
                 不勾选时，平台不向这个通道发送工具定义，智能体勾选的工具在这里不生效。本地小模型通常不支持，确认模型能可靠调用工具后再勾选。
               </p>
+
+              <template v-if="form.supportsTools">
+                <label class="gateway-enable-row" style="margin-top: 6px; margin-bottom: 2px;">
+                  <input v-model="form.supportsToolChoiceRequired" type="checkbox">
+                  <span>支持强制工具调用 (tool_choice=required)</span>
+                </label>
+                <p class="gateway-field-hint" style="margin-top: 0;">
+                  开启后，AI 助手遇到明确数据查询但模型首轮跳过调工具时，会自动带 tool_choice=required 重试一次以防编造（标准 OpenAI 协议默认支持，Ollama 需确认版本支持）。
+                </p>
+              </template>
+
+              <div class="form-group" style="margin-top: 10px;">
+                <label class="form-label">模型规模档位（用于 AI 助手执行模式分级）</label>
+                <select v-model="form.modelSizeTier" class="form-control-styled">
+                  <option value="STANDARD_7B_PLUS">7B 及以上（支持工具调用时开放执行模式）</option>
+                  <option value="SMALL_UNDER_7B">小于 7B（如 1.7B/3B 小模型，AI 助手仅开放问答模式）</option>
+                </select>
+                <p class="gateway-field-hint">Ollama 本地通道默认按「小于 7B」处理，确认部署了 7B 及以上支持工具调用的模型后可切为「7B 及以上」。</p>
+              </div>
             </template>
 
             <!-- 模式二：自定义 HTTP REST 接口 -->
@@ -425,7 +460,7 @@ const policy = reactive({
 const form = reactive({
   id: '', vendor: 'CUSTOM', protocol: 'OPENAI', name: '', baseUrl: '', apiKey: '', apiKeyMasked: '',
   defaultModel: '', models: '', timeoutMs: 30000, remark: '', enabled: false, configured: false,
-  supportsTools: false, contextWindow: '',
+  supportsTools: false, supportsToolChoiceRequired: false, modelSizeTier: 'STANDARD_7B_PLUS', contextWindow: '',
   openAiHeaders: '',
   openAiWebSearch: false,
   customHttpMethod: 'POST',
@@ -517,11 +552,31 @@ function statusClass(p) {
 // ==========================================
 // 模型通道：加载、增改删、测试与路由策略保存
 // ==========================================
+const evalComparisons = ref([])
+
+function channelEval(p) {
+  if (!p || !evalComparisons.value.length) return null
+  return evalComparisons.value.find(c => (c.channelId && c.channelId === p.id) || (c.channelName && c.channelName === p.name)) || null
+}
+
+function channelEvalTitle(ev) {
+  if (!ev) return ''
+  const warns = ev.belowThresholdCategories || []
+  if (warns.length) {
+    return `最近评测通过率 ${ev.passRate}%（以下类别低于验收线，建议更换更强模型：${warns.join('、')}）`
+  }
+  return `最近评测通过率 ${ev.passRate}%（模型：${ev.model || '-'}）`
+}
+
 async function load() {
-  const [ov, cat] = await Promise.all([
+  const [ov, cat, cmp] = await Promise.all([
     http.get('/api/model-gateway'),
-    http.get('/api/model-gateway/catalog')
+    http.get('/api/model-gateway/catalog'),
+    http.get('/api/assistant/evals/compare').catch(() => null)
   ])
+  if (cmp && cmp.success && Array.isArray(cmp.data)) {
+    evalComparisons.value = cmp.data
+  }
   if (ov.success) {
     overview.value = ov.data || {}
     const p = ov.data?.policy || {}
@@ -561,7 +616,7 @@ function openCreate() {
     apiKey: '', apiKeyMasked: '', defaultModel: preset.defaultModel || '',
     models: (preset.models || []).join(', '),
     timeoutMs: 30000, remark: '', enabled: true, configured: false,
-    supportsTools: false, contextWindow: '',
+    supportsTools: false, supportsToolChoiceRequired: false, modelSizeTier: 'STANDARD_7B_PLUS', contextWindow: '',
     openAiHeaders: '',
     openAiWebSearch: false,
     customHttpMethod: 'POST',
@@ -605,6 +660,10 @@ function openEdit(provider) {
     enabled: provider.enabled,
     configured: provider.configured,
     supportsTools: !!provider.supportsTools,
+    supportsToolChoiceRequired: provider.supportsToolChoiceRequired != null
+      ? !!provider.supportsToolChoiceRequired
+      : (provider.protocol !== 'OLLAMA' && provider.protocol !== 'CUSTOM_HTTP'),
+    modelSizeTier: provider.modelSizeTier || (provider.protocol === 'OLLAMA' ? 'SMALL_UNDER_7B' : 'STANDARD_7B_PLUS'),
     contextWindow: provider.contextWindow || '',
     openAiHeaders: openAiHdrs,
     openAiWebSearch: !!(customCfg.webSearch || customCfg.enable_search),
@@ -757,6 +816,8 @@ async function saveProvider() {
     models: form.models.trim(),
     timeoutMs: form.timeoutMs,
     supportsTools: !!form.supportsTools,
+    supportsToolChoiceRequired: !!form.supportsTools && !!form.supportsToolChoiceRequired,
+    modelSizeTier: form.modelSizeTier || (form.protocol === 'OLLAMA' ? 'SMALL_UNDER_7B' : 'STANDARD_7B_PLUS'),
     contextWindow: Number(form.contextWindow) || 0,
     remark: form.remark.trim(),
     enabled: form.enabled
