@@ -826,6 +826,7 @@
   min-width: 380px;
   flex-shrink: 0;
   background: var(--bg-primary);
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 20px 24px 60px 24px;
   display: flex;
@@ -904,12 +905,15 @@
   border-radius: var(--radius-md);
   padding: 16px 18px;
   box-shadow: var(--shadow-card);
+  min-width: 0;
 }
 
 .section-header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-bottom: 12px;
 }
 
@@ -993,6 +997,7 @@
   color: var(--accent-amber);
   font-size: 11px;
   line-height: 18px;
+  flex-shrink: 0;
 }
 
 .tools-channel-hint {
@@ -1153,7 +1158,7 @@
 
 .tools-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fill, minmax(min(270px, 100%), 1fr));
   gap: 10px;
   margin-top: 10px;
 }
@@ -1162,6 +1167,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 8px 12px;
   background: var(--bg-input);
   border: 1px solid var(--border-color);
@@ -1169,6 +1175,9 @@
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   min-height: 44px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .tool-item-card:hover {
@@ -1273,19 +1282,27 @@
   font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
 }
 
 .tool-prefix {
   font-weight: 700;
   color: var(--text-primary);
   font-size: 12px;
+  flex-shrink: 0;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tool-title {
   font-weight: 500;
   color: var(--text-secondary);
   font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tool-help-icon,
@@ -1293,6 +1310,7 @@
   color: var(--text-muted);
   font-size: 11px;
   cursor: help;
+  flex-shrink: 0;
   transition: color 0.15s;
 }
 
@@ -1312,13 +1330,17 @@
   display: flex;
   align-items: center;
   gap: 2px;
+  max-width: 0;
+  overflow: hidden;
   opacity: 0;
   pointer-events: none;
   transform: translateX(4px);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: max-width 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.tool-item-card:hover .tool-hover-actions {
+.tool-item-card:hover .tool-hover-actions,
+.tool-item-card:focus-within .tool-hover-actions {
+  max-width: 60px;
   opacity: 1;
   pointer-events: auto;
   transform: translateX(0);
