@@ -727,7 +727,7 @@ async function openConversation(id) {
   const actionsByMessage = {}
   for (const card of res.data.actions || []) {
     if (!card.messageId) continue
-    ;(actionsByMessage[card.messageId] ||= []).push(card)
+    ;(actionsByMessage[card.messageId] ||= []).push(stampCardDeadline(card))
   }
   messages.value = (res.data.messages || []).map(m => fromStoredMessage(m, actionsByMessage[m.id] || []))
   view.value = 'chat'
@@ -858,7 +858,7 @@ async function send(text) {
         } else if (event === 'tool') {
           upsertTool(reply, data)
         } else if (event === 'action') {
-          reply.actions.push(data)
+          reply.actions.push(stampCardDeadline(data))
           scrollToBottom()
         } else if (event === 'message') {
           reply.content += data.delta || ''
@@ -913,14 +913,34 @@ let clockTimer = null
 onMounted(() => { clockTimer = setInterval(() => { now.value = Date.now() }, 15000) })
 onBeforeUnmount(() => clearInterval(clockTimer))
 
+function stampCardDeadline(card) {
+  if (card && typeof card.remainingSeconds === 'number') {
+    const ts = Date.now()
+    now.value = ts
+    card._clientExpiresAt = ts + Math.max(0, card.remainingSeconds) * 1000
+  }
+  return card
+}
+
+function cardDeadlineMs(card) {
+  if (card && typeof card._clientExpiresAt === 'number') return card._clientExpiresAt
+  if (card && card.expiresAt) {
+    const t = new Date(card.expiresAt).getTime()
+    if (!Number.isNaN(t)) return t
+  }
+  return null
+}
+
 function cardStatus(card) {
-  if (card.status === 'PENDING' && card.expiresAt && new Date(card.expiresAt).getTime() <= now.value) return 'EXPIRED'
+  const deadline = cardDeadlineMs(card)
+  if (card.status === 'PENDING' && deadline != null && deadline <= now.value) return 'EXPIRED'
   return card.status || 'PENDING'
 }
 
 function expiryText(card) {
-  if (!card.expiresAt) return '10 分钟内有效'
-  const left = Math.max(0, Math.ceil((new Date(card.expiresAt).getTime() - now.value) / 60000))
+  const deadline = cardDeadlineMs(card)
+  if (deadline == null) return '10 分钟内有效'
+  const left = Math.max(0, Math.ceil((deadline - now.value) / 60000))
   return left > 0 ? `${left} 分钟内有效` : '即将过期'
 }
 
@@ -988,7 +1008,7 @@ async function actOnCard(card, verb, body) {
   card.busy = false
   if (res && res.success && res.data) {
     const { expanded } = card
-    Object.assign(card, res.data, { expanded, confirmNameInput: '', secretInputVal: '' })
+    Object.assign(card, stampCardDeadline(res.data), { expanded, confirmNameInput: '', secretInputVal: '' })
   } else {
     card.error = (res && res.message) || '操作失败，请稍后重试'
   }
