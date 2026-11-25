@@ -35,6 +35,9 @@
           <div class="slp-card-actions">
             <button type="button" class="slp-icon" title="复制链接" :disabled="l.state !== 'ACTIVE'" @click="copyLink(l)"><i class="fa-regular fa-copy"></i></button>
             <button type="button" class="slp-icon" title="二维码" :disabled="l.state !== 'ACTIVE'" @click="showQr(l)"><i class="fa-solid fa-qrcode"></i></button>
+            <button v-if="l.accessMode === 'ACCESS_CODE'" type="button" class="slp-icon"
+                    :title="l.accessCodeViewable ? '查看访问码' : '旧版本创建的访问码无法查看，请在编辑中重新设置'"
+                    :disabled="!canManage || busyId === l.id" @click="viewAccessCode(l)"><i class="fa-solid fa-key"></i></button>
             <button type="button" class="slp-icon" title="访客记录" @click="openRecords(l)"><i class="fa-regular fa-comments"></i></button>
             <button type="button" class="slp-icon" title="编辑" :disabled="!canManage" @click="openEdit(l)"><i class="fa-regular fa-pen-to-square"></i></button>
             <button type="button" class="slp-icon" :title="l.status === 'ACTIVE' ? '停用' : '启用'" :disabled="!canManage || busyId === l.id" @click="toggle(l)">
@@ -86,7 +89,7 @@
             </label>
             <template v-if="!form.id || !form.hasAccessCode || form.changeCode">
               <input v-model="form.accessCode" class="slp-input" maxlength="32" placeholder="不填则自动生成 6 位数字">
-              <span class="slp-hint">4～32 位字母或数字。保存后只显示一次，请及时复制给访客</span>
+              <span class="slp-hint">4～32 位字母或数字。加密保存，之后可在链接卡片上点 <i class="fa-solid fa-key"></i> 查看</span>
             </template>
           </div>
 
@@ -169,7 +172,7 @@
             <strong>{{ share.accessCode }}</strong>
             <button type="button" class="slp-icon" title="复制访问码" @click="copy(share.accessCode, '访问码已复制')"><i class="fa-regular fa-copy"></i></button>
           </div>
-          <p v-if="share.accessCode" class="slp-hint slp-warn">访问码只显示这一次，关闭后无法再查看，忘记了可以在编辑里重新设置。</p>
+          <p v-if="share.accessCode" class="slp-hint">关闭后可在链接卡片上点 <i class="fa-solid fa-key"></i> 再次查看，每次查看都会记入审计日志。</p>
           <button v-if="share.accessCode" type="button" class="slp-btn" @click="copy(share.url + '\n访问码：' + share.accessCode, '链接和访问码已复制')">
             复制链接和访问码
           </button>
@@ -341,6 +344,16 @@ async function openShare(l, title) {
   Object.assign(share, { open: true, title, url, qr, accessCode: l.accessCode || '' })
 }
 function showQr(l) { openShare(l, '扫码打开') }
+async function viewAccessCode(l) {
+  busyId.value = l.id
+  try {
+    const res = await http.get(`${base.value}/${l.id}/access-code`)
+    if (!res.success || !res.data?.accessCode) { showToast(res.message || '获取访问码失败', 'error'); return }
+    await openShare({ ...l, accessCode: res.data.accessCode }, '访问码')
+  } finally {
+    busyId.value = ''
+  }
+}
 function copyLink(l) {
   const url = linkUrl(l)
   copy(l.accessMode === 'ACCESS_CODE' ? url + '\n（需要访问码）' : url, '链接已复制')
