@@ -2860,7 +2860,7 @@ input:checked + .slider-toggle:before {
   padding-top: 16px;
 }
 .access-web-workspace > * {
-  max-width: 960px;
+  max-width: 1400px;
 }
 @media (max-width: 720px) {
   .access-entry-switch { padding: 12px 16px 0; }

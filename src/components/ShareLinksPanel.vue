@@ -7,7 +7,8 @@
           生成一个免登录的聊天页地址，发给客户演示或请同事试用。链接默认需要访问码，到期、用完或停用后立即失效。
         </p>
       </div>
-      <button type="button" class="slp-btn slp-btn-primary" :disabled="!canManage" @click="openCreate">
+      <button type="button" class="slp-btn slp-btn-primary" :disabled="!canManage || links.length >= MAX_LINKS"
+              :title="links.length >= MAX_LINKS ? `每个智能体最多 ${MAX_LINKS} 个分享链接，请先删除不用的链接` : ''" @click="openCreate">
         <i class="fa-solid fa-plus"></i> 新建链接
       </button>
     </div>
@@ -23,19 +24,56 @@
       还没有分享链接。点「新建链接」生成第一个。
     </div>
 
-    <div v-else class="slp-list">
-      <article v-for="l in links" :key="l.id" class="slp-card" :class="{ 'slp-card-off': l.state !== 'ACTIVE' }">
-        <div class="slp-card-top">
-          <div class="slp-card-name">
-            <span class="slp-name">{{ l.name }}</span>
+    <template v-else>
+    <div class="slp-toolbar">
+      <div class="slp-search">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input v-model="keyword" class="slp-input" placeholder="搜索名称或链接码">
+      </div>
+      <div class="slp-seg">
+        <button v-for="f in FILTERS" :key="f.value" type="button" :class="{ active: filter === f.value }" @click="filter = f.value">
+          {{ f.label }}<span class="slp-seg-count">{{ filterCount(f.value) }}</span>
+        </button>
+      </div>
+      <span class="slp-total" :class="{ 'slp-warn': links.length >= MAX_LINKS }">共 {{ links.length }} / {{ MAX_LINKS }} 个</span>
+    </div>
+
+    <div class="slp-list">
+      <div class="slp-row slp-row-head" aria-hidden="true">
+        <span>名称</span>
+        <span>链接地址</span>
+        <span>用量</span>
+        <span>到期 / 最近使用</span>
+        <span class="slp-col-actions">操作</span>
+      </div>
+      <div v-if="!visibleLinks.length" class="slp-empty">没有符合条件的链接</div>
+      <article v-for="l in visibleLinks" :key="l.id" class="slp-row slp-card" :class="{ 'slp-card-off': l.state !== 'ACTIVE' }">
+        <div class="slp-card-name">
+          <span class="slp-name" :title="l.name">{{ l.name }}</span>
+          <span class="slp-badges">
             <span class="slp-badge" :class="stateClass(l.state)">{{ stateLabel(l.state) }}</span>
             <span class="slp-badge slp-badge-plain">{{ l.accessMode === 'PUBLIC' ? '公开' : '访问码' }}</span>
             <span v-if="l.expiringSoon" class="slp-badge slp-badge-warn" title="24 小时内到期">即将到期</span>
-          </div>
-          <div class="slp-card-actions">
+          </span>
+        </div>
+        <div class="slp-url-row">
+          <code class="slp-url" :title="linkUrl(l)">{{ linkUrl(l) }}</code>
+        </div>
+        <div class="slp-stats">
+          <span title="已用对话次数 / 上限"><i class="fa-regular fa-message"></i> {{ l.messageCount }}{{ l.maxMessages ? ' / ' + l.maxMessages : '' }}</span>
+          <span title="已用 token / 上限"><i class="fa-solid fa-ticket"></i> {{ formatNum(l.tokenCount) }}{{ l.maxTokens ? ' / ' + formatNum(l.maxTokens) : '' }}</span>
+          <span title="访客数 / 上限"><i class="fa-regular fa-user"></i> {{ l.visitorCount }}{{ l.maxVisitors ? ' / ' + l.maxVisitors : '' }}</span>
+        </div>
+        <div class="slp-times">
+          <span :title="l.expiresAt ? '到期时间' : ''"><i class="fa-regular fa-clock"></i> {{ l.expiresAt ? formatTime(l.expiresAt) : '永不过期' }}</span>
+          <span v-if="l.lastUsedAt" title="最近使用"><i class="fa-solid fa-bolt"></i> {{ formatTime(l.lastUsedAt) }}</span>
+        </div>
+          <div class="slp-card-actions slp-col-actions">
             <button type="button" class="slp-icon" title="复制链接" :disabled="l.state !== 'ACTIVE'" @click="copyLink(l)"><i class="fa-regular fa-copy"></i></button>
             <button type="button" class="slp-icon" title="二维码" :disabled="l.state !== 'ACTIVE'" @click="showQr(l)"><i class="fa-solid fa-qrcode"></i></button>
-            <button v-if="l.accessMode === 'ACCESS_CODE'" type="button" class="slp-icon"
+            <!-- 公开链接没有访问码：保留占位，让每行的操作按钮对齐 -->
+            <span v-if="l.accessMode !== 'ACCESS_CODE'" class="slp-icon slp-icon-placeholder" aria-hidden="true"></span>
+            <button v-else type="button" class="slp-icon"
                     :title="l.accessCodeViewable ? '查看访问码' : '旧版本创建的访问码无法查看，请在编辑中重新设置'"
                     :disabled="!canManage || busyId === l.id" @click="viewAccessCode(l)"><i class="fa-solid fa-key"></i></button>
             <button type="button" class="slp-icon" title="访客记录" @click="openRecords(l)"><i class="fa-regular fa-comments"></i></button>
@@ -46,19 +84,9 @@
             <button type="button" class="slp-icon" title="重置地址（旧地址立即失效）" :disabled="!canManage || busyId === l.id" @click="reset(l)"><i class="fa-solid fa-rotate"></i></button>
             <button type="button" class="slp-icon slp-icon-danger" title="删除" :disabled="!canManage || busyId === l.id" @click="remove(l)"><i class="fa-regular fa-trash-can"></i></button>
           </div>
-        </div>
-        <div class="slp-url-row">
-          <code class="slp-url" :title="linkUrl(l)">{{ linkUrl(l) }}</code>
-        </div>
-        <div class="slp-stats">
-          <span title="已用对话次数 / 上限"><i class="fa-regular fa-message"></i> 对话 {{ l.messageCount }}{{ l.maxMessages ? ' / ' + l.maxMessages : '' }}</span>
-          <span title="已用 token / 上限"><i class="fa-solid fa-ticket"></i> {{ formatNum(l.tokenCount) }}{{ l.maxTokens ? ' / ' + formatNum(l.maxTokens) : '' }} tokens</span>
-          <span title="访客数 / 上限"><i class="fa-regular fa-user"></i> 访客 {{ l.visitorCount }}{{ l.maxVisitors ? ' / ' + l.maxVisitors : '' }}</span>
-          <span><i class="fa-regular fa-clock"></i> {{ l.expiresAt ? '到期 ' + formatTime(l.expiresAt) : '永不过期' }}</span>
-          <span v-if="l.lastUsedAt"><i class="fa-solid fa-bolt"></i> 最近使用 {{ formatTime(l.lastUsedAt) }}</span>
-        </div>
       </article>
     </div>
+    </template>
 
     <!-- 新建 / 编辑 -->
     <div v-if="form.open" class="slp-backdrop" @click.self="form.open = false">
@@ -244,6 +272,29 @@ const STATE_LABELS = {
   AGENT_NOT_RUNNING: '智能体未运行'
 }
 function stateLabel(state) { return STATE_LABELS[state] || state }
+
+// 与后端 ShareLinkService.MAX_LINKS_PER_AGENT 一致
+const MAX_LINKS = 50
+const FILTERS = [
+  { value: 'all', label: '全部' },
+  { value: 'active', label: '可用' },
+  { value: 'inactive', label: '不可用' },
+  { value: 'expiring', label: '即将到期' }
+]
+const keyword = ref('')
+const filter = ref('all')
+function matchesFilter(l, f) {
+  if (f === 'active') return l.state === 'ACTIVE'
+  if (f === 'inactive') return l.state !== 'ACTIVE'
+  if (f === 'expiring') return !!l.expiringSoon
+  return true
+}
+function filterCount(f) { return links.value.filter(l => matchesFilter(l, f)).length }
+const visibleLinks = computed(() => {
+  const kw = keyword.value.trim().toLowerCase()
+  return links.value.filter(l => matchesFilter(l, filter.value)
+    && (!kw || (l.name || '').toLowerCase().includes(kw) || (l.code || '').toLowerCase().includes(kw)))
+})
 function stateClass(state) { return state === 'ACTIVE' ? 'slp-badge-ok' : 'slp-badge-off' }
 
 function linkUrl(l) { return `${window.location.origin}${l.path}` }
@@ -456,26 +507,54 @@ defineExpose({ load })
 .slp-icon:disabled { opacity: 0.35; cursor: not-allowed; }
 .slp-icon-danger:hover:not(:disabled) { color: var(--accent-rose); }
 
-.slp-list { display: flex; flex-direction: column; gap: 10px; }
-.slp-card {
-  padding: 12px 14px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px;
+/* 工具栏：搜索 + 状态筛选 + 数量 */
+.slp-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.slp-search { position: relative; flex: 0 1 280px; min-width: 180px; }
+.slp-search i { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--text-muted); }
+.slp-search .slp-input { padding-left: 30px; }
+.slp-seg-count { margin-left: 5px; font-size: 11px; opacity: 0.7; }
+.slp-total { margin-left: auto; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+
+/* 列表：宽屏为表格式的一行一个链接，窄屏退回卡片 */
+.slp-list {
+  display: flex; flex-direction: column;
+  /* clip 而不是 hidden：hidden 会让表头的 sticky 失效 */
+  background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; overflow: clip;
 }
-.slp-card-off { opacity: 0.75; }
-.slp-card-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.slp-card-name { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
-.slp-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
-.slp-card-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.slp-row {
+  display: grid; align-items: center; gap: 16px; padding: 10px 14px;
+  /* 各行是独立的 grid，列宽不能用 auto，否则每行按内容算宽度会错位；操作列 = 8 个 30px 按钮 + 间距 */
+  grid-template-columns: minmax(160px, 1.2fr) minmax(200px, 1.6fr) minmax(230px, 1.1fr) 120px 254px;
+}
+.slp-row-head {
+  position: sticky; top: 0; z-index: 1; padding-top: 8px; padding-bottom: 8px;
+  font-size: 12px; font-weight: 600; color: var(--text-muted);
+  background: var(--bg-input); border-bottom: 1px solid var(--border-color);
+}
+.slp-card { border-bottom: 1px solid var(--border-color); }
+.slp-card:last-child { border-bottom: none; }
+.slp-card:hover { background: var(--bg-card-hover); }
+.slp-card-off { opacity: 0.7; }
+.slp-card-name { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.slp-name { font-size: 14px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slp-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+.slp-card-actions { display: flex; gap: 2px; flex-shrink: 0; justify-content: flex-end; }
+.slp-col-actions { text-align: right; }
+.slp-times { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.slp-times i { width: 14px; margin-right: 3px; }
 .slp-badge { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; line-height: 18px; white-space: nowrap; }
 .slp-badge-ok { color: var(--accent-emerald); background: rgba(16, 185, 129, 0.12); }
 .slp-badge-off { color: var(--accent-rose); background: rgba(244, 63, 94, 0.1); }
 .slp-badge-warn { color: var(--accent-amber); background: rgba(245, 158, 11, 0.14); }
 .slp-badge-plain { color: var(--text-secondary); background: var(--bg-input); border: 1px solid var(--border-color); }
-.slp-url-row { margin-top: 8px; }
+.slp-url-row { min-width: 0; }
 .slp-url {
   display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 5px 8px;
   font-size: 12px; color: var(--text-secondary); background: var(--bg-input); border-radius: 6px;
 }
-.slp-stats { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: 12px; color: var(--text-muted); }
+.slp-stats { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-muted); }
+.slp-stats span { white-space: nowrap; }
+.slp-icon-placeholder { visibility: hidden; }
 .slp-stats i { margin-right: 3px; }
 
 .slp-backdrop {
@@ -552,7 +631,23 @@ defineExpose({ load })
 }
 .slp-msg-user .slp-msg-text { background: rgba(59, 130, 246, 0.12); }
 
+@media (max-width: 1180px) {
+  .slp-row-head { display: none; }
+  .slp-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "name actions" "url url" "stats times";
+    gap: 8px 12px;
+  }
+  .slp-card-name { grid-area: name; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 6px; }
+  .slp-card-actions { grid-area: actions; }
+  .slp-url-row { grid-area: url; }
+  .slp-stats { grid-area: stats; }
+  .slp-times { grid-area: times; flex-direction: row; gap: 12px; }
+}
+
 @media (max-width: 720px) {
+  .slp-row { grid-template-areas: "name name" "actions actions" "url url" "stats stats" "times times"; }
+  .slp-card-actions { justify-content: flex-start; flex-wrap: wrap; }
   .slp-grid { grid-template-columns: 1fr; }
   .slp-records { grid-template-columns: 1fr; grid-template-rows: 200px 1fr; }
   .slp-rec-list { border-right: none; border-bottom: 1px solid var(--border-color); }
