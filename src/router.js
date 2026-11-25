@@ -10,6 +10,8 @@ const router = createRouter({
     { path: '/login', name: 'login', component: LoginView },
     { path: '/dashboard', name: 'dashboard', component: DashboardView, meta: { requiresAuth: true } },
     { path: '/debug/:id', name: 'debug', component: DebugView, meta: { requiresAuth: true } },
+    // 分享链接的免登录聊天页：不走登录校验，单独打包，访客不用加载平台控制台的代码
+    { path: '/chat/:code', name: 'share-chat', component: () => import('./views/ShareChatView.vue') },
     { path: '/', redirect: '/dashboard' }
   ]
 })

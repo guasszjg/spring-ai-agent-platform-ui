@@ -385,7 +385,7 @@
                       <div class="agent-title-row">
                         <h3 :title="a.name">{{ a.name }}</h3>
                         <span v-if="a.isSystem" class="agent-scope-pill scope-system" title="系统公共预置资产，全员共享"><i class="fa-solid fa-shield-halved"></i> 公共</span>
-                        <span v-else class="agent-scope-pill scope-mine" title="专属个人智能体资产"><i class="fa-solid fa-user-check"></i> 专属</span>
+                        <span v-else class="agent-scope-pill scope-mine" title="专属个人智能体资产"><i class="fa-solid fa-user-check"></i> 专属</span><span v-if="expiringShare[a.id]" class="agent-scope-pill share-expiring-pill" :title="shareExpiringTitle(a.id)" @click.stop="openDebugAccess(a)"><i class="fa-regular fa-clock"></i> 链接即将到期</span>
                       </div>
                       <div class="agent-sub-meta">
                         <span class="agent-cat-badge"><i class="fa-solid fa-layer-group"></i> {{ a.category || '通用' }}</span>
@@ -502,7 +502,7 @@
                           <div class="table-agent-title-row">
                             <span class="table-agent-title" :title="a.name">{{ a.name }}</span>
                             <span v-if="a.isSystem" class="agent-scope-pill scope-system-sm" title="系统公共预置资产，全员共享"><i class="fa-solid fa-shield-halved"></i> 公共</span>
-                            <span v-else class="agent-scope-pill scope-mine-sm" title="专属智能体资产"><i class="fa-solid fa-user-check"></i> 专属</span>
+                            <span v-else class="agent-scope-pill scope-mine-sm" title="专属智能体资产"><i class="fa-solid fa-user-check"></i> 专属</span><span v-if="expiringShare[a.id]" class="agent-scope-pill share-expiring-pill" :title="shareExpiringTitle(a.id)" @click.stop="openDebugAccess(a)"><i class="fa-regular fa-clock"></i> 链接即将到期</span>
                           </div>
                           <div class="table-agent-id-row">
                             <div class="table-id-pill" title="点击一键复制真实智能体 ID (agent_id)" @click.stop="copyText(a.id, '智能体 ID 已复制: ' + a.id)">
@@ -1468,6 +1468,23 @@ function goDebug(id) {
   router.push(`/debug/${id}`)
 }
 
+// 24 小时内到期的分享链接：智能体 ID → 链接列表，在卡片和列表上提醒创建人
+const expiringShare = ref({})
+async function loadExpiringShare() {
+  const res = await http.get('/api/share-links/expiring')
+  if (!res.success || !Array.isArray(res.data)) return
+  const map = {}
+  for (const l of res.data) (map[l.agentId] ||= []).push(l)
+  expiringShare.value = map
+}
+function shareExpiringTitle(agentId) {
+  const list = expiringShare.value[agentId] || []
+  return list.map(l => `分享链接「${l.name}」将于 ${new Date(l.expiresAt).toLocaleString()} 到期`).join('\n') + '\n点击前往延期'
+}
+function openDebugAccess(a) {
+  router.push({ path: `/debug/${a.id}`, query: { tab: 'access' } })
+}
+
 watch(viewMode, (mode) => localStorage.setItem('agentViewMode', mode))
 
 watch(() => route.query.tab, (newTab) => {
@@ -1611,6 +1628,7 @@ async function loadTemplates() {
 }
 
 async function loadGatewayRoute() {
+  loadExpiringShare()
   const [res, options] = await Promise.all([
     http.get('/api/model-gateway/active-route'),
     http.get('/api/model-gateway/chat-route-options')

@@ -55,6 +55,16 @@
           只限制模型回答<b>一个问题</b>时反复调用工具，不限制提问次数；到上限后模型会根据已查到的资料直接作答。
         </span>
       </div>
+      <div v-if="isSuperAdmin" class="tools-setting-item">
+        <label class="tools-setting-label" for="share-public-enabled">允许「公开」分享链接</label>
+        <label class="switch">
+          <input id="share-public-enabled" v-model="sharePublicEnabled" type="checkbox" :disabled="savingShare" @change="saveSharePublic">
+          <span class="slider-toggle"></span>
+        </label>
+        <span class="tools-setting-hint">
+          打开后，智能体的分享链接可以选「公开」：拿到链接的人不用访问码就能对话。关闭后已有的公开链接立即失效。
+        </span>
+      </div>
       <div class="tools-usage-total" title="本月全部工具的成功调用次数与预估费用（按各工具单价计算）">
         <i class="fa-solid fa-chart-column"></i>
         本月调用 <b>{{ monthTotalCalls }}</b> 次 · 预估 <b>¥{{ monthTotalCost }}</b>
@@ -657,6 +667,8 @@ const maxToolRounds = ref(5)
 const defaultRounds = ref(5)
 const roundOptions = ref([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 const savingRounds = ref(false)
+const sharePublicEnabled = ref(false)
+const savingShare = ref(false)
 const EMPTY_USAGE = { today: 0, month: 0, total: 0, monthCost: 0 }
 
 const monthTotalCalls = computed(() => usageRows.value.reduce((sum, r) => sum + (r.month || 0), 0))
@@ -692,6 +704,7 @@ async function loadSettings() {
     if (res.success && res.data) {
       maxToolRounds.value = res.data.maxToolRounds
       defaultRounds.value = res.data.default
+      sharePublicEnabled.value = !!res.data.sharePublicEnabled
       const options = []
       for (let n = res.data.min; n <= res.data.max; n++) options.push(n)
       roundOptions.value = options
@@ -705,6 +718,24 @@ async function saveMaxToolRounds() {
   savingRounds.value = false
   if (res.success) {
     showToast(res.message || '已保存', 'success', 2000)
+  } else {
+    showToast(res.message || '保存失败', 'error')
+    await loadSettings()
+  }
+}
+
+async function saveSharePublic() {
+  if (!sharePublicEnabled.value) {
+    if (!confirm('关闭后，所有「公开」分享链接立即失效（访问码链接不受影响），确定关闭吗？')) {
+      sharePublicEnabled.value = true
+      return
+    }
+  }
+  savingShare.value = true
+  const res = await http.put('/api/platform-tools/settings', { sharePublicEnabled: sharePublicEnabled.value })
+  savingShare.value = false
+  if (res.success) {
+    showToast(sharePublicEnabled.value ? '已允许公开分享链接' : '已关闭公开分享链接', 'success', 2000)
   } else {
     showToast(res.message || '保存失败', 'error')
     await loadSettings()

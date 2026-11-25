@@ -41,6 +41,10 @@ export default defineConfig({
       '/open': {
         target: 'http://localhost:8080',
         changeOrigin: true
+      },
+      '/share': {
+        target: 'http://localhost:8080',
+        changeOrigin: true
       }
     }
   },

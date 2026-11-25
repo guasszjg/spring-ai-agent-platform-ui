@@ -18,7 +18,7 @@
             <button type="button" class="debug-tab" :class="{ active: pageTab === 'orchestrate' }" @click="pageTab = 'orchestrate'">编排</button>
             <button type="button" class="debug-tab" :class="{ active: pageTab === 'logs' }" @click="pageTab = 'logs'">日志</button>
             <button type="button" class="debug-tab" :class="{ active: pageTab === 'monitor' }" @click="pageTab = 'monitor'">监测</button>
-            <button type="button" class="debug-tab" :class="{ active: pageTab === 'api' }" @click="pageTab = 'api'">访问 API</button>
+            <button type="button" class="debug-tab" :class="{ active: pageTab === 'api' }" @click="pageTab = 'api'">访问入口</button>
           </div>
         </div>
       </div>
@@ -491,8 +491,21 @@
 
     <AgentLogsPanel v-if="pageTab === 'logs' && agent" :agent-id="agent.id" />
     <AgentMonitorPanel v-if="pageTab === 'monitor' && agent" :agent-id="agent.id" />
+    <div v-if="pageTab === 'api' && agent" class="access-entry-switch">
+      <div class="access-entry-seg" role="tablist">
+        <button type="button" role="tab" :class="{ active: accessTab === 'web' }" @click="accessTab = 'web'">
+          <i class="fa-solid fa-link"></i> Web 应用
+        </button>
+        <button type="button" role="tab" :class="{ active: accessTab === 'api' }" @click="accessTab = 'api'">
+          <i class="fa-solid fa-code"></i> 后端服务 API
+        </button>
+      </div>
+    </div>
+    <section v-if="pageTab === 'api' && agent && accessTab === 'web'" class="debug-workspace access-web-workspace">
+      <ShareLinksPanel :agent="agent" :can-manage="canEditAgent" />
+    </section>
     <AgentApiPanel
-      v-if="pageTab === 'api' && agent"
+      v-if="pageTab === 'api' && agent && accessTab === 'api'"
       :agent="agent"
       :routed-channel="publishedRouteInfo.primary ? publishedRouteInfo.primary.name : ''"
       :routed-model="publishedRouteInfo.model"
@@ -1012,6 +1025,7 @@ import AgentMascot from '../components/AgentMascot.vue'
 import AgentAvatar from '../components/AgentAvatar.vue'
 import AssistantDock from '../components/AssistantDock.vue'
 import ModelRoutePicker from '../components/ModelRoutePicker.vue'
+import ShareLinksPanel from '../components/ShareLinksPanel.vue'
 import { describeRoute, modelOn, routeChoiceFromAgent, sameRouteChoice, emptyRouteChoice } from '../utils/chatRoute'
 import { clearAssistantResource, setAssistantPage, setAssistantResource } from '../composables/useAssistantContext'
 import { copyToClipboard } from '../utils/clipboard'
@@ -1024,6 +1038,8 @@ const { showToast } = useToast()
 const inputVar = '{{input}}'
 const timeVar = '{{system_time}}'
 const pageTab = ref('orchestrate')
+// 「访问入口」里的两块：Web 应用（分享链接）/ 后端服务 API
+const accessTab = ref('web')
 const agent = ref(null)
 
 // 与后端 ResourceAuthorizationService.canManageAgent 一致：超管可改全部；系统公共智能体只有超管能改；其余只能改自己的
@@ -2250,6 +2266,11 @@ onMounted(async () => {
     await loadKnowledgeCatalog()
     if (boundSkillIds.value.length) loadSkillOptions()
     resetChat()
+    // 从智能体列表的「链接即将到期」进来时直接打开分享链接
+    if (route.query.tab === 'access') {
+      pageTab.value = 'api'
+      accessTab.value = 'web'
+    }
   } else {
     showToast('未能加载智能体信息', 'error')
   }

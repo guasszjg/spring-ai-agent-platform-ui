@@ -25,6 +25,10 @@ const route = useRoute()
 const { toasts } = useToast()
 
 function applyBodyClass(name) {
+  if (name === 'share-chat') {
+    document.body.className = 'share-chat-page'
+    return
+  }
   document.body.className = name === 'login' ? 'login-page-wrapper' : (name === 'debug' ? 'debug-page' : 'dashboard-page')
 }
 
