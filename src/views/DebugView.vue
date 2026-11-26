@@ -434,11 +434,11 @@
               <div v-if="msg.skills && msg.skills.length" class="msg-tool-chip msg-skill-chip"><i class="fa-solid fa-wand-magic-sparkles"></i> 加载技能: {{ msg.skills.join('、') }}</div>
               <div v-if="toolTextWithoutSkills(msg.tool)" class="msg-tool-chip"><i class="fa-solid fa-circle-check" style="color: var(--accent-emerald);"></i> 工具调用: {{ toolTextWithoutSkills(msg.tool) }}</div>
               <div class="msg-bubble" :class="{ 'md-body': msg.role === 'assistant' }" v-html="msg.html"></div>
-              <div v-if="msg.images && msg.images.length" class="msg-faq-images">
-                <a v-for="src in msg.images" :key="src" :href="src" target="_blank" rel="noopener" title="FAQ 回答附图，点击查看原图">
-                  <img :src="src" alt="FAQ 回答附图" loading="lazy" />
-                </a>
-              </div>
+              <FaqMediaGallery
+                v-if="(msg.images && msg.images.length) || (msg.videos && msg.videos.length)"
+                :images="msg.images"
+                :videos="msg.videos"
+              />
               <div v-if="msg.streaming && streamWaitSec" class="msg-stream-wait">
                 <i class="fa-solid fa-circle-notch fa-spin"></i> 等待模型继续输出… {{ streamWaitSec }}s（模型可能在思考、联网搜索，或通道繁忙排队中）
               </div>
@@ -1026,6 +1026,7 @@ import AgentAvatar from '../components/AgentAvatar.vue'
 import AssistantDock from '../components/AssistantDock.vue'
 import ModelRoutePicker from '../components/ModelRoutePicker.vue'
 import ShareLinksPanel from '../components/ShareLinksPanel.vue'
+import FaqMediaGallery from '../components/FaqMediaGallery.vue'
 import { describeRoute, modelOn, routeChoiceFromAgent, sameRouteChoice, emptyRouteChoice } from '../utils/chatRoute'
 import { clearAssistantResource, setAssistantPage, setAssistantResource } from '../composables/useAssistantContext'
 import { copyToClipboard } from '../utils/clipboard'
@@ -1737,6 +1738,7 @@ async function sendChat() {
       skills: res.data.skillsLoaded || [],
       searches: res.data.knowledgeSearches || [],
       images: res.data.images || [],
+      videos: res.data.videos || [],
       meta: { model: res.data.model || routedModel.value, latencyMs: res.data.latencyMs || 240, tokensUsed: res.data.tokensUsed || 150, cachedPromptTokens: res.data.cachedPromptTokens || 0, failoverFrom: res.data.failoverFrom || '', channel: res.data.channel || '', routeNotice: res.data.routeNotice || '' }
     })
     history.value.push({ role: 'assistant', content: reply })
@@ -1813,6 +1815,7 @@ async function sendStreaming(payload) {
         m.skills = data?.skillsLoaded || []
         m.searches = data?.knowledgeSearches || []
         m.images = data?.images || []
+        m.videos = data?.videos || []
         m.meta = {
           model: data?.model || routedModel.value,
           latencyMs: data?.latencyMs ?? Math.round(performance.now() - started),

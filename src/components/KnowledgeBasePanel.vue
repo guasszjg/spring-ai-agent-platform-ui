@@ -825,6 +825,23 @@
                     <span class="img-zoom-hint"><i class="fa-solid fa-magnifying-glass-plus"></i></span>
                   </div>
                 </div>
+                <!-- 视频预览区 -->
+                <div v-if="getFaqVideos(faq).length > 0" class="faq-videos-gallery">
+                  <button
+                    v-for="(vid, vidIdx) in getFaqVideos(faq)"
+                    :key="vidIdx"
+                    type="button"
+                    class="faq-video-card-chip"
+                    :title="`点击播放：${vid}`"
+                    @click="previewVideo(vid)"
+                  >
+                    <span class="faq-video-play-icon"><i class="fa-solid fa-play"></i></span>
+                    <span class="faq-video-card-meta">
+                      <span class="faq-video-card-name">{{ formatVideoLabel(vid, vidIdx) }}</span>
+                      <span class="faq-video-card-source">{{ isExternalUrl(vid) ? '外部链接' : '站内视频' }}</span>
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1883,15 +1900,18 @@
             <!-- FAQ 图片附件上传与图文支持 -->
             <div class="form-group">
               <div class="faq-upload-label-row">
-                <label class="form-label">回答附图 (支持多张图片 / 图文并茂)</label>
-                <label class="btn-upload-faq-img" :class="{ disabled: uploadingFaqImg }">
+                <label class="form-label">回答附图 (最多 {{ MAX_FAQ_IMAGES }} 张 · 已添加 {{ faqForm.imageUrls.length }}/{{ MAX_FAQ_IMAGES }})</label>
+                <label
+                  class="btn-upload-faq-img"
+                  :class="{ disabled: uploadingFaqImg || faqForm.imageUrls.length >= MAX_FAQ_IMAGES }"
+                >
                   <i :class="uploadingFaqImg ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-image'"></i>
                   <span>{{ uploadingFaqImg ? '上传中...' : '上传图片附件' }}</span>
                   <input
                     type="file"
                     accept="image/png,image/jpeg,image/webp,image/gif"
                     style="display: none;"
-                    :disabled="uploadingFaqImg"
+                    :disabled="uploadingFaqImg || faqForm.imageUrls.length >= MAX_FAQ_IMAGES"
                     @change="handleFaqImageUpload"
                   >
                 </label>
@@ -1899,14 +1919,87 @@
 
               <div v-if="faqForm.imageUrls && faqForm.imageUrls.length > 0" class="faq-form-imgs-preview">
                 <div v-for="(imgUrl, idx) in faqForm.imageUrls" :key="idx" class="faq-form-img-chip">
-                  <img :src="imgUrl" alt="预览">
+                  <img :src="imgUrl" alt="预览" @click="previewImage(imgUrl)">
                   <button type="button" class="btn-del-chip" title="删除图片" @click="removeFaqImage(idx)">
                     <i class="fa-solid fa-xmark"></i>
                   </button>
                 </div>
               </div>
+            </div>
+
+            <!-- FAQ 视频附件上传 / 外部链接 -->
+            <div class="form-group">
+              <div class="faq-upload-label-row">
+                <label class="form-label">回答视频 (最多 {{ MAX_FAQ_VIDEOS }} 个 · 已添加 {{ faqForm.videoUrls.length }}/{{ MAX_FAQ_VIDEOS }}，单个 ≤ {{ MAX_FAQ_VIDEO_MB }}MB)</label>
+                <label
+                  class="btn-upload-faq-img btn-upload-faq-video"
+                  :class="{ disabled: uploadingFaqVideo || faqForm.videoUrls.length >= MAX_FAQ_VIDEOS }"
+                >
+                  <i :class="uploadingFaqVideo ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-film'"></i>
+                  <span>{{ uploadingFaqVideo ? `上传中 ${faqVideoUploadProgress}%` : '上传本地视频' }}</span>
+                  <input
+                    type="file"
+                    accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov"
+                    style="display: none;"
+                    :disabled="uploadingFaqVideo || faqForm.videoUrls.length >= MAX_FAQ_VIDEOS"
+                    @change="handleFaqVideoUpload"
+                  >
+                </label>
+              </div>
+
+              <!-- 上传进度条 -->
+              <div v-if="uploadingFaqVideo" class="faq-video-progress-wrap">
+                <div class="faq-video-progress-bar">
+                  <div class="faq-video-progress-fill" :style="{ width: faqVideoUploadProgress + '%' }"></div>
+                </div>
+                <span class="faq-video-progress-text">{{ faqVideoUploadProgress }}%</span>
+              </div>
+
+              <!-- 外部视频直链录入 -->
+              <div class="faq-video-url-row">
+                <input
+                  v-model="externalVideoUrlInput"
+                  type="url"
+                  class="form-control-styled faq-video-url-input"
+                  placeholder="也可直接粘贴外部视频链接（如 https://oss.example.com/guide.mp4）"
+                  :disabled="faqForm.videoUrls.length >= MAX_FAQ_VIDEOS"
+                  @keydown.enter.prevent="addExternalFaqVideo"
+                >
+                <button
+                  type="button"
+                  class="btn-add-video-url"
+                  :disabled="!externalVideoUrlInput.trim() || faqForm.videoUrls.length >= MAX_FAQ_VIDEOS"
+                  @click="addExternalFaqVideo"
+                >
+                  <i class="fa-solid fa-link"></i> 添加链接
+                </button>
+              </div>
+
+              <div v-if="faqForm.videoUrls && faqForm.videoUrls.length > 0" class="faq-form-videos-preview">
+                <div v-for="(vidUrl, idx) in faqForm.videoUrls" :key="vidUrl + idx" class="faq-form-video-chip">
+                  <button
+                    type="button"
+                    class="faq-form-video-thumb"
+                    title="点击试播视频"
+                    @click="previewVideo(vidUrl)"
+                  >
+                    <video :src="vidUrl" muted preload="metadata"></video>
+                    <span class="faq-thumb-play"><i class="fa-solid fa-play"></i></span>
+                  </button>
+                  <div class="faq-form-video-info">
+                    <span class="faq-form-video-name" :title="vidUrl">{{ formatVideoLabel(vidUrl, idx) }}</span>
+                    <span class="faq-form-video-tag" :class="{ external: isExternalUrl(vidUrl) }">
+                      {{ isExternalUrl(vidUrl) ? '外部链接' : '本地上传' }}
+                    </span>
+                  </div>
+                  <button type="button" class="btn-del-chip" title="删除视频" @click="removeFaqVideo(idx)">
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+              </div>
+
               <p class="section-hint" style="margin-top: 6px;">
-                图片不参与检索（只按问题和回答文字匹配）。智能体回答命中这条 FAQ 时，图片会随回答一起返回：调试窗口直接显示，开放接口在 images 字段返回完整网址。
+                图片与视频不参与检索（只按问题和回答文字匹配）。智能体回答命中这条 FAQ 时，图片（支持多图自动轮播）与视频（支持多视频自动连播）会随回答一起展示；开放接口分别在 images、videos 字段返回完整网址。支持 MP4 / WEBM / MOV。
               </p>
             </div>
           </div>
@@ -1950,6 +2043,22 @@
       <div class="image-lightbox-box" @click.stop>
         <img :src="previewImgUrl" alt="大图预览">
         <button class="btn-lightbox-close" @click="previewImgUrl = null">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- 视频试播灯箱预览 -->
+    <div v-if="previewVideoUrl" class="image-lightbox-overlay" @click="previewVideoUrl = null">
+      <div class="video-lightbox-box" @click.stop>
+        <video :src="previewVideoUrl" controls autoplay playsinline class="video-lightbox-player"></video>
+        <div class="video-lightbox-bar">
+          <span class="video-lightbox-url" :title="previewVideoUrl">{{ previewVideoUrl }}</span>
+          <a :href="previewVideoUrl" target="_blank" rel="noopener" class="video-lightbox-ext">
+            <i class="fa-solid fa-up-right-from-square"></i> 新窗口打开
+          </a>
+        </div>
+        <button class="btn-lightbox-close" @click="previewVideoUrl = null">
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
@@ -2497,16 +2606,24 @@ const kbForm = reactive({
   keywordWeight: 0.5
 })
 
+const MAX_FAQ_IMAGES = 9
+const MAX_FAQ_VIDEOS = 3
+const MAX_FAQ_VIDEO_MB = 500
+
 const faqModalOpen = ref(false)
 const savingFaq = ref(false)
 const uploadingFaqImg = ref(false)
+const uploadingFaqVideo = ref(false)
+const faqVideoUploadProgress = ref(0)
+const externalVideoUrlInput = ref('')
 const faqForm = reactive({
   id: '',
   question: '',
   answer: '',
   category: '通用问答',
   contentType: 'TEXT',
-  imageUrls: []
+  imageUrls: [],
+  videoUrls: []
 })
 
 const deleteModalOpen = ref(false)
@@ -2516,6 +2633,7 @@ const pendingDeleteItem = ref(null)
 const pendingDeleteTitle = ref('')
 
 const previewImgUrl = ref(null)
+const previewVideoUrl = ref(null)
 
 const emojiList = ['📚', '💡', '📑', '🔬', '🤖', '⚖️', '💻', '🎧', '🚀', '📊', '🛡️', '🌐']
 
@@ -3259,19 +3377,24 @@ function goToFaqPage(p) {
 }
 
 function openCreateFaq() {
+  externalVideoUrlInput.value = ''
+  faqVideoUploadProgress.value = 0
   Object.assign(faqForm, {
     id: '',
     question: '',
     answer: '',
     category: selectedFaqCategory.value !== '全部' ? selectedFaqCategory.value : '通用问答',
     contentType: 'TEXT',
-    imageUrls: []
+    imageUrls: [],
+    videoUrls: []
   })
   faqModalOpen.value = true
 }
 
 function openEditFaq(faq) {
   if (!faq) return
+  externalVideoUrlInput.value = ''
+  faqVideoUploadProgress.value = 0
   let imgs = []
   if (faq.imageUrls) {
     try {
@@ -3280,13 +3403,22 @@ function openEditFaq(faq) {
       imgs = []
     }
   }
+  let vids = []
+  if (faq.videoUrls) {
+    try {
+      vids = typeof faq.videoUrls === 'string' ? JSON.parse(faq.videoUrls) : faq.videoUrls
+    } catch {
+      vids = []
+    }
+  }
   Object.assign(faqForm, {
     id: faq.id,
     question: faq.question,
     answer: faq.answer,
     category: faq.category || '通用问答',
     contentType: faq.contentType || 'TEXT',
-    imageUrls: imgs || []
+    imageUrls: Array.isArray(imgs) ? [...imgs] : [],
+    videoUrls: Array.isArray(vids) ? [...vids] : []
   })
   faqModalOpen.value = true
 }
@@ -3294,6 +3426,11 @@ function openEditFaq(faq) {
 async function handleFaqImageUpload(e) {
   const file = e.target.files?.[0]
   if (!file) return
+  if (faqForm.imageUrls.length >= MAX_FAQ_IMAGES) {
+    showToast(`单条 FAQ 最多关联 ${MAX_FAQ_IMAGES} 张图片`, 'warning')
+    e.target.value = ''
+    return
+  }
   uploadingFaqImg.value = true
   const formData = new FormData()
   formData.append('file', file)
@@ -3314,6 +3451,69 @@ function removeFaqImage(idx) {
   faqForm.imageUrls.splice(idx, 1)
 }
 
+async function handleFaqVideoUpload(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  if (faqForm.videoUrls.length >= MAX_FAQ_VIDEOS) {
+    showToast(`单条 FAQ 最多关联 ${MAX_FAQ_VIDEOS} 个视频`, 'warning')
+    e.target.value = ''
+    return
+  }
+  if (file.size > MAX_FAQ_VIDEO_MB * 1024 * 1024) {
+    showToast(`单个视频大小不能超过 ${MAX_FAQ_VIDEO_MB}MB，大视频建议使用外部视频链接`, 'warning')
+    e.target.value = ''
+    return
+  }
+  const ext = (file.name.split('.').pop() || '').toLowerCase()
+  if (!['mp4', 'webm', 'mov'].includes(ext)) {
+    showToast('仅支持 MP4、WEBM、MOV 格式视频', 'warning')
+    e.target.value = ''
+    return
+  }
+
+  uploadingFaqVideo.value = true
+  faqVideoUploadProgress.value = 0
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const res = await http.uploadWithProgress('/api/knowledge-bases/upload-video', formData, (pct) => {
+    faqVideoUploadProgress.value = pct
+  })
+  uploadingFaqVideo.value = false
+  e.target.value = ''
+
+  if (res.success && res.data?.url) {
+    faqForm.videoUrls.push(res.data.url)
+    showToast('视频上传成功', 'success')
+  } else {
+    showToast(res.message || '视频上传失败', 'error')
+  }
+}
+
+function addExternalFaqVideo() {
+  const raw = externalVideoUrlInput.value.trim()
+  if (!raw) return
+  if (faqForm.videoUrls.length >= MAX_FAQ_VIDEOS) {
+    showToast(`单条 FAQ 最多关联 ${MAX_FAQ_VIDEOS} 个视频`, 'warning')
+    return
+  }
+  if (!/^https?:\/\/\S+$/i.test(raw)) {
+    showToast('请输入以 http:// 或 https:// 开头的有效视频链接', 'warning')
+    return
+  }
+  if (faqForm.videoUrls.includes(raw)) {
+    showToast('该视频链接已添加', 'warning')
+    return
+  }
+  faqForm.videoUrls.push(raw)
+  externalVideoUrlInput.value = ''
+  showToast('已添加外部视频链接', 'success')
+}
+
+function removeFaqVideo(idx) {
+  faqForm.videoUrls.splice(idx, 1)
+}
+
 function getFaqImages(faq) {
   if (!faq?.imageUrls) return []
   try {
@@ -3323,8 +3523,36 @@ function getFaqImages(faq) {
   }
 }
 
+function getFaqVideos(faq) {
+  if (!faq?.videoUrls) return []
+  try {
+    const parsed = typeof faq.videoUrls === 'string' ? JSON.parse(faq.videoUrls) : faq.videoUrls
+    return Array.isArray(parsed) ? parsed.filter(u => typeof u === 'string' && u.trim()) : []
+  } catch {
+    return []
+  }
+}
+
+function isExternalUrl(url) {
+  return /^https?:\/\//i.test(String(url || ''))
+}
+
+function formatVideoLabel(url, idx) {
+  if (!url) return `视频 ${idx + 1}`
+  try {
+    const clean = String(url).split('?')[0].split('#')[0]
+    const name = decodeURIComponent(clean.substring(clean.lastIndexOf('/') + 1))
+    if (name) return name.length > 26 ? name.slice(0, 23) + '...' : name
+  } catch { /* ignore */ }
+  return `视频 ${idx + 1}`
+}
+
 function previewImage(url) {
   previewImgUrl.value = url
+}
+
+function previewVideo(url) {
+  previewVideoUrl.value = url
 }
 
 async function saveFaq() {
@@ -3332,16 +3560,22 @@ async function saveFaq() {
     showToast('请完整填写 FAQ 问题与回答内容', 'warning')
     return
   }
+  if (uploadingFaqImg.value || uploadingFaqVideo.value) {
+    showToast('附件正在上传中，请稍候再保存', 'warning')
+    return
+  }
   if (!selectedKb.value) return
 
   savingFaq.value = true
   let res
+  const hasMedia = faqForm.imageUrls.length > 0 || faqForm.videoUrls.length > 0
   const payload = {
     question: faqForm.question.trim(),
     answer: faqForm.answer.trim(),
     category: faqForm.category.trim() || '通用问答',
-    contentType: faqForm.imageUrls.length > 0 ? 'MIXED' : 'TEXT',
-    imageUrls: faqForm.imageUrls
+    contentType: hasMedia ? 'MIXED' : 'TEXT',
+    imageUrls: faqForm.imageUrls,
+    videoUrls: faqForm.videoUrls
   }
 
   if (faqForm.id) {
@@ -5570,5 +5804,271 @@ onMounted(() => {
   font-size: 12px;
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+/* ==================== FAQ 视频上传与卡片预览样式 ==================== */
+.btn-upload-faq-video {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.35);
+  color: #7c3aed;
+}
+
+.btn-upload-faq-video:hover:not(.disabled) {
+  background: rgba(139, 92, 246, 0.18);
+  border-color: rgba(139, 92, 246, 0.55);
+}
+
+.faq-video-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.faq-video-progress-bar {
+  flex: 1;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+.faq-video-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8b5cf6, #3b82f6);
+  transition: width 0.2s ease;
+}
+
+.faq-video-progress-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-blue);
+  min-width: 36px;
+  text-align: right;
+}
+
+.faq-video-url-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.faq-video-url-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.btn-add-video-url {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 13px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.18s ease;
+}
+
+.btn-add-video-url:hover:not(:disabled) {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.btn-add-video-url:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.faq-form-videos-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.faq-form-video-chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 34px 6px 6px;
+  border-radius: 9px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+}
+
+.faq-form-video-thumb {
+  position: relative;
+  width: 80px;
+  height: 46px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: none;
+  padding: 0;
+  background: #0f172a;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.faq-form-video-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.faq-thumb-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.35);
+  color: #fff;
+  font-size: 13px;
+}
+
+.faq-form-video-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.faq-form-video-name {
+  font-size: 12.5px;
+  color: var(--text-primary);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.faq-form-video-tag {
+  align-self: flex-start;
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(139, 92, 246, 0.12);
+  color: #8b5cf6;
+}
+
+.faq-form-video-tag.external {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+}
+
+.faq-videos-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.faq-video-card-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 11px;
+  border-radius: 8px;
+  border: 1px solid rgba(139, 92, 246, 0.28);
+  background: rgba(139, 92, 246, 0.08);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  text-align: left;
+  max-width: 240px;
+}
+
+.faq-video-card-chip:hover {
+  border-color: rgba(139, 92, 246, 0.6);
+  background: rgba(139, 92, 246, 0.14);
+}
+
+.faq-video-play-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #8b5cf6;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.faq-video-card-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.faq-video-card-name {
+  font-size: 12px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.faq-video-card-source {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.video-lightbox-box {
+  position: relative;
+  width: min(860px, 92vw);
+  background: #0f172a;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+.video-lightbox-player {
+  display: block;
+  width: 100%;
+  max-height: 75vh;
+  background: #000;
+}
+
+.video-lightbox-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(15, 23, 42, 0.95);
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.video-lightbox-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.video-lightbox-ext {
+  color: #60a5fa;
+  white-space: nowrap;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.video-lightbox-ext:hover {
+  text-decoration: underline;
 }
 </style>

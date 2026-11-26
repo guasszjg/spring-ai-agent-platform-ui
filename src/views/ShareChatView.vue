@@ -88,6 +88,11 @@
               <div v-else class="sc-bubble sc-bubble-bot">
                 <div v-if="m.html" class="sc-md" v-html="m.html"></div>
                 <span v-else-if="m.pending" class="sc-typing"><i></i><i></i><i></i></span>
+                <FaqMediaGallery
+                  v-if="(m.images && m.images.length) || (m.videos && m.videos.length)"
+                  :images="m.images"
+                  :videos="m.videos"
+                />
                 <div v-if="m.notice" class="sc-msg-notice">{{ m.notice }}</div>
               </div>
             </div>
@@ -127,6 +132,7 @@ import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { shareApi, shareStore } from '../api/share'
 import { renderMarkdown } from '../utils/markdown'
+import FaqMediaGallery from '../components/FaqMediaGallery.vue'
 
 const route = useRoute()
 const code = String(route.params.code || '')
@@ -287,7 +293,7 @@ async function send(text) {
   input.value = ''
   autoGrow()
   messages.value.push({ role: 'user', content })
-  const reply = { role: 'assistant', html: '', pending: true, notice: '' }
+  const reply = { role: 'assistant', html: '', pending: true, notice: '', images: [], videos: [] }
   messages.value.push(reply)
   const replyIndex = messages.value.length - 1
   sending.value = true
@@ -309,6 +315,8 @@ async function send(text) {
       } else if (event === 'message_end') {
         ended = true
         if (data?.conversation_id) conversationId.value = data.conversation_id
+        if (Array.isArray(data?.images)) msg.images = data.images
+        if (Array.isArray(data?.videos)) msg.videos = data.videos
       } else if (event === 'guardrail') {
         msg.notice = data?.message || '回答中包含不合适的内容，已停止输出'
       } else if (event === 'error') {

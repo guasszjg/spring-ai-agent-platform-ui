@@ -145,5 +145,38 @@ export const http = {
     } catch (err) {
       return { success: false, message: '网络请求失败: ' + err.message }
     }
-  }
+  },
+  uploadWithProgress: (url, formData, onProgress) => new Promise((resolve) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', url, true)
+    xhr.withCredentials = true
+    const token = getCsrfToken()
+    if (token) {
+      xhr.setRequestHeader('X-CSRF-TOKEN', token)
+    }
+    xhr.upload.onprogress = (evt) => {
+      if (evt.lengthComputable && typeof onProgress === 'function') {
+        const percent = Math.min(99, Math.round((evt.loaded / evt.total) * 100))
+        onProgress(percent, evt.loaded, evt.total)
+      }
+    }
+    xhr.onload = () => {
+      if (typeof onProgress === 'function' && xhr.status >= 200 && xhr.status < 300) {
+        onProgress(100, 1, 1)
+      }
+      try {
+        const parsed = JSON.parse(xhr.responseText || '{}')
+        resolve(parsed)
+      } catch {
+        resolve({ success: false, message: `请求失败 (HTTP ${xhr.status})` })
+      }
+    }
+    xhr.onerror = () => {
+      resolve({ success: false, message: '网络请求失败，请检查网络连接或文件大小限制' })
+    }
+    xhr.ontimeout = () => {
+      resolve({ success: false, message: '视频上传超时，请稍后重试或改用外部视频链接' })
+    }
+    xhr.send(formData)
+  })
 }
