@@ -1,16 +1,67 @@
 <template>
   <!-- 平台 AI 助手：右侧悬浮入口 + 滑出式对话面板；流式对话（/api/assistant/chat/stream），执行模式可调用只读平台工具 -->
   <div class="ad">
-    <button
+    <!-- 悬浮入口：支持一键贴边隐藏、划过滑出提示「AI 助手」，以及上下自由拖动避让页面按钮 -->
+    <div
       v-show="!open"
-      type="button"
-      class="ad-launcher"
-      :style="{ bottom: launcherBottom + 'px' }"
-      title="AI 助手"
-      @click="openPanel"
+      class="ad-launcher-wrap"
+      :class="{ collapsed: launcherCollapsed, dragging: launcherDragging }"
+      :style="{ bottom: effectiveLauncherBottom + 'px' }"
     >
-      <AgentMascot :size="34" animated />
-    </button>
+      <!-- 贴边隐藏态：平时极窄不挡内容，鼠标划过平滑滑出提示「AI 助手」 -->
+      <div v-if="launcherCollapsed" class="ad-edge-dock">
+        <button
+          type="button"
+          class="ad-edge-pill"
+          title="点击打开 AI 助手（可上下拖动位置）"
+          @pointerdown="startLauncherDrag"
+          @click="onLauncherClick"
+        >
+          <span class="ad-edge-tab" aria-hidden="true">
+            <ChevronLeft :size="13" :stroke-width="2.2" />
+          </span>
+          <span class="ad-edge-content">
+            <AgentMascot :size="24" animated />
+            <span class="ad-edge-text">
+              <strong>AI 助手</strong>
+              <small>点击对话</small>
+            </span>
+          </span>
+        </button>
+        <button
+          type="button"
+          class="ad-edge-pin"
+          title="取消隐藏，恢复悬浮图标"
+          aria-label="恢复悬浮图标"
+          @click.stop="setLauncherCollapsed(false)"
+        >
+          <Pin :size="12" :stroke-width="2" />
+        </button>
+      </div>
+
+      <!-- 展开态：圆角悬浮球，悬停提示「AI 助手」并提供一键贴边隐藏按钮 -->
+      <div v-else class="ad-orb-shell">
+        <span class="ad-orb-tooltip" aria-hidden="true">AI 助手</span>
+        <button
+          type="button"
+          class="ad-launcher"
+          title="点击打开 AI 助手（按住可上下拖动）"
+          @pointerdown="startLauncherDrag"
+          @click="onLauncherClick"
+        >
+          <AgentMascot :size="34" animated />
+        </button>
+        <button
+          type="button"
+          class="ad-orb-hide"
+          title="贴边隐藏（鼠标划到右侧边缘可随时唤出）"
+          aria-label="贴边隐藏 AI 助手"
+          @click.stop="setLauncherCollapsed(true)"
+        >
+          <ChevronRight :size="12" :stroke-width="2.4" />
+        </button>
+      </div>
+    </div>
 
     <transition :name="effectiveMode === 'dock' ? 'ad-slide' : 'ad-pop'">
       <aside
@@ -419,7 +470,7 @@ import {
   Workflow, BookOpen, Network, Wrench, KeyRound, Stethoscope, ArrowUp, SquarePen, X,
   PanelRight, PictureInPicture2, Maximize2, Minimize2, History, Square, LoaderCircle, Check,
   CircleAlert, Trash2, MessageSquare, Zap, ThumbsUp, ThumbsDown, ExternalLink, PencilLine, Plus, Clock,
-  Copy, Crosshair, Link2, Play, ShieldAlert
+  Copy, Crosshair, Link2, Play, ShieldAlert, ChevronLeft, ChevronRight, Pin
 } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { http } from '../api/http'
@@ -431,7 +482,79 @@ const props = defineProps({
   // 入口按钮离底部的距离：页面右下角有自己的按钮时（例如调试台的发送按钮）上移避开
   launcherBottom: { type: Number, default: 28 }
 })
-const launcherBottom = computed(() => props.launcherBottom)
+const LAUNCHER_KEY = 'agentmatrix.assistant.launcher'
+const launcherCollapsed = ref(false)
+const launcherCustomBottom = ref(null)
+const launcherDragging = ref(false)
+let launcherDidDrag = false
+
+const effectiveLauncherBottom = computed(() => {
+  const base = launcherCustomBottom.value != null ? launcherCustomBottom.value : props.launcherBottom
+  const maxB = Math.max(60, (typeof window !== 'undefined' ? window.innerHeight : 800) - 90)
+  return Math.min(maxB, Math.max(16, base))
+})
+
+function loadLauncherState() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LAUNCHER_KEY) || 'null')
+    if (raw && typeof raw === 'object') {
+      if (typeof raw.collapsed === 'boolean') launcherCollapsed.value = raw.collapsed
+      if (typeof raw.bottom === 'number' && Number.isFinite(raw.bottom)) launcherCustomBottom.value = raw.bottom
+    }
+  } catch { /* 忽略损坏的本地存储 */ }
+}
+
+function saveLauncherState() {
+  try {
+    localStorage.setItem(LAUNCHER_KEY, JSON.stringify({
+      collapsed: launcherCollapsed.value,
+      bottom: launcherCustomBottom.value
+    }))
+  } catch { /* 忽略 */ }
+}
+
+function setLauncherCollapsed(val) {
+  launcherCollapsed.value = !!val
+  saveLauncherState()
+}
+
+function startLauncherDrag(e) {
+  if (e.button !== 0) return
+  const startY = e.clientY
+  const startBottom = effectiveLauncherBottom.value
+  launcherDidDrag = false
+
+  const onMove = (ev) => {
+    const dy = startY - ev.clientY
+    if (!launcherDidDrag && Math.abs(dy) > 4) {
+      launcherDidDrag = true
+      launcherDragging.value = true
+    }
+    if (launcherDidDrag) {
+      const maxB = Math.max(60, window.innerHeight - 90)
+      launcherCustomBottom.value = Math.min(maxB, Math.max(16, Math.round(startBottom + dy)))
+    }
+  }
+  const onUp = () => {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+    window.removeEventListener('pointercancel', onUp)
+    if (launcherDidDrag) {
+      launcherDragging.value = false
+      saveLauncherState()
+      // 短暂延迟复位标志，防止松手紧接着触发 click 打开面板
+      setTimeout(() => { launcherDidDrag = false }, 80)
+    }
+  }
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+  window.addEventListener('pointercancel', onUp)
+}
+
+function onLauncherClick() {
+  if (launcherDidDrag) return
+  openPanel()
+}
 
 const router = useRouter()
 
@@ -629,6 +752,7 @@ function onKeydown(e) {
 
 onMounted(() => {
   loadLayout()
+  loadLauncherState()
   loadChatMode()
   window.addEventListener('resize', onWindowResize)
   window.addEventListener('keydown', onKeydown)
@@ -1081,12 +1205,56 @@ async function sendFeedback(m, rating) {
 </script>
 
 <style scoped>
-/* ---------- 悬浮入口 ---------- */
-.ad-launcher {
+/* ---------- 悬浮入口（支持贴边隐藏 + 划过滑出 + 上下拖动） ---------- */
+.ad-launcher-wrap {
   position: fixed;
   right: 20px;
   bottom: 28px;
   z-index: 900;
+  user-select: none;
+  touch-action: none;
+  transition: right 0.22s ease;
+}
+
+.ad-launcher-wrap.collapsed {
+  right: 0;
+}
+
+.ad-launcher-wrap.dragging {
+  transition: none;
+}
+
+/* 展开态悬浮球 */
+.ad-orb-shell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.ad-orb-tooltip {
+  position: absolute;
+  right: calc(100% + 10px);
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 8px 20px -8px rgba(15, 23, 42, 0.28);
+  opacity: 0;
+  transform: translateX(6px);
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.ad-orb-shell:hover .ad-orb-tooltip {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.ad-launcher {
   width: 52px;
   height: 52px;
   display: inline-flex;
@@ -1103,6 +1271,149 @@ async function sendFeedback(m, rating) {
 .ad-launcher:hover {
   transform: translateY(-2px);
   box-shadow: 0 14px 32px -10px rgba(60, 30, 10, 0.45);
+}
+
+.ad-orb-hide {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.16s ease, transform 0.16s ease, color 0.15s, border-color 0.15s;
+}
+
+.ad-orb-shell:hover .ad-orb-hide,
+.ad-orb-hide:focus-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.ad-orb-hide:hover {
+  color: var(--accent-blue, #3b82f6);
+  border-color: var(--accent-blue, #3b82f6);
+}
+
+/* 贴边隐藏态：平时只露出右侧 20px 极窄小耳朵，划过时平滑滑出「AI 助手」胶囊 */
+.ad-edge-dock {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding-left: 16px; /* 扩大左侧柔和感应区，鼠标靠近边缘即可触发滑出 */
+}
+
+.ad-edge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  height: 44px;
+  border-radius: 22px 0 0 22px;
+  border: 1px solid var(--border-color);
+  border-right: none;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: -4px 8px 24px -10px rgba(15, 23, 42, 0.32);
+  cursor: pointer;
+  overflow: hidden;
+  max-width: 22px;
+  opacity: 0.78;
+  transition: max-width 0.24s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.18s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.ad-edge-dock:hover .ad-edge-pill,
+.ad-edge-dock:focus-within .ad-edge-pill,
+.ad-launcher-wrap.dragging .ad-edge-pill {
+  max-width: 170px;
+  opacity: 1;
+  border-color: rgba(59, 130, 246, 0.45);
+  box-shadow: -6px 12px 28px -10px rgba(59, 130, 246, 0.35);
+}
+
+.ad-edge-tab {
+  width: 22px;
+  height: 44px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-blue, #3b82f6);
+  background: rgba(59, 130, 246, 0.08);
+  transition: background 0.18s ease;
+}
+
+.ad-edge-dock:hover .ad-edge-tab {
+  background: rgba(59, 130, 246, 0.14);
+}
+
+.ad-edge-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 34px 0 8px;
+  white-space: nowrap;
+}
+
+.ad-edge-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+
+.ad-edge-text strong {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.ad-edge-text small {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.ad-edge-pin {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%) scale(0.8);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease 0.06s, transform 0.18s ease, color 0.15s, border-color 0.15s;
+}
+
+.ad-edge-dock:hover .ad-edge-pin,
+.ad-edge-dock:focus-within .ad-edge-pin {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) scale(1);
+}
+
+.ad-edge-pin:hover {
+  color: var(--accent-blue, #3b82f6);
+  border-color: var(--accent-blue, #3b82f6);
 }
 
 /* ---------- 面板 ---------- */

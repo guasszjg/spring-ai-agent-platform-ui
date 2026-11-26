@@ -93,14 +93,14 @@
       </div>
     </div>
 
-    <div v-if="detail" class="logs-drawer-mask" @click.self="detail = null">
-      <aside class="logs-drawer">
+    <div v-if="detail" class="logs-drawer-mask" @click.self="closeDetail">
+      <aside class="logs-drawer" :class="{ 'logs-drawer-wide': expandedTraceMsgIds.size > 0 }">
         <div class="logs-drawer-head">
           <div>
             <h3>{{ detail.conversation?.title || '会话详情' }}</h3>
             <p>{{ detail.conversation?.account }} · {{ detail.conversation?.messageCount || 0 }} 条消息</p>
           </div>
-          <button type="button" class="ms-close" @click="detail = null"><i class="fa-solid fa-xmark"></i></button>
+          <button type="button" class="ms-close" @click="closeDetail"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="logs-drawer-body">
           <div v-for="msg in detail.messages || []" :key="msg.id" class="logs-msg" :class="'logs-msg-' + msg.role">
@@ -110,6 +110,19 @@
               <span v-if="msg.model">{{ msg.model }}</span>
               <span v-if="msg.latencyMs">{{ msg.latencyMs }}ms</span>
               <span v-if="msg.tokensUsed">{{ msg.tokensUsed }} Tokens</span>
+              <button
+                v-if="parseTrace(msg.traceJson)"
+                type="button"
+                class="logs-trace-toggle"
+                :class="{ active: expandedTraceMsgIds.has(msg.id) }"
+                @click="toggleTrace(msg.id)"
+              >
+                <i class="fa-solid fa-diagram-project"></i>
+                <span>{{ expandedTraceMsgIds.has(msg.id) ? '收起调用链路' : `调用链路 (${parseTrace(msg.traceJson).steps?.length || 0} 步)` }}</span>
+              </button>
+            </div>
+            <div v-if="msg.role === 'assistant' && expandedTraceMsgIds.has(msg.id) && parseTrace(msg.traceJson)" class="logs-trace-panel-wrap">
+              <CallTracePanel :trace="parseTrace(msg.traceJson)" compact />
             </div>
           </div>
         </div>
@@ -121,6 +134,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { http } from '../api/http'
+import CallTracePanel from './CallTracePanel.vue'
 
 const props = defineProps({
   agentId: { type: String, required: true }
@@ -148,7 +162,35 @@ const total = ref(0)
 const records = ref([])
 const totalPages = ref(1)
 const detail = ref(null)
+const expandedTraceMsgIds = ref(new Set())
+const traceCache = new Map()
 let searchTimer = null
+
+function parseTrace(raw) {
+  if (!raw) return null
+  if (typeof raw === 'object') return raw
+  if (traceCache.has(raw)) return traceCache.get(raw)
+  try {
+    const parsed = JSON.parse(raw)
+    traceCache.set(raw, parsed)
+    return parsed
+  } catch {
+    traceCache.set(raw, null)
+    return null
+  }
+}
+
+function toggleTrace(msgId) {
+  const next = new Set(expandedTraceMsgIds.value)
+  if (next.has(msgId)) next.delete(msgId)
+  else next.add(msgId)
+  expandedTraceMsgIds.value = next
+}
+
+function closeDetail() {
+  detail.value = null
+  expandedTraceMsgIds.value = new Set()
+}
 
 function feedbackLabel(value) {
   return value ? value : 'N/A'
@@ -209,6 +251,7 @@ function changePage(next) {
 }
 
 async function openDetail(item) {
+  expandedTraceMsgIds.value = new Set()
   const res = await http.get(`/api/agents/${props.agentId}/logs/${item.id}`)
   if (res.success) {
     detail.value = res.data
@@ -217,3 +260,37 @@ async function openDetail(item) {
 
 onMounted(reload)
 </script>
+
+<style scoped>
+.logs-drawer-wide {
+  width: min(760px, 92vw) !important;
+  max-width: 92vw !important;
+  transition: width 0.2s ease;
+}
+
+.logs-trace-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--accent-blue);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: auto;
+  transition: all 0.16s ease;
+}
+
+.logs-trace-toggle:hover,
+.logs-trace-toggle.active {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+.logs-trace-panel-wrap {
+  margin-top: 10px;
+}
+</style>

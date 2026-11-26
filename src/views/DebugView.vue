@@ -390,11 +390,43 @@
 
       <section class="preview-pane">
         <div class="preview-header">
-          <div>
-            <h3 class="preview-title">调试预览</h3>
+          <div class="preview-header-left">
+            <div class="preview-subtabs" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                class="preview-subtab"
+                :class="{ active: previewTab === 'chat' }"
+                @click="previewTab = 'chat'"
+              >
+                <i class="fa-regular fa-comments"></i> 对话预览
+              </button>
+              <button
+                type="button"
+                role="tab"
+                class="preview-subtab"
+                :class="{ active: previewTab === 'trace' }"
+                @click="previewTab = 'trace'"
+              >
+                <i class="fa-solid fa-diagram-project"></i> 调用链路
+                <span v-if="sending && activeLiveTrace" class="subtab-dot live" title="正在执行"></span>
+                <span v-else-if="selectedTrace?.status === 'error'" class="subtab-dot error" title="最近一次调用异常"></span>
+                <span v-else-if="traceTurns.length" class="subtab-count">{{ traceTurns.length }}</span>
+              </button>
+            </div>
             <p class="preview-hint">{{ promptDirty ? '正在使用未发布的草稿提示词' : '正在使用已发布的系统提示词' }}</p>
           </div>
           <div class="preview-header-actions">
+            <button
+              type="button"
+              class="memory-chip"
+              :class="{ off: !traceEnabled }"
+              :title="traceEnabled ? '调用链路追踪已开启：实时记录知识库、向量模型、工具与 LLM 各阶段耗时，点击关闭以零开销运行' : '调用链路追踪已关闭（零额外开销），点击开启以排查卡点与延迟'"
+              @click="toggleTraceEnabled"
+            >
+              <i class="fa-solid fa-diagram-project"></i>
+              {{ traceEnabled ? '链路开' : '链路关' }}
+            </button>
             <button
               type="button"
               class="memory-chip"
@@ -418,7 +450,25 @@
             <button class="btn-icon-round" title="清空对话" @click="resetChat"><i class="fa-solid fa-rotate-right"></i></button>
           </div>
         </div>
-        <div class="chat-history-scroll" ref="streamRef">
+        <div v-if="previewTab === 'trace'" class="trace-pane-scroll">
+          <div v-if="!traceEnabled" class="trace-off-banner">
+            <span><i class="fa-solid fa-circle-info"></i> 当前已关闭「调用链路」采集，新的提问不会记录链路详情。</span>
+            <button type="button" class="trace-enable-btn" @click="toggleTraceEnabled">立即开启</button>
+          </div>
+          <div v-if="traceTurns.length > 1" class="trace-turn-bar">
+            <label class="trace-turn-label">查看轮次</label>
+            <select v-model="selectedTraceTurnId" class="trace-turn-select">
+              <option v-for="t in traceTurns" :key="t.id" :value="t.id">
+                第 {{ t.round }} 轮 · {{ t.questionPreview }} ({{ t.status === 'running' ? '执行中' : (t.status === 'error' ? '异常' : t.durationText) }})
+              </option>
+            </select>
+            <button type="button" class="trace-back-btn" @click="previewTab = 'chat'">
+              <i class="fa-solid fa-arrow-left"></i> 返回对话
+            </button>
+          </div>
+          <CallTracePanel :trace="selectedTrace" :live="isSelectedTraceLive" />
+        </div>
+        <div v-show="previewTab === 'chat'" class="chat-history-scroll" ref="streamRef">
           <div v-if="!messages.length && !sending" class="chat-empty chat-empty-mascot">
             <AgentMascot :size="56" animated />
             <strong>{{ agent?.name || '智能体' }}</strong>
@@ -470,17 +520,47 @@
                   <span><i class="fa-solid fa-ticket"></i> {{ msg.meta.tokensUsed }} Tokens</span>
                   <span v-if="msg.meta.cachedPromptTokens" title="输入 Token 中命中提示词缓存的部分"><i class="fa-solid fa-bolt"></i> 缓存 {{ msg.meta.cachedPromptTokens }}</span>
                 </div>
+                <button
+                  v-if="msg.role === 'assistant' && msg.trace"
+                  type="button"
+                  class="msg-trace-btn"
+                  :class="{ error: msg.trace.status === 'error' }"
+                  title="查看本次问答的完整调用链路与各阶段耗时"
+                  @click="openMessageTrace(msg)"
+                >
+                  <i class="fa-solid fa-diagram-project"></i>
+                  <span>调用链路</span>
+                </button>
               </div>
             </div>
           </div>
           <div v-if="sending && !streamingActive" class="chat-msg-row chat-msg-bot">
             <div class="msg-avatar msg-avatar-bot"><AgentMascot :size="22" animated /></div>
             <div class="msg-content-wrapper">
-              <div class="msg-bubble"><i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent-blue);"></i> {{ appliedSettings.thinking.value !== 'OFF' ? '思考中...' : '生成中...' }}<span v-if="streamWaitSec" class="msg-wait-sec"> {{ streamWaitSec }}s</span></div>
+              <div class="msg-bubble">
+                <i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent-blue);"></i>
+                {{ currentLiveStepText || (appliedSettings.thinking.value !== 'OFF' ? '思考中...' : '生成中...') }}
+                <span v-if="streamWaitSec" class="msg-wait-sec"> {{ streamWaitSec }}s</span>
+              </div>
+              <div v-if="activeLiveTrace && activeLiveTrace.steps.length" class="live-trace-ticker">
+                <span
+                  v-for="s in activeLiveTrace.steps"
+                  :key="s.id"
+                  class="live-step-pill"
+                  :class="'live-' + s.status"
+                  :title="s.summary || s.name"
+                >
+                  <i :class="s.status === 'running' ? 'fa-solid fa-circle-notch fa-spin' : (s.status === 'error' ? 'fa-solid fa-xmark' : 'fa-solid fa-check')"></i>
+                  {{ s.name }}<template v-if="s.durationMs != null"> {{ s.durationMs >= 1000 ? (s.durationMs / 1000).toFixed(1) + 's' : s.durationMs + 'ms' }}</template>
+                </span>
+                <button type="button" class="live-trace-jump" @click="previewTab = 'trace'">
+                  实时链路 <i class="fa-solid fa-arrow-right"></i>
+                </button>
+              </div>
             </div>
           </div>
         </div>
-        <div class="preview-input-container">
+        <div v-show="previewTab === 'chat'" class="preview-input-container">
           <form class="input-bar-wrapper" @submit.prevent="sendChat">
             <input v-model="inputText" class="main-chat-input" placeholder="和 Bot 聊天" autocomplete="off">
             <button type="submit" class="btn-input-send" :disabled="sending"><i class="fa-solid fa-paper-plane"></i></button>
@@ -1027,6 +1107,7 @@ import AssistantDock from '../components/AssistantDock.vue'
 import ModelRoutePicker from '../components/ModelRoutePicker.vue'
 import ShareLinksPanel from '../components/ShareLinksPanel.vue'
 import FaqMediaGallery from '../components/FaqMediaGallery.vue'
+import CallTracePanel from '../components/CallTracePanel.vue'
 import { describeRoute, modelOn, routeChoiceFromAgent, sameRouteChoice, emptyRouteChoice } from '../utils/chatRoute'
 import { clearAssistantResource, setAssistantPage, setAssistantResource } from '../composables/useAssistantContext'
 import { copyToClipboard } from '../utils/clipboard'
@@ -1666,6 +1747,106 @@ function resetChat() {
   history.value = []
   messages.value = []
   copiedIndex.value = null
+  activeLiveTrace.value = null
+  selectedTraceTurnId.value = ''
+  previewTab.value = 'chat'
+}
+
+// ==================== 调用链路（实时 + 历史轮次 + 开关，默认关闭，按需开启） ====================
+const TRACE_ENABLED_KEY = 'debug-trace-enabled'
+const traceEnabled = ref((() => {
+  try { return localStorage.getItem(TRACE_ENABLED_KEY) === 'true' } catch { return false }
+})())
+const previewTab = ref('chat') // 'chat' | 'trace'
+const activeLiveTrace = ref(null)
+const selectedTraceTurnId = ref('')
+
+function toggleTraceEnabled() {
+  traceEnabled.value = !traceEnabled.value
+  try { localStorage.setItem(TRACE_ENABLED_KEY, String(traceEnabled.value)) } catch {}
+  showToast(traceEnabled.value ? '已开启调用链路追踪' : '已关闭调用链路追踪（零额外开销）', 'success', 1800)
+}
+
+const traceTurns = computed(() => {
+  const list = []
+  let round = 0
+  let lastUserText = ''
+  for (const m of messages.value) {
+    if (m.role === 'user') {
+      lastUserText = m.copyText || ''
+    } else if (m.role === 'assistant' && m.trace) {
+      round += 1
+      const dur = m.trace.totalDurationMs
+      list.push({
+        id: m.traceId || m.trace.traceId || `turn-${round}`,
+        round,
+        questionPreview: lastUserText ? (lastUserText.length > 18 ? lastUserText.slice(0, 18) + '…' : lastUserText) : `对话 ${round}`,
+        status: m.streaming ? 'running' : (m.trace.status || 'ok'),
+        durationText: dur != null ? (dur >= 1000 ? `${(dur / 1000).toFixed(2)}s` : `${dur}ms`) : '-',
+        trace: m.trace,
+        live: !!m.streaming
+      })
+    }
+  }
+  if (sending.value && activeLiveTrace.value && !list.some(t => t.trace === activeLiveTrace.value)) {
+    round += 1
+    list.push({
+      id: activeLiveTrace.value.traceId || `live-${round}`,
+      round,
+      questionPreview: lastUserText ? (lastUserText.length > 18 ? lastUserText.slice(0, 18) + '…' : lastUserText) : '当前问题',
+      status: 'running',
+      durationText: '执行中',
+      trace: activeLiveTrace.value,
+      live: true
+    })
+  }
+  return list
+})
+
+const selectedTraceEntry = computed(() => {
+  if (!traceTurns.value.length) return null
+  if (selectedTraceTurnId.value) {
+    const matched = traceTurns.value.find(t => t.id === selectedTraceTurnId.value)
+    if (matched) return matched
+  }
+  return traceTurns.value[traceTurns.value.length - 1]
+})
+
+const selectedTrace = computed(() => selectedTraceEntry.value?.trace || null)
+const isSelectedTraceLive = computed(() => !!selectedTraceEntry.value?.live)
+
+const currentLiveStepText = computed(() => {
+  const steps = activeLiveTrace.value?.steps || []
+  if (!steps.length) return ''
+  const running = [...steps].reverse().find(s => s.status === 'running')
+  if (!running) return ''
+  return `${running.name}${running.summary ? ' · ' + running.summary : '...'}`
+})
+
+function openMessageTrace(msg) {
+  if (!msg?.trace) return
+  selectedTraceTurnId.value = msg.traceId || msg.trace.traceId || ''
+  previewTab.value = 'trace'
+}
+
+function upsertLiveTraceStep(traceId, step) {
+  if (!activeLiveTrace.value) {
+    activeLiveTrace.value = {
+      traceId: traceId || `live-${Date.now()}`,
+      status: 'running',
+      startedAt: Date.now(),
+      steps: []
+    }
+  }
+  if (traceId && !activeLiveTrace.value.traceId) {
+    activeLiveTrace.value.traceId = traceId
+  }
+  const idx = activeLiveTrace.value.steps.findIndex(s => s.id === step.id)
+  if (idx >= 0) {
+    activeLiveTrace.value.steps[idx] = step
+  } else {
+    activeLiveTrace.value.steps.push(step)
+  }
 }
 
 // 同一时间只有一条消息显示“已复制”
@@ -1715,6 +1896,7 @@ async function sendChat() {
     conversationId: conversationId.value || undefined,
     account: user.username || user.nickname || undefined,
     enabledTools: enabledToolNames,
+    traceEnabled: traceEnabled.value,
     toolConfigs: {
       bochaApiKey
     }
@@ -1730,6 +1912,7 @@ async function sendChat() {
     if (res.data.conversationId) conversationId.value = res.data.conversationId
     const reply = res.data.reply
     const tool = res.data.toolCalled || null
+    const trace = res.data.trace || null
     appendChatMessage({
       role: 'assistant',
       html: formatHtml(reply, false),
@@ -1739,8 +1922,11 @@ async function sendChat() {
       searches: res.data.knowledgeSearches || [],
       images: res.data.images || [],
       videos: res.data.videos || [],
+      traceId: trace?.traceId || '',
+      trace,
       meta: { model: res.data.model || routedModel.value, latencyMs: res.data.latencyMs || 240, tokensUsed: res.data.tokensUsed || 150, cachedPromptTokens: res.data.cachedPromptTokens || 0, failoverFrom: res.data.failoverFrom || '', channel: res.data.channel || '', routeNotice: res.data.routeNotice || '' }
     })
+    if (trace?.traceId) selectedTraceTurnId.value = trace.traceId
     history.value.push({ role: 'assistant', content: reply })
     speedText.value = `↑ 0.1 K/s  ↓ ${(Math.random() * 2.2 + 1.1).toFixed(1)} K/s`
   } else {
@@ -1779,10 +1965,31 @@ async function sendStreaming(payload) {
   let firstTokenMs = null
   let finished = false
   let errorMessage = ''
+  let errorTrace = null
+
+  if (traceEnabled.value) {
+    activeLiveTrace.value = {
+      traceId: `live-${Date.now()}`,
+      status: 'running',
+      startedAt: Date.now(),
+      steps: []
+    }
+    selectedTraceTurnId.value = activeLiveTrace.value.traceId
+  } else {
+    activeLiveTrace.value = null
+  }
 
   const ensureMessage = () => {
     if (!msg) {
-      msg = appendChatMessage({ role: 'assistant', html: '', tool: null, meta: null, streaming: true })
+      msg = appendChatMessage({
+        role: 'assistant',
+        html: '',
+        tool: null,
+        meta: null,
+        streaming: true,
+        traceId: activeLiveTrace.value?.traceId || '',
+        trace: activeLiveTrace.value
+      })
       streamingActive.value = true
     }
     return msg
@@ -1797,7 +2004,14 @@ async function sendStreaming(payload) {
 
   const res = await http.stream(`/api/agents/${agent.value.id}/messages/stream`, payload, {
     onEvent: (event, data) => {
-      if (event === 'message') {
+      if (event === 'trace_step' && data?.step) {
+        upsertLiveTraceStep(data.traceId, data.step)
+        if (data.traceId) selectedTraceTurnId.value = data.traceId
+        if (msg) {
+          msg.traceId = activeLiveTrace.value?.traceId || msg.traceId
+          msg.trace = activeLiveTrace.value
+        }
+      } else if (event === 'message') {
         lastOutputAt = performance.now()
         streamWaitSec.value = 0
         if (firstTokenMs == null) firstTokenMs = Math.round(performance.now() - started)
@@ -1816,6 +2030,11 @@ async function sendStreaming(payload) {
         m.searches = data?.knowledgeSearches || []
         m.images = data?.images || []
         m.videos = data?.videos || []
+        if (data?.trace) {
+          m.trace = data.trace
+          m.traceId = data.trace.traceId || m.traceId
+          selectedTraceTurnId.value = m.traceId
+        }
         m.meta = {
           model: data?.model || routedModel.value,
           latencyMs: data?.latencyMs ?? Math.round(performance.now() - started),
@@ -1831,6 +2050,9 @@ async function sendStreaming(payload) {
         finished = true
       } else if (event === 'error') {
         errorMessage = data?.message || '对话异常'
+        if (data?.trace) {
+          errorTrace = data.trace
+        }
       }
     }
   })
@@ -1842,12 +2064,30 @@ async function sendStreaming(payload) {
   streamingActive.value = false
   if (!finished) {
     const reason = errorMessage || res.message || '连接中断，请重试'
+    const finalErrorTrace = errorTrace || (activeLiveTrace.value ? {
+      ...activeLiveTrace.value,
+      status: 'error',
+      error: reason,
+      totalDurationMs: Math.max(0, Date.now() - activeLiveTrace.value.startedAt)
+    } : null)
     if (msg && answer) {
       msg.html = formatHtml(answer, false) + `<div class="msg-stream-error">（输出中断：${escapeHtml(reason)}）</div>`
+      if (finalErrorTrace) {
+        msg.trace = finalErrorTrace
+        msg.traceId = finalErrorTrace.traceId || msg.traceId
+      }
     } else {
-      appendChatMessage({ role: 'assistant', html: `对话异常: ${escapeHtml(reason)}`, copyText: `对话异常: ${reason}` })
+      appendChatMessage({
+        role: 'assistant',
+        html: `对话异常: ${escapeHtml(reason)}`,
+        copyText: `对话异常: ${reason}`,
+        traceId: finalErrorTrace?.traceId || '',
+        trace: finalErrorTrace
+      })
     }
+    if (finalErrorTrace?.traceId) selectedTraceTurnId.value = finalErrorTrace.traceId
   }
+  activeLiveTrace.value = null
   scrollToBottom()
 }
 
@@ -2288,3 +2528,243 @@ onUnmounted(() => {
   document.removeEventListener('mousedown', onDocClick)
 })
 </script>
+
+<style scoped>
+.preview-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.preview-subtabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  align-self: flex-start;
+}
+
+.preview-subtab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  white-space: nowrap;
+}
+
+.preview-subtab:hover {
+  color: var(--text-primary);
+}
+
+.preview-subtab.active {
+  background: var(--bg-card);
+  color: var(--accent-blue);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.subtab-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.subtab-dot.live {
+  background: var(--accent-blue);
+  animation: trace-pulse 1.2s infinite ease-in-out;
+}
+
+.subtab-dot.error {
+  background: #f43f5e;
+}
+
+@keyframes trace-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.8); }
+}
+
+.subtab-count {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.trace-pane-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.trace-off-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(100, 116, 139, 0.1);
+  border: 1px solid var(--border-color);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.trace-enable-btn {
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--accent-blue);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.trace-enable-btn:hover {
+  background: rgba(59, 130, 246, 0.18);
+}
+
+.trace-turn-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+
+.trace-turn-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.trace-turn-select {
+  flex: 1;
+  min-width: 160px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.trace-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.trace-back-btn:hover {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.msg-trace-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.msg-trace-btn:hover {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.msg-trace-btn.error {
+  border-color: rgba(244, 63, 94, 0.35);
+  color: #f43f5e;
+  background: rgba(244, 63, 94, 0.08);
+}
+
+.live-trace-ticker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.live-step-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+}
+
+.live-step-pill.live-ok {
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #059669;
+}
+
+.live-step-pill.live-running {
+  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--accent-blue);
+  font-weight: 600;
+}
+
+.live-step-pill.live-error {
+  border-color: rgba(244, 63, 94, 0.35);
+  color: #f43f5e;
+}
+
+.live-trace-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.live-trace-jump:hover {
+  background: rgba(59, 130, 246, 0.2);
+}
+</style>

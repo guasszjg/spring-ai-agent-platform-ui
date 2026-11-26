@@ -19,13 +19,25 @@
       @mouseleave="imageHovered = false"
     >
       <div v-if="validImages.length === 1" class="fmg-single-image-wrap">
+        <div v-if="brokenImages.has(validImages[0])" class="fmg-img-error">
+          <i class="fa-regular fa-image"></i>
+          <span>图片加载失败</span>
+          <a :href="validImages[0]" target="_blank" rel="noopener" class="fmg-ext-link">新窗口打开</a>
+        </div>
         <button
+          v-else
           type="button"
           class="fmg-image-btn"
           title="点击查看大图"
           @click="openLightbox(0)"
         >
-          <img :src="validImages[0]" alt="FAQ 回答附图" loading="lazy" />
+          <img
+            :src="validImages[0]"
+            alt="FAQ 回答附图"
+            loading="lazy"
+            referrerpolicy="no-referrer"
+            @error="markImageBroken(validImages[0])"
+          />
           <span class="fmg-zoom-badge"><i class="fa-solid fa-magnifying-glass-plus"></i></span>
         </button>
       </div>
@@ -49,11 +61,19 @@
             @click="openLightbox(currentImageIndex)"
           >
             <Transition name="fmg-fade" mode="out-in">
+              <div v-if="brokenImages.has(currentImageUrl)" :key="'err-' + currentImageIndex" class="fmg-img-error">
+                <i class="fa-regular fa-image"></i>
+                <span>图片加载失败</span>
+                <a :href="currentImageUrl" target="_blank" rel="noopener" class="fmg-ext-link" @click.stop>新窗口打开</a>
+              </div>
               <img
+                v-else
                 :key="currentImageUrl + '-' + currentImageIndex"
                 :src="currentImageUrl"
                 :alt="`FAQ 回答附图 ${currentImageIndex + 1}`"
                 loading="lazy"
+                referrerpolicy="no-referrer"
+                @error="markImageBroken(currentImageUrl)"
               />
             </Transition>
             <span class="fmg-zoom-badge"><i class="fa-solid fa-magnifying-glass-plus"></i></span>
@@ -223,6 +243,7 @@
             :src="validImages[lightboxIndex]"
             :alt="`FAQ 附图 ${lightboxIndex + 1}`"
             class="fmg-lb-img"
+            referrerpolicy="no-referrer"
           />
 
           <button
@@ -287,7 +308,15 @@ const imageHovered = ref(false)
 const lightboxOpen = ref(false)
 const lightboxIndex = ref(0)
 const progressRunKey = ref(0)
+const brokenImages = ref(new Set())
 let imageTimer = null
+
+function markImageBroken(url) {
+  if (!url) return
+  const next = new Set(brokenImages.value)
+  next.add(url)
+  brokenImages.value = next
+}
 
 const currentImageUrl = computed(() => validImages.value[currentImageIndex.value] || '')
 
@@ -556,6 +585,20 @@ onUnmounted(() => {
   width: auto;
   height: auto;
   object-fit: contain;
+}
+
+.fmg-img-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 20px 28px;
+  border-radius: 10px;
+  border: 1px dashed var(--border-color, #cbd5e1);
+  background: var(--bg-input, #f8fafc);
+  color: var(--text-muted, #64748b);
+  font-size: 12px;
 }
 
 .fmg-zoom-badge {

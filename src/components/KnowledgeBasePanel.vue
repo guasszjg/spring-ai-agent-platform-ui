@@ -821,7 +821,7 @@
                     class="faq-image-thumbnail"
                     @click="previewImage(img)"
                   >
-                    <img :src="img" alt="FAQ 附件">
+                    <img :src="img" alt="FAQ 附件" referrerpolicy="no-referrer">
                     <span class="img-zoom-hint"><i class="fa-solid fa-magnifying-glass-plus"></i></span>
                   </div>
                 </div>
@@ -1897,16 +1897,16 @@
               ></textarea>
             </div>
 
-            <!-- FAQ 图片附件上传与图文支持 -->
+            <!-- FAQ 图片附件上传与联网图片支持 -->
             <div class="form-group">
               <div class="faq-upload-label-row">
-                <label class="form-label">回答附图 (最多 {{ MAX_FAQ_IMAGES }} 张 · 已添加 {{ faqForm.imageUrls.length }}/{{ MAX_FAQ_IMAGES }})</label>
+                <label class="form-label">回答附图 (最多 {{ MAX_FAQ_IMAGES }} 张 · 本地与联网图片合计 {{ faqForm.imageUrls.length }}/{{ MAX_FAQ_IMAGES }})</label>
                 <label
                   class="btn-upload-faq-img"
                   :class="{ disabled: uploadingFaqImg || faqForm.imageUrls.length >= MAX_FAQ_IMAGES }"
                 >
                   <i :class="uploadingFaqImg ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-image'"></i>
-                  <span>{{ uploadingFaqImg ? '上传中...' : '上传图片附件' }}</span>
+                  <span>{{ uploadingFaqImg ? '上传中...' : '上传本地图片' }}</span>
                   <input
                     type="file"
                     accept="image/png,image/jpeg,image/webp,image/gif"
@@ -1917,9 +1917,30 @@
                 </label>
               </div>
 
+              <!-- 联网图片直链录入 -->
+              <div class="faq-video-url-row">
+                <input
+                  v-model="externalImageUrlInput"
+                  type="url"
+                  class="form-control-styled faq-video-url-input"
+                  placeholder="也可直接粘贴联网图片链接（如 https://oss.example.com/guide.png）"
+                  :disabled="faqForm.imageUrls.length >= MAX_FAQ_IMAGES"
+                  @keydown.enter.prevent="addExternalFaqImage"
+                >
+                <button
+                  type="button"
+                  class="btn-add-video-url"
+                  :disabled="!externalImageUrlInput.trim() || faqForm.imageUrls.length >= MAX_FAQ_IMAGES"
+                  @click="addExternalFaqImage"
+                >
+                  <i class="fa-solid fa-link"></i> 添加链接
+                </button>
+              </div>
+
               <div v-if="faqForm.imageUrls && faqForm.imageUrls.length > 0" class="faq-form-imgs-preview">
-                <div v-for="(imgUrl, idx) in faqForm.imageUrls" :key="idx" class="faq-form-img-chip">
-                  <img :src="imgUrl" alt="预览" @click="previewImage(imgUrl)">
+                <div v-for="(imgUrl, idx) in faqForm.imageUrls" :key="imgUrl + idx" class="faq-form-img-chip">
+                  <img :src="imgUrl" alt="预览" referrerpolicy="no-referrer" @click="previewImage(imgUrl)">
+                  <span v-if="isExternalUrl(imgUrl)" class="faq-img-ext-badge" title="联网图片链接">外链</span>
                   <button type="button" class="btn-del-chip" title="删除图片" @click="removeFaqImage(idx)">
                     <i class="fa-solid fa-xmark"></i>
                   </button>
@@ -2041,7 +2062,7 @@
     <!-- 图片大图灯箱预览 -->
     <div v-if="previewImgUrl" class="image-lightbox-overlay" @click="previewImgUrl = null">
       <div class="image-lightbox-box" @click.stop>
-        <img :src="previewImgUrl" alt="大图预览">
+        <img :src="previewImgUrl" alt="大图预览" referrerpolicy="no-referrer">
         <button class="btn-lightbox-close" @click="previewImgUrl = null">
           <i class="fa-solid fa-xmark"></i>
         </button>
@@ -2613,6 +2634,7 @@ const MAX_FAQ_VIDEO_MB = 500
 const faqModalOpen = ref(false)
 const savingFaq = ref(false)
 const uploadingFaqImg = ref(false)
+const externalImageUrlInput = ref('')
 const uploadingFaqVideo = ref(false)
 const faqVideoUploadProgress = ref(0)
 const externalVideoUrlInput = ref('')
@@ -3377,6 +3399,7 @@ function goToFaqPage(p) {
 }
 
 function openCreateFaq() {
+  externalImageUrlInput.value = ''
   externalVideoUrlInput.value = ''
   faqVideoUploadProgress.value = 0
   Object.assign(faqForm, {
@@ -3393,6 +3416,7 @@ function openCreateFaq() {
 
 function openEditFaq(faq) {
   if (!faq) return
+  externalImageUrlInput.value = ''
   externalVideoUrlInput.value = ''
   faqVideoUploadProgress.value = 0
   let imgs = []
@@ -3449,6 +3473,26 @@ async function handleFaqImageUpload(e) {
 
 function removeFaqImage(idx) {
   faqForm.imageUrls.splice(idx, 1)
+}
+
+function addExternalFaqImage() {
+  const raw = externalImageUrlInput.value.trim()
+  if (!raw) return
+  if (faqForm.imageUrls.length >= MAX_FAQ_IMAGES) {
+    showToast(`单条 FAQ 最多关联 ${MAX_FAQ_IMAGES} 张图片（含本地与联网图片）`, 'warning')
+    return
+  }
+  if (!/^https?:\/\/\S+$/i.test(raw)) {
+    showToast('请输入以 http:// 或 https:// 开头的有效图片链接', 'warning')
+    return
+  }
+  if (faqForm.imageUrls.includes(raw)) {
+    showToast('该图片链接已添加', 'warning')
+    return
+  }
+  faqForm.imageUrls.push(raw)
+  externalImageUrlInput.value = ''
+  showToast('已添加联网图片链接', 'success')
 }
 
 async function handleFaqVideoUpload(e) {
@@ -5964,6 +6008,19 @@ onMounted(() => {
 .faq-form-video-tag.external {
   background: rgba(59, 130, 246, 0.12);
   color: var(--accent-blue);
+}
+
+.faq-img-ext-badge {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #fff;
+  font-size: 10px;
+  line-height: 1.3;
+  pointer-events: none;
 }
 
 .faq-videos-gallery {

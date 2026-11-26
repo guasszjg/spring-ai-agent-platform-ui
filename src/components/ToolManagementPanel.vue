@@ -65,6 +65,16 @@
           打开后，智能体的分享链接可以选「公开」：拿到链接的人不用访问码就能对话。关闭后已有的公开链接立即失效。
         </span>
       </div>
+      <div v-if="isSuperAdmin" class="tools-setting-item">
+        <label class="tools-setting-label" for="open-api-trace-enabled">记录开放接口调用链路</label>
+        <label class="switch">
+          <input id="open-api-trace-enabled" v-model="openApiTraceEnabled" type="checkbox" :disabled="savingOpenApiTrace" @change="saveOpenApiTrace">
+          <span class="slider-toggle"></span>
+        </label>
+        <span class="tools-setting-hint">
+          默认关闭，客户端 API 与分享页调用零额外开销。排查线上慢请求时临时打开，可在智能体「日志」中查看该次调用的完整链路与各阶段耗时。
+        </span>
+      </div>
       <div class="tools-usage-total" title="本月全部工具的成功调用次数与预估费用（按各工具单价计算）">
         <i class="fa-solid fa-chart-column"></i>
         本月调用 <b>{{ monthTotalCalls }}</b> 次 · 预估 <b>¥{{ monthTotalCost }}</b>
@@ -669,6 +679,8 @@ const roundOptions = ref([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 const savingRounds = ref(false)
 const sharePublicEnabled = ref(false)
 const savingShare = ref(false)
+const openApiTraceEnabled = ref(false)
+const savingOpenApiTrace = ref(false)
 const EMPTY_USAGE = { today: 0, month: 0, total: 0, monthCost: 0 }
 
 const monthTotalCalls = computed(() => usageRows.value.reduce((sum, r) => sum + (r.month || 0), 0))
@@ -705,6 +717,7 @@ async function loadSettings() {
       maxToolRounds.value = res.data.maxToolRounds
       defaultRounds.value = res.data.default
       sharePublicEnabled.value = !!res.data.sharePublicEnabled
+      openApiTraceEnabled.value = !!res.data.openApiTraceEnabled
       const options = []
       for (let n = res.data.min; n <= res.data.max; n++) options.push(n)
       roundOptions.value = options
@@ -736,6 +749,18 @@ async function saveSharePublic() {
   savingShare.value = false
   if (res.success) {
     showToast(sharePublicEnabled.value ? '已允许公开分享链接' : '已关闭公开分享链接', 'success', 2000)
+  } else {
+    showToast(res.message || '保存失败', 'error')
+    await loadSettings()
+  }
+}
+
+async function saveOpenApiTrace() {
+  savingOpenApiTrace.value = true
+  const res = await http.put('/api/platform-tools/settings', { openApiTraceEnabled: openApiTraceEnabled.value })
+  savingOpenApiTrace.value = false
+  if (res.success) {
+    showToast(openApiTraceEnabled.value ? '已开启开放接口调用链路记录' : '已关闭开放接口调用链路记录', 'success', 2000)
   } else {
     showToast(res.message || '保存失败', 'error')
     await loadSettings()
