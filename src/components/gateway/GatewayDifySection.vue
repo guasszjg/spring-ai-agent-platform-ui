@@ -45,7 +45,7 @@
               暂无 Dify 接入配置，点击上方“接入 Dify 实例”录入
             </td>
           </tr>
-          <tr v-for="d in difys" :key="d.id">
+          <tr v-for="d in pagedDifys" :key="d.id">
             <td>
               <div class="table-agent-meta">
                 <div class="table-agent-avatar" style="font-size: 16px; background: rgba(59, 130, 246, 0.1); color: var(--accent-blue);">
@@ -101,6 +101,15 @@
         </tbody>
       </table>
     </div>
+
+    <GatewayPagination
+      v-model:page="difyPage"
+      v-model:page-size="difyPageSize"
+      :total="difyTotal"
+      :total-pages="difyTotalPages"
+      :size-options="difySizeOptions"
+      unit="个 Dify 实例"
+    />
 
     <!-- ======================================================== -->
     <!-- MODAL 3: Dify 知识库引擎实例配置弹窗                        -->
@@ -186,6 +195,8 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../../api/http'
 import { useToast } from '../../composables/useToast'
+import { useClientPagination } from '../../composables/useClientPagination'
+import GatewayPagination from './GatewayPagination.vue'
 
 const emit = defineEmits(['status'])
 const { showToast } = useToast()
@@ -194,6 +205,14 @@ const { showToast } = useToast()
 // Dify 知识引擎实例：列表、增改删、激活与连通性测试
 // ==========================================
 const difys = ref([])
+const {
+  page: difyPage,
+  pageSize: difyPageSize,
+  sizeOptions: difySizeOptions,
+  total: difyTotal,
+  totalPages: difyTotalPages,
+  pagedItems: pagedDifys
+} = useClientPagination(difys, { storageKey: 'gatewayDifyPageSize', defaultSize: 10 })
 const difyModalOpen = ref(false)
 const savingDify = ref(false)
 const probingDifyId = ref('')

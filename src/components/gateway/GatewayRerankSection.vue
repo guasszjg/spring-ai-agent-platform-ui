@@ -41,7 +41,7 @@
               暂无 Rerank 模型配置，点击上方“添加 Rerank 模型”录入
             </td>
           </tr>
-          <tr v-for="c in configs" :key="c.id">
+          <tr v-for="c in pagedConfigs" :key="c.id">
             <td>
               <div class="table-agent-meta">
                 <div class="table-agent-avatar" style="font-size: 16px;"><i class="fa-solid fa-arrows-spin"></i></div>
@@ -90,6 +90,15 @@
         </tbody>
       </table>
     </div>
+
+    <GatewayPagination
+      v-model:page="rerankPage"
+      v-model:page-size="rerankPageSize"
+      :total="rerankTotal"
+      :total-pages="rerankTotalPages"
+      :size-options="rerankSizeOptions"
+      unit="个 Rerank 模型"
+    />
 
     <div class="modal-backdrop" :class="{ open: modalOpen }">
       <div class="modal-dialog" style="max-width: 580px;">
@@ -198,6 +207,8 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../../api/http'
 import { useToast } from '../../composables/useToast'
+import { useClientPagination } from '../../composables/useClientPagination'
+import GatewayPagination from './GatewayPagination.vue'
 
 const emit = defineEmits(['status'])
 const { showToast } = useToast()
@@ -210,6 +221,14 @@ const PRESETS = [
 ]
 
 const configs = ref([])
+const {
+  page: rerankPage,
+  pageSize: rerankPageSize,
+  sizeOptions: rerankSizeOptions,
+  total: rerankTotal,
+  totalPages: rerankTotalPages,
+  pagedItems: pagedConfigs
+} = useClientPagination(configs, { storageKey: 'gatewayRerankPageSize', defaultSize: 10 })
 const loading = ref(false)
 const modalOpen = ref(false)
 const saving = ref(false)

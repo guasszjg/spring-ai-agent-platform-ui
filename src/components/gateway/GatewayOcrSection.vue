@@ -46,7 +46,7 @@
               暂无 OCR 配置，点击上方“添加 OCR 引擎”录入本地 PaddleOCR 或在线 Vision API
             </td>
           </tr>
-          <tr v-for="item in ocrs" :key="item.id">
+          <tr v-for="item in pagedOcrs" :key="item.id">
             <td>
               <div class="table-agent-meta">
                 <div class="table-agent-avatar" style="font-size: 16px;"><i class="fa-solid fa-eye"></i></div>
@@ -103,6 +103,15 @@
         </tbody>
       </table>
     </div>
+
+    <GatewayPagination
+      v-model:page="ocrPage"
+      v-model:page-size="ocrPageSize"
+      :total="ocrTotal"
+      :total-pages="ocrTotalPages"
+      :size-options="ocrSizeOptions"
+      unit="个 OCR 引擎"
+    />
 
     <!-- MODAL: OCR 引擎配置 -->
     <div class="modal-backdrop" :class="{ open: ocrModalOpen }">
@@ -208,12 +217,22 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../../api/http'
 import { useToast } from '../../composables/useToast'
+import { useClientPagination } from '../../composables/useClientPagination'
+import GatewayPagination from './GatewayPagination.vue'
 
 const emit = defineEmits(['status'])
 const { showToast } = useToast()
 
 // OCR 引擎配置：列表、增改删、激活与连通性测试
 const ocrs = ref([])
+const {
+  page: ocrPage,
+  pageSize: ocrPageSize,
+  sizeOptions: ocrSizeOptions,
+  total: ocrTotal,
+  totalPages: ocrTotalPages,
+  pagedItems: pagedOcrs
+} = useClientPagination(ocrs, { storageKey: 'gatewayOcrPageSize', defaultSize: 10 })
 const ocrModalOpen = ref(false)
 const savingOcr = ref(false)
 const probingOcr = ref('')

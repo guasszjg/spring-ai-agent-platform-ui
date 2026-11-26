@@ -47,7 +47,7 @@
               暂无 Embedding 向量模型配置，点击上方“添加向量模型”录入
             </td>
           </tr>
-          <tr v-for="e in embeddings" :key="e.id">
+          <tr v-for="e in pagedEmbeddings" :key="e.id">
             <td>
               <div class="table-agent-meta">
                 <div class="table-agent-avatar" style="font-size: 16px;"><i class="fa-solid fa-microchip"></i></div>
@@ -107,6 +107,15 @@
         </tbody>
       </table>
     </div>
+
+    <GatewayPagination
+      v-model:page="embPage"
+      v-model:page-size="embPageSize"
+      :total="embTotal"
+      :total-pages="embTotalPages"
+      :size-options="embSizeOptions"
+      unit="个向量模型"
+    />
 
     <!-- ======================================================== -->
     <!-- MODAL 2: Embedding 向量模型配置弹窗                        -->
@@ -250,6 +259,8 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../../api/http'
 import { useToast } from '../../composables/useToast'
+import { useClientPagination } from '../../composables/useClientPagination'
+import GatewayPagination from './GatewayPagination.vue'
 
 const emit = defineEmits(['status'])
 const { showToast } = useToast()
@@ -258,6 +269,14 @@ const { showToast } = useToast()
 // 向量模型配置：列表、增改删、激活与连通性测试
 // ==========================================
 const embeddings = ref([])
+const {
+  page: embPage,
+  pageSize: embPageSize,
+  sizeOptions: embSizeOptions,
+  total: embTotal,
+  totalPages: embTotalPages,
+  pagedItems: pagedEmbeddings
+} = useClientPagination(embeddings, { storageKey: 'gatewayEmbeddingPageSize', defaultSize: 10 })
 const embModalOpen = ref(false)
 const savingEmb = ref(false)
 const probingEmb = ref('')

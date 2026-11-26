@@ -60,7 +60,12 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="p in providers" :key="p.id">
+          <tr v-if="!providers.length">
+            <td colspan="6" style="text-align:center; padding: 40px; color: var(--text-muted);">
+              暂无模型通道，点击上方「添加模型通道」录入
+            </td>
+          </tr>
+          <tr v-for="p in pagedProviders" :key="p.id">
             <td>
               <div class="gateway-name-cell">
                 <div class="gateway-vendor-mark" :class="'mark-' + (p.vendor || '').toLowerCase()">
@@ -157,6 +162,15 @@
         </tbody>
       </table>
     </div>
+
+    <GatewayPagination
+      v-model:page="llmPage"
+      v-model:page-size="llmPageSize"
+      :total="llmTotal"
+      :total-pages="llmTotalPages"
+      :size-options="llmSizeOptions"
+      unit="个通道"
+    />
 
     <!-- ======================================================== -->
     <!-- MODAL 1: LLM 模型通道配置弹窗                              -->
@@ -423,6 +437,8 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../../api/http'
 import { useToast } from '../../composables/useToast'
+import { useClientPagination } from '../../composables/useClientPagination'
+import GatewayPagination from './GatewayPagination.vue'
 import logoDeepseek from '../../assets/vendors/deepseek-color.svg'
 import logoQwen from '../../assets/vendors/qwen-color.svg'
 import logoHunyuan from '../../assets/vendors/hunyuan-color.svg'
@@ -473,6 +489,14 @@ const form = reactive({
 })
 
 const providers = computed(() => overview.value.providers || [])
+const {
+  page: llmPage,
+  pageSize: llmPageSize,
+  sizeOptions: llmSizeOptions,
+  total: llmTotal,
+  totalPages: llmTotalPages,
+  pagedItems: pagedProviders
+} = useClientPagination(providers, { storageKey: 'gatewayLlmPageSize', defaultSize: 10 })
 const savedDefaultProviderId = computed(() => {
   const id = overview.value.policy?.defaultProviderId
   return providers.value.find(p => p.id === id && p.enabled && p.configured)?.id
