@@ -2200,6 +2200,7 @@ function loadPersistedTools(agentData) {
       }
     }
     if (Array.isArray(saved) && saved.length) {
+      const hasCatalog = standardToolCatalog.value.length > 0
       const loadedList = []
       saved.forEach(st => {
         const standard = matchSavedTool(st, standardToolCatalog.value)
@@ -2210,14 +2211,15 @@ function loadPersistedTools(agentData) {
             unavailable: false,
             config: { ...standard.config, ...(st.config || {}) }
           })
-        } else {
+        } else if (st.category === 'MCP') {
           // 保存过的 MCP 工具已经不在可用列表里：被管理员停用、上游有变化待重新审核，或服务已删除
-          loadedList.push(st.category === 'MCP' ? { ...st, unavailable: true } : st)
+          loadedList.push({ ...st, unavailable: true })
+        } else if (!hasCatalog) {
+          // 仅在平台工具目录拉取失败时回退保留原记录；目录正常加载时，在「工具管理」已停用/删除的工具直接隐藏
+          loadedList.push(st)
         }
       })
-      if (loadedList.length > 0) {
-        tools.splice(0, tools.length, ...loadedList)
-      }
+      tools.splice(0, tools.length, ...loadedList)
     } else if (standardToolCatalog.value.length) {
       // 新智能体默认带上内置工具；MCP 工具必须手动添加，不默认带
       tools.splice(0, tools.length, ...standardToolCatalog.value
