@@ -52,14 +52,18 @@ export const shareApi = {
    * 发消息并读取流式回答。onEvent(event, data)：message（data.answer 是一段文字）、message_end、guardrail、error。
    * 中止（停止生成）时返回 { success: false, aborted: true }。
    */
-  async send(code, token, message, conversationId, { signal, onEvent } = {}) {
+  async send(code, token, message, conversationId, { signal, onEvent, inputs } = {}) {
     let res
     try {
       res = await fetch(linkUrl(code, '/messages'), {
         method: 'POST',
         credentials: 'omit',
         headers: headers(token, { Accept: 'text/event-stream' }),
-        body: JSON.stringify({ message, conversationId: conversationId || undefined }),
+        body: JSON.stringify({
+          message,
+          conversationId: conversationId || undefined,
+          inputs: inputs && Object.keys(inputs).length ? inputs : undefined
+        }),
         signal
       })
     } catch (err) {

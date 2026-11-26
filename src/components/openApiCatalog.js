@@ -59,7 +59,8 @@ export const OPEN_API_GROUPS = [
           { name: 'message', type: 'string', required: true, default: '广告机怎么发布节目？', description: '用户问题（兼容 query、prompt、input、content、question）' },
           { name: 'response_mode', type: 'string', required: false, default: 'blocking', description: 'blocking：返回完整 JSON；streaming：SSE 流式输出（不传时默认 streaming）' },
           { name: 'conversation_id', type: 'string', required: false, default: '', description: '会话 ID。智能体开启上下文记忆 (memoryTurns > 0) 时，传入上一轮返回的 conversation_id 即可接着追问，平台自动带上最近 N 轮问答；同一会话须使用相同的 user。记忆关闭时只用于日志归档' },
-          { name: 'user', type: 'string', required: false, default: 'device-SN001', description: '终端用户标识（兼容 end_user），用于审计、用量统计与会话归属；上下文记忆只读取同一 user 的会话' }
+          { name: 'user', type: 'string', required: false, default: 'device-SN001', description: '终端用户标识（兼容 end_user），用于审计、用量统计与会话归属；上下文记忆只读取同一 user 的会话' },
+          { name: 'inputs', type: 'object', required: false, default: '{}', description: '自定义提示词变量键值对（兼容 variables），如 {"store_name":"深圳南山店"}，自动替换系统提示词中的 {{store_name}}；未传或为空时自动回退变量默认值，完全向后兼容' }
         ],
         exampleBody: body({
           agent_id: 'agent-2e839a1c',

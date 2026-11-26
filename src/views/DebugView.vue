@@ -183,19 +183,77 @@
               <button class="btn-section-action" @click="optimizePrompt"><i class="fa-solid fa-wand-magic-sparkles"></i><span>生成</span></button>
             </div>
           </div>
-          <textarea v-model="prompt" class="prompt-textarea" placeholder="请输入智能体的角色设定与工作流程..."></textarea>
+          <textarea ref="promptTextareaRef" v-model="prompt" class="prompt-textarea" placeholder="请输入智能体的角色设定与工作流程..."></textarea>
           <div class="prompt-footer">
             <span>{{ prompt.length }} 字</span>
             <span style="font-size: 11px;">右侧调试用这份草稿；点「发布上线」后才成为线上系统提示词</span>
           </div>
         </div>
         <div class="config-card-section">
-          <div class="section-header-row"><div class="section-title"><span>变量</span></div></div>
-          <p class="section-hint">变量能使用户输入表单引入提示词或开场白</p>
-          <div class="var-tag-list">
-            <span class="var-chip"><i class="fa-solid fa-code" style="color: var(--accent-blue);"></i> {{ inputVar }} (用户输入)</span>
-            <span class="var-chip"><i class="fa-solid fa-clock" style="color: var(--accent-amber);"></i> {{ timeVar }}</span>
+          <div class="section-header-row">
+            <div class="section-title"><span>变量</span></div>
+            <div class="section-tools-header-right">
+              <span v-if="promptVariables.length" class="tools-count-badge">{{ promptVariables.length }} 个自定义</span>
+              <span v-if="promptVariables.length" class="tools-header-divider">|</span>
+              <button type="button" class="btn-tools-add" @click="openAddVariableModal">
+                <i class="fa-solid fa-plus"></i>
+                <span>添加</span>
+              </button>
+            </div>
           </div>
+          <p class="section-hint var-section-hint">点击变量插入提示词光标处，支持表单与接口 inputs 传参</p>
+          <div class="var-group-head">
+            <span class="var-group-label">内置变量</span>
+            <span class="var-group-note">服务端自动注入，无需开启时间工具</span>
+          </div>
+          <div class="var-builtin-grid">
+            <button
+              v-for="bv in BUILTIN_VARIABLES"
+              :key="bv.key"
+              type="button"
+              class="var-builtin-card"
+              :title="`${bv.desc}（点击插入到提示词光标处）`"
+              @click="insertVariableToPrompt(bv.key)"
+            >
+              <code class="var-builtin-token">{{ formatVarToken(bv.key) }}</code>
+              <span class="var-builtin-label">{{ bv.label }}</span>
+            </button>
+          </div>
+          <template v-if="promptVariables.length">
+            <div class="var-group-head" style="margin-top: 12px;">
+              <span class="var-group-label">自定义变量</span>
+            </div>
+            <div class="custom-var-list">
+              <div v-for="(v, idx) in promptVariables" :key="v.key" class="custom-var-row">
+                <button
+                  type="button"
+                  class="var-chip var-chip-clickable var-chip-custom"
+                  :title="`点击插入 {{${v.key}}} 到提示词光标处`"
+                  @click="insertVariableToPrompt(v.key)"
+                >
+                  <span>{{ formatVarToken(v.key) }}</span>
+                </button>
+                <div class="custom-var-meta">
+                  <span class="custom-var-name" :title="v.label">
+                    {{ v.label || v.key }}
+                    <span v-if="v.required" class="custom-var-req">必填</span>
+                  </span>
+                  <span class="custom-var-sub">
+                    {{ variableTypeLabel(v.type) }}
+                    <template v-if="v.defaultValue"> · 默认：{{ v.defaultValue }}</template>
+                  </span>
+                </div>
+                <div class="custom-var-actions">
+                  <button type="button" class="var-icon-btn" title="编辑变量" @click="openEditVariableModal(v, idx)">
+                    <i class="fa-regular fa-pen-to-square"></i>
+                  </button>
+                  <button type="button" class="var-icon-btn danger" title="删除变量" @click="deleteVariable(idx)">
+                    <i class="fa-regular fa-trash-can"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </template>
         </div>
         <div class="config-card-section">
           <div class="section-header-row">
@@ -467,6 +525,56 @@
             </button>
           </div>
           <CallTracePanel :trace="selectedTrace" :live="isSelectedTraceLive" />
+        </div>
+        <div v-if="previewTab === 'chat' && promptVariables.length" class="debug-vars-panel" :class="{ open: debugVarsOpen, warn: missingRequiredVars.length }">
+          <div class="debug-vars-head" @click="debugVarsOpen = !debugVarsOpen">
+            <div class="debug-vars-title">
+              <i class="fa-solid fa-sliders"></i>
+              <span>变量表单</span>
+              <span class="debug-vars-count">{{ promptVariables.length }}</span>
+              <span v-if="missingRequiredVars.length" class="debug-vars-warn-badge">
+                <i class="fa-solid fa-circle-exclamation"></i> {{ missingRequiredVars.length }} 项必填待填
+              </span>
+              <span v-else-if="!debugVarsOpen && filledVarSummary" class="debug-vars-summary" :title="filledVarSummary">
+                {{ filledVarSummary }}
+              </span>
+            </div>
+            <div class="debug-vars-head-actions" @click.stop>
+              <button v-if="debugVarsOpen" type="button" class="debug-vars-reset" title="恢复为变量默认值" @click="resetVariableValues">
+                <i class="fa-solid fa-rotate-left"></i> 恢复默认
+              </button>
+              <button type="button" class="debug-vars-toggle" @click="debugVarsOpen = !debugVarsOpen">
+                <i :class="debugVarsOpen ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>
+              </button>
+            </div>
+          </div>
+          <div v-if="debugVarsOpen" class="debug-vars-grid">
+            <div v-for="v in promptVariables" :key="v.key" class="debug-var-field" :class="{ full: v.type === 'paragraph' }">
+              <label class="debug-var-label">
+                <span>{{ v.label || v.key }}</span>
+                <span v-if="v.required" class="debug-var-req">*</span>
+                <code>{{ formatVarToken(v.key) }}</code>
+              </label>
+              <select v-if="v.type === 'select'" v-model="variableValues[v.key]" class="debug-var-input">
+                <option value="">{{ v.placeholder || '请选择...' }}</option>
+                <option v-for="opt in (v.options || [])" :key="opt" :value="opt">{{ opt }}</option>
+              </select>
+              <textarea
+                v-else-if="v.type === 'paragraph'"
+                v-model="variableValues[v.key]"
+                class="debug-var-input debug-var-textarea"
+                rows="2"
+                :placeholder="v.placeholder || (v.defaultValue ? `默认：${v.defaultValue}` : `请输入 ${v.label || v.key}`)"
+              ></textarea>
+              <input
+                v-else
+                v-model="variableValues[v.key]"
+                :type="v.type === 'number' ? 'number' : 'text'"
+                class="debug-var-input"
+                :placeholder="v.placeholder || (v.defaultValue ? `默认：${v.defaultValue}` : `请输入 ${v.label || v.key}`)"
+              >
+            </div>
+          </div>
         </div>
         <div v-show="previewTab === 'chat'" class="chat-history-scroll" ref="streamRef">
           <div v-if="!messages.length && !sending" class="chat-empty chat-empty-mascot">
@@ -1036,6 +1144,114 @@
       </div>
     </div>
 
+    <!-- 新增 / 编辑自定义变量弹窗 -->
+    <div v-if="variableModalOpen" class="tool-modal-backdrop" @click.self="variableModalOpen = false">
+      <div class="tool-modal-dialog var-modal-dialog">
+        <div class="tool-modal-header">
+          <div class="tool-modal-title">
+            <i class="fa-solid fa-sliders" style="color: var(--accent-blue);"></i>
+            <span>{{ editingVariableIndex >= 0 ? '编辑变量' : '添加自定义变量' }}</span>
+          </div>
+          <button type="button" class="btn-modal-close" @click="variableModalOpen = false">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="tool-modal-body var-modal-body">
+          <div class="var-modal-grid">
+            <div class="tool-form-group">
+              <div class="var-label-between">
+                <label class="tool-form-label">变量名 (Key) <span class="var-req-star">*</span></label>
+                <code class="var-key-preview">{{ formatVarToken(variableForm.key.trim() || 'store_name') }}</code>
+              </div>
+              <input
+                v-model="variableForm.key"
+                type="text"
+                class="tool-form-input var-control-h"
+                placeholder="例如：store_name"
+                maxlength="32"
+              >
+              <span class="var-field-help">字母开头，仅含字母、数字或下划线</span>
+            </div>
+            <div class="tool-form-group">
+              <label class="tool-form-label">显示名称</label>
+              <input
+                v-model="variableForm.label"
+                type="text"
+                class="tool-form-input var-control-h"
+                placeholder="例如：门店名称"
+                maxlength="40"
+              >
+              <span class="var-field-help">表单展示名称，留空默认同变量名</span>
+            </div>
+          </div>
+
+          <div class="var-modal-grid">
+            <div class="tool-form-group">
+              <label class="tool-form-label">字段类型</label>
+              <select v-model="variableForm.type" class="tool-form-select var-control-h">
+                <option value="text">单行文本 (text)</option>
+                <option value="paragraph">多行文本 (paragraph)</option>
+                <option value="select">下拉选项 (select)</option>
+                <option value="number">数字 (number)</option>
+              </select>
+            </div>
+            <div class="tool-form-group">
+              <label class="tool-form-label">必填校验</label>
+              <label class="var-required-toggle" title="设为必填后，未填写且无默认值时将拦截发送">
+                <input v-model="variableForm.required" type="checkbox">
+                <span>设为必填项</span>
+                <span class="var-required-note">默认值可兜底</span>
+              </label>
+            </div>
+          </div>
+
+          <div v-if="variableForm.type === 'select'" class="tool-form-group">
+            <label class="tool-form-label">下拉选项 <span class="var-req-star">*</span> <span class="label-sub">每行一个选项</span></label>
+            <textarea
+              v-model="variableForm.optionsText"
+              class="tool-form-textarea"
+              rows="3"
+              placeholder="深圳南山店&#10;上海静安店&#10;北京朝阳店"
+            ></textarea>
+          </div>
+
+          <div class="var-modal-grid">
+            <div class="tool-form-group">
+              <label class="tool-form-label">默认值 <span class="label-sub">可选</span></label>
+              <select v-if="variableForm.type === 'select'" v-model="variableForm.defaultValue" class="tool-form-select var-control-h">
+                <option value="">不设默认值</option>
+                <option v-for="opt in parsedSelectOptions" :key="opt" :value="opt">{{ opt }}</option>
+              </select>
+              <input
+                v-else
+                v-model="variableForm.defaultValue"
+                :type="variableForm.type === 'number' ? 'number' : 'text'"
+                class="tool-form-input var-control-h"
+                placeholder="未传 inputs 时自动使用"
+                maxlength="500"
+              >
+            </div>
+            <div class="tool-form-group">
+              <label class="tool-form-label">输入提示 <span class="label-sub">可选</span></label>
+              <input
+                v-model="variableForm.placeholder"
+                type="text"
+                class="tool-form-input var-control-h"
+                placeholder="例如：请输入当前门店名称"
+                maxlength="100"
+              >
+            </div>
+          </div>
+        </div>
+        <div class="tool-modal-footer">
+          <button type="button" class="btn-modal-cancel" @click="variableModalOpen = false">取消</button>
+          <button type="button" class="btn-modal-save" :disabled="savingVariables" @click="saveVariableForm">
+            {{ savingVariables ? '保存中...' : '保存变量' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 发布 / 回滚确认：填写版本说明 -->
     <div v-if="publishDialog.open" class="tool-modal-backdrop" @click.self="publishDialog.open = false">
       <div class="tool-modal-dialog">
@@ -1117,8 +1333,256 @@ import logoDeepseek from '../assets/vendors/deepseek-color.svg'
 
 const route = useRoute()
 const { showToast } = useToast()
-const inputVar = '{{input}}'
-const timeVar = '{{system_time}}'
+const promptTextareaRef = ref(null)
+const BUILTIN_VARIABLES = [
+  { key: 'input', label: '用户输入', icon: 'fa-solid fa-code', color: 'var(--accent-blue)', desc: '替换为本轮用户输入的问题原文' },
+  { key: 'system_time', label: '时间+星期', icon: 'fa-solid fa-clock', color: 'var(--accent-amber)', desc: '服务端北京时间，如 2026-11-26 16:45:00 (星期四)' },
+  { key: 'today', label: '日期+星期', icon: 'fa-regular fa-calendar', color: 'var(--accent-emerald)', desc: '如 2026年11月26日 星期四' },
+  { key: 'date', label: '今日日期', icon: 'fa-regular fa-calendar-days', color: '#8b5cf6', desc: '如 2026年11月26日' }
+]
+const RESERVED_VAR_KEYS = new Set(['input', 'system_time', 'sys.time', 'time', 'sys.date', 'date', 'today'])
+const VAR_KEY_RE = /^[a-zA-Z][a-zA-Z0-9_]{0,31}$/
+
+const promptVariables = ref([])
+const variableValues = reactive({})
+const debugVarsOpen = ref(false)
+const variableModalOpen = ref(false)
+const editingVariableIndex = ref(-1)
+const savingVariables = ref(false)
+const variableForm = reactive({
+  key: '',
+  label: '',
+  type: 'text',
+  required: false,
+  defaultValue: '',
+  optionsText: '',
+  placeholder: ''
+})
+
+function formatVarToken(key) {
+  return `{{${key}}}`
+}
+
+function variableTypeLabel(type) {
+  switch (type) {
+    case 'paragraph': return '多行文本'
+    case 'select': return '下拉选项'
+    case 'number': return '数字'
+    default: return '单行文本'
+  }
+}
+
+const parsedSelectOptions = computed(() => {
+  const seen = new Set()
+  const out = []
+  String(variableForm.optionsText || '').split(/\r?\n/).forEach(line => {
+    const t = line.trim()
+    if (t && !seen.has(t)) {
+      seen.add(t)
+      out.push(t)
+    }
+  })
+  return out
+})
+
+const missingRequiredVars = computed(() =>
+  promptVariables.value.filter(v => {
+    if (!v.required) return false
+    const val = String(variableValues[v.key] ?? '').trim()
+    const def = String(v.defaultValue ?? '').trim()
+    return !val && !def
+  })
+)
+
+const filledVarSummary = computed(() => {
+  const parts = []
+  for (const v of promptVariables.value) {
+    const val = String(variableValues[v.key] ?? '').trim() || String(v.defaultValue ?? '').trim()
+    if (val) parts.push(`${v.label || v.key}=${val}`)
+  }
+  return parts.join(' · ')
+})
+
+function syncVariableValuesFromDefs(defs, preserveExisting = true) {
+  const nextKeys = new Set()
+  ;(defs || []).forEach(v => {
+    if (!v?.key) return
+    nextKeys.add(v.key)
+    if (!preserveExisting || variableValues[v.key] === undefined) {
+      variableValues[v.key] = v.defaultValue ?? ''
+    }
+  })
+  Object.keys(variableValues).forEach(k => {
+    if (!nextKeys.has(k)) delete variableValues[k]
+  })
+  if (missingRequiredVars.value.length) {
+    debugVarsOpen.value = true
+  }
+}
+
+function resetVariableValues() {
+  promptVariables.value.forEach(v => {
+    variableValues[v.key] = v.defaultValue ?? ''
+  })
+  showToast('已恢复为变量默认值', 'info', 1500)
+}
+
+function buildVariableInputsPayload() {
+  if (!promptVariables.value.length) return undefined
+  const out = {}
+  promptVariables.value.forEach(v => {
+    const val = variableValues[v.key]
+    if (val !== undefined && val !== null && String(val).trim() !== '') {
+      out[v.key] = String(val).trim()
+    }
+  })
+  return out
+}
+
+function insertVariableToPrompt(key) {
+  const token = `{{${key}}}`
+  const el = promptTextareaRef.value
+  const current = prompt.value || ''
+  if (el && typeof el.selectionStart === 'number') {
+    const start = el.selectionStart
+    const end = el.selectionEnd ?? start
+    prompt.value = current.slice(0, start) + token + current.slice(end)
+    nextTick(() => {
+      el.focus()
+      const pos = start + token.length
+      el.setSelectionRange(pos, pos)
+    })
+  } else {
+    prompt.value = current + (current && !current.endsWith(' ') && !current.endsWith('\n') ? ' ' : '') + token
+  }
+  showToast(`已插入变量 ${token}`, 'info', 1400)
+}
+
+function openAddVariableModal() {
+  editingVariableIndex.value = -1
+  Object.assign(variableForm, {
+    key: '',
+    label: '',
+    type: 'text',
+    required: false,
+    defaultValue: '',
+    optionsText: '',
+    placeholder: ''
+  })
+  variableModalOpen.value = true
+}
+
+function openEditVariableModal(v, idx) {
+  editingVariableIndex.value = idx
+  Object.assign(variableForm, {
+    key: v.key || '',
+    label: v.label || '',
+    type: v.type || 'text',
+    required: !!v.required,
+    defaultValue: v.defaultValue || '',
+    optionsText: Array.isArray(v.options) ? v.options.join('\n') : '',
+    placeholder: v.placeholder || ''
+  })
+  variableModalOpen.value = true
+}
+
+async function persistPromptVariables(nextList) {
+  if (!agent.value?.id) return true
+  if (!canEditAgent.value) {
+    promptVariables.value = nextList
+    syncVariableValuesFromDefs(nextList, true)
+    showToast('只读智能体：变量调整仅在本次调试窗口生效', 'info', 2200)
+    return true
+  }
+  savingVariables.value = true
+  try {
+    const res = await http.put(`/api/agents/${agent.value.id}`, {
+      ...agent.value,
+      promptVariables: nextList
+    })
+    if (res.success && res.data) {
+      agent.value = res.data
+      const savedList = Array.isArray(res.data.promptVariables) ? res.data.promptVariables : nextList
+      promptVariables.value = savedList
+      syncVariableValuesFromDefs(savedList, true)
+      return true
+    }
+    showToast(res.message || '保存变量失败', 'error')
+    return false
+  } finally {
+    savingVariables.value = false
+  }
+}
+
+async function saveVariableForm() {
+  const key = variableForm.key.trim()
+  if (!key) {
+    showToast('请输入变量名 (Key)', 'error')
+    return
+  }
+  if (!VAR_KEY_RE.test(key)) {
+    showToast('变量名需以英文字母开头，仅含字母、数字或下划线（最长 32 位）', 'error')
+    return
+  }
+  if (RESERVED_VAR_KEYS.has(key.toLowerCase())) {
+    showToast(`「${key}」为系统内置保留变量，请换一个名称`, 'error')
+    return
+  }
+  const dup = promptVariables.value.findIndex((v, i) => v.key === key && i !== editingVariableIndex.value)
+  if (dup >= 0) {
+    showToast(`变量名「${key}」已存在`, 'error')
+    return
+  }
+  const options = variableForm.type === 'select' ? parsedSelectOptions.value : []
+  if (variableForm.type === 'select' && !options.length) {
+    showToast('下拉类型变量至少需要填写 1 个选项', 'error')
+    return
+  }
+  let defVal = String(variableForm.defaultValue ?? '').trim()
+  if (variableForm.type === 'select' && defVal && !options.includes(defVal)) {
+    defVal = options[0]
+  }
+  const item = {
+    key,
+    label: variableForm.label.trim() || key,
+    type: variableForm.type,
+    required: !!variableForm.required,
+    defaultValue: defVal,
+    options,
+    placeholder: variableForm.placeholder.trim()
+  }
+  const nextList = promptVariables.value.map(v => ({ ...v, options: Array.isArray(v.options) ? [...v.options] : [] }))
+  const isEdit = editingVariableIndex.value >= 0
+  if (isEdit) {
+    const oldKey = nextList[editingVariableIndex.value]?.key
+    nextList[editingVariableIndex.value] = item
+    if (oldKey && oldKey !== key) {
+      variableValues[key] = variableValues[oldKey] ?? item.defaultValue
+      delete variableValues[oldKey]
+    } else if (!variableValues[key] && item.defaultValue) {
+      variableValues[key] = item.defaultValue
+    }
+  } else {
+    nextList.push(item)
+    variableValues[key] = item.defaultValue
+  }
+  const ok = await persistPromptVariables(nextList)
+  if (ok) {
+    variableModalOpen.value = false
+    debugVarsOpen.value = true
+    showToast(isEdit ? `已更新变量 {{${key}}}` : `已添加变量 {{${key}}}`, 'success', 2000)
+  }
+}
+
+async function deleteVariable(idx) {
+  const target = promptVariables.value[idx]
+  if (!target) return
+  const nextList = promptVariables.value.filter((_, i) => i !== idx)
+  const ok = await persistPromptVariables(nextList)
+  if (ok) {
+    showToast(`已删除变量 {{${target.key}}}`, 'info', 1800)
+  }
+}
 const pageTab = ref('orchestrate')
 // 「访问入口」里的两块：Web 应用（分享链接）/ 后端服务 API
 const accessTab = ref('web')
@@ -1870,6 +2334,12 @@ function appendChatMessage(message) {
 
 async function sendChat() {
   if (!agent.value || !inputText.value.trim() || sending.value) return
+  if (missingRequiredVars.value.length) {
+    debugVarsOpen.value = true
+    const first = missingRequiredVars.value[0]
+    showToast(`请先填写必填变量「${first.label || first.key}」`, 'error', 2800)
+    return
+  }
   const text = inputText.value.trim()
   inputText.value = ''
   // 只带本次问题之前的最近 N 轮（本次问题单独作为 message 发送）
@@ -1896,6 +2366,7 @@ async function sendChat() {
     conversationId: conversationId.value || undefined,
     account: user.username || user.nickname || undefined,
     enabledTools: enabledToolNames,
+    inputs: buildVariableInputsPayload(),
     traceEnabled: traceEnabled.value,
     toolConfigs: {
       bochaApiKey
@@ -2117,7 +2588,8 @@ async function publish(note) {
     maxTokens: Number(appliedSettings.maxTokens.value),
     memoryTurns: memoryTurns.value,
     thinkingMode: appliedSettings.thinking.value,
-    toolsConfig: JSON.stringify(tools)
+    toolsConfig: JSON.stringify(tools),
+    promptVariables: promptVariables.value
   })
   if (res.success) {
     agent.value = res.data
@@ -2508,6 +2980,8 @@ onMounted(async () => {
     loadPersistedTools(res.data)
     boundKbIds.value = Array.isArray(res.data.knowledgeBaseIds) ? [...res.data.knowledgeBaseIds] : []
     boundSkillIds.value = Array.isArray(res.data.skillIds) ? [...res.data.skillIds] : []
+    promptVariables.value = Array.isArray(res.data.promptVariables) ? res.data.promptVariables : []
+    syncVariableValuesFromDefs(promptVariables.value, false)
     await loadKnowledgeCatalog()
     if (boundSkillIds.value.length) loadSkillOptions()
     resetChat()
@@ -2766,5 +3240,439 @@ onUnmounted(() => {
 
 .live-trace-jump:hover {
   background: rgba(59, 130, 246, 0.2);
+}
+
+/* 变量编排与调试表单 */
+.var-section-hint {
+  margin-bottom: 10px;
+}
+
+.var-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.var-group-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.var-group-note {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.var-builtin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.var-builtin-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  cursor: pointer;
+  min-width: 0;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+}
+
+.var-builtin-card:hover {
+  border-color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.var-builtin-card:active {
+  transform: scale(0.985);
+}
+
+.var-builtin-token {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.var-builtin-card:hover .var-builtin-token {
+  color: var(--accent-blue);
+}
+
+.var-builtin-label {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.var-chip-clickable {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+}
+
+.var-chip-clickable:hover {
+  border-color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--accent-blue);
+}
+
+.var-chip-clickable:active {
+  transform: scale(0.97);
+}
+
+.var-chip-custom {
+  color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.06);
+  border-color: rgba(59, 130, 246, 0.28);
+  flex-shrink: 0;
+}
+
+.custom-var-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.custom-var-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+}
+
+.custom-var-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.custom-var-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-var-req {
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #f43f5e;
+  background: rgba(244, 63, 94, 0.1);
+}
+
+.custom-var-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-var-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.var-icon-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.var-icon-btn:hover {
+  background: var(--bg-card);
+  border-color: var(--border-color);
+  color: var(--accent-blue);
+}
+
+.var-icon-btn.danger:hover {
+  color: #f43f5e;
+  border-color: rgba(244, 63, 94, 0.35);
+}
+
+.var-modal-dialog {
+  max-width: 560px;
+}
+
+.var-modal-body {
+  gap: 14px;
+}
+
+.var-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 14px;
+  align-items: start;
+}
+
+.var-label-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.var-req-star {
+  color: #f43f5e;
+}
+
+.var-key-preview {
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.08);
+  max-width: 145px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.var-control-h {
+  height: 38px;
+  box-sizing: border-box;
+}
+
+.var-field-help {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.var-required-toggle {
+  height: 38px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  font-size: 12.5px;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.var-required-toggle input[type="checkbox"] {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.var-required-note {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* 右侧调试变量表单 */
+.debug-vars-panel {
+  flex-shrink: 0;
+  margin: 10px 16px 0;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-card);
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.debug-vars-panel.warn {
+  border-color: rgba(245, 158, 11, 0.55);
+}
+
+.debug-vars-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  background: var(--bg-input);
+}
+
+.debug-vars-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.debug-vars-title > i {
+  color: var(--accent-blue);
+}
+
+.debug-vars-count {
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+}
+
+.debug-vars-warn-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.14);
+  white-space: nowrap;
+}
+
+.debug-vars-summary {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.debug-vars-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.debug-vars-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.debug-vars-reset:hover {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.debug-vars-toggle {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.debug-vars-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border-color);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.debug-var-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.debug-var-field.full {
+  grid-column: 1 / -1;
+}
+
+.debug-var-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.debug-var-label code {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.debug-var-req {
+  color: #f43f5e;
+}
+
+.debug-var-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-family: inherit;
+  outline: none;
+}
+
+.debug-var-input:focus {
+  border-color: var(--accent-blue);
+}
+
+.debug-var-textarea {
+  resize: vertical;
+  min-height: 48px;
 }
 </style>

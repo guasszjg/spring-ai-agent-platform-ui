@@ -75,10 +75,54 @@
         <div v-if="historyOpen" class="sc-history-mask" @click="historyOpen = false"></div>
 
         <main class="sc-main">
+          <!-- 访客变量表单（智能体配置了自定义变量时展示） -->
+          <div v-if="variables.length" class="sc-vars-wrap">
+            <div class="sc-vars-card" :class="{ warn: missingRequiredVars.length }">
+              <div class="sc-vars-head" @click="varsOpen = !varsOpen">
+                <div class="sc-vars-title">
+                  <i class="fa-solid fa-sliders"></i>
+                  <span>对话参数</span>
+                  <span v-if="missingRequiredVars.length" class="sc-vars-warn">
+                    有 {{ missingRequiredVars.length }} 项必填待填
+                  </span>
+                  <span v-else-if="!varsOpen && filledVarSummary" class="sc-vars-summary" :title="filledVarSummary">
+                    {{ filledVarSummary }}
+                  </span>
+                </div>
+                <i :class="varsOpen ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'" class="sc-vars-chevron"></i>
+              </div>
+              <div v-if="varsOpen" class="sc-vars-grid">
+                <div v-for="v in variables" :key="v.key" class="sc-var-field" :class="{ full: v.type === 'paragraph' }">
+                  <label class="sc-var-label">
+                    {{ v.label || v.key }}<span v-if="v.required" class="sc-var-req">*</span>
+                  </label>
+                  <select v-if="v.type === 'select'" v-model="variableValues[v.key]" class="sc-var-input">
+                    <option value="">{{ v.placeholder || '请选择...' }}</option>
+                    <option v-for="opt in (v.options || [])" :key="opt" :value="opt">{{ opt }}</option>
+                  </select>
+                  <textarea
+                    v-else-if="v.type === 'paragraph'"
+                    v-model="variableValues[v.key]"
+                    class="sc-var-input"
+                    rows="2"
+                    :placeholder="v.placeholder || (v.defaultValue ? `默认：${v.defaultValue}` : `请输入 ${v.label || v.key}`)"
+                  ></textarea>
+                  <input
+                    v-else
+                    v-model="variableValues[v.key]"
+                    :type="v.type === 'number' ? 'number' : 'text'"
+                    class="sc-var-input"
+                    :placeholder="v.placeholder || (v.defaultValue ? `默认：${v.defaultValue}` : `请输入 ${v.label || v.key}`)"
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div ref="scrollRef" class="sc-messages">
             <div v-if="!messages.length" class="sc-welcome">
               <div class="sc-welcome-icon"><i class="fa-regular fa-comments"></i></div>
-              <p class="sc-welcome-text">{{ welcome || '你好，有什么可以帮你？' }}</p>
+              <p class="sc-welcome-text">{{ renderedWelcome || '你好，有什么可以帮你？' }}</p>
               <div v-if="examples.length" class="sc-examples">
                 <button v-for="q in examples" :key="q" type="button" class="sc-example" :disabled="sending" @click="send(q)">{{ q }}</button>
               </div>
@@ -128,7 +172,7 @@
 </template>
 
 <script setup>
-import { nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { shareApi, shareStore } from '../api/share'
 import { renderMarkdown } from '../utils/markdown'
@@ -148,7 +192,51 @@ const codeInputRef = ref(null)
 const token = ref('')
 const welcome = ref('')
 const examples = ref([])
+const variables = ref([])
+const variableValues = reactive({})
+const varsOpen = ref(false)
 const showRecordNotice = ref(true)
+
+const missingRequiredVars = computed(() =>
+  variables.value.filter(v => {
+    if (!v.required) return false
+    const val = String(variableValues[v.key] ?? '').trim()
+    const def = String(v.defaultValue ?? '').trim()
+    return !val && !def
+  })
+)
+
+const filledVarSummary = computed(() => {
+  const parts = []
+  for (const v of variables.value) {
+    const val = String(variableValues[v.key] ?? '').trim() || String(v.defaultValue ?? '').trim()
+    if (val) parts.push(`${v.label || v.key}=${val}`)
+  }
+  return parts.join(' · ')
+})
+
+const renderedWelcome = computed(() => {
+  const text = welcome.value || ''
+  if (!text || !variables.value.length) return text
+  return text.replace(/\{\{([a-zA-Z][a-zA-Z0-9_]*)\}\}/g, (match, key) => {
+    const def = variables.value.find(v => v.key === key)
+    if (!def) return match
+    const val = String(variableValues[key] ?? '').trim() || String(def.defaultValue ?? '').trim()
+    return val || match
+  })
+})
+
+function buildInputsPayload() {
+  if (!variables.value.length) return undefined
+  const out = {}
+  variables.value.forEach(v => {
+    const val = variableValues[v.key]
+    if (val !== undefined && val !== null && String(val).trim() !== '') {
+      out[v.key] = String(val).trim()
+    }
+  })
+  return out
+}
 const history = ref([])
 const historyOpen = ref(false)
 const conversationId = ref('')
@@ -194,6 +282,12 @@ async function enter(t) {
   title.value = res.data.title || title.value
   welcome.value = res.data.welcomeMessage || ''
   examples.value = res.data.exampleQuestions || []
+  variables.value = Array.isArray(res.data.variables) ? res.data.variables : []
+  Object.keys(variableValues).forEach(k => delete variableValues[k])
+  variables.value.forEach(v => {
+    if (v?.key) variableValues[v.key] = v.defaultValue ?? ''
+  })
+  varsOpen.value = missingRequiredVars.value.length > 0
   showRecordNotice.value = res.data.showRecordNotice !== false
   setPageTitle(title.value)
   stage.value = 'chat'
@@ -289,6 +383,12 @@ async function handleFailure(res) {
 async function send(text) {
   const content = (text ?? input.value).trim()
   if (!content || sending.value) return
+  if (missingRequiredVars.value.length) {
+    varsOpen.value = true
+    const first = missingRequiredVars.value[0]
+    inlineError.value = `请先填写必填项「${first.label || first.key}」`
+    return
+  }
   inlineError.value = ''
   input.value = ''
   autoGrow()
@@ -305,6 +405,7 @@ async function send(text) {
   controller = new AbortController()
   const res = await shareApi.send(code, token.value, content, conversationId.value, {
     signal: controller.signal,
+    inputs: buildInputsPayload(),
     onEvent: (event, data) => {
       const msg = messages.value[replyIndex]
       if (event === 'message') {
@@ -455,6 +556,35 @@ onUnmounted(() => {
 .sc-history-mask { display: none; }
 
 .sc-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sc-vars-wrap { flex-shrink: 0; padding: 10px 16px 0; }
+.sc-vars-card {
+  max-width: 760px; margin: 0 auto; border: 1px solid var(--border-color); border-radius: 12px;
+  background: var(--bg-card); overflow: hidden;
+}
+.sc-vars-card.warn { border-color: rgba(245, 158, 11, 0.55); }
+.sc-vars-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 9px 14px; background: var(--bg-input); cursor: pointer; user-select: none;
+}
+.sc-vars-title { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.sc-vars-title > i { color: var(--accent-blue); }
+.sc-vars-warn { padding: 1px 7px; border-radius: 999px; font-size: 11px; color: #d97706; background: rgba(245, 158, 11, 0.14); white-space: nowrap; }
+.sc-vars-summary { font-size: 12px; font-weight: 400; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-vars-chevron { font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
+.sc-vars-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px;
+  padding: 12px 14px; border-top: 1px solid var(--border-color);
+}
+.sc-var-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sc-var-field.full { grid-column: 1 / -1; }
+.sc-var-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.sc-var-req { color: var(--accent-rose); margin-left: 2px; }
+.sc-var-input {
+  width: 100%; box-sizing: border-box; padding: 7px 10px; border-radius: 8px;
+  border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);
+  font: inherit; font-size: 13px; outline: none;
+}
+.sc-var-input:focus { border-color: var(--accent-blue); }
 .sc-messages { flex: 1; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 14px; }
 .sc-messages > * { width: 100%; max-width: 760px; margin-left: auto; margin-right: auto; box-sizing: border-box; }
 .sc-welcome { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 8vh; text-align: center; }
@@ -522,6 +652,8 @@ onUnmounted(() => {
   .sc-history-head { display: flex; }
   .sc-history-mask { display: block; position: absolute; inset: 0; z-index: 10; background: rgba(0, 0, 0, 0.3); }
   .sc-messages { padding: 14px 12px; }
+  .sc-vars-wrap { padding: 8px 12px 0; }
+  .sc-vars-grid { grid-template-columns: 1fr; }
   .sc-bubble { max-width: 90%; }
   .sc-composer { padding-left: 10px; padding-right: 10px; }
 }
