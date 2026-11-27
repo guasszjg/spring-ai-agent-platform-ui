@@ -32,7 +32,7 @@ export function consumePendingUiEffect(matcher) {
 
 export const copilotHud = reactive({
   visible: false,
-  status: 'running', // 'running' | 'done'
+  status: 'running', // 'running' | 'done' | 'error'
   label: ''
 })
 
@@ -66,7 +66,7 @@ export function dispatchAssistantUiEffect(effect) {
   }
   for (const fn of [...listeners]) {
     try {
-      fn(effect)
+      Promise.resolve(fn(effect)).catch(err => console.warn('Assistant UI effect handler failed:', err))
     } catch (err) {
       console.warn('Assistant UI effect handler failed:', err)
     }

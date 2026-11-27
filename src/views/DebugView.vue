@@ -1882,10 +1882,6 @@ async function testBochaConnection() {
 }
 
 const GLOBAL_BOCHA_KEY = 'global-bocha-api-key'
-function toolsStorageKey(id) {
-  return 'debug-agent-tools:' + (id || 'default')
-}
-
 function openToolSettings(tool) {
   editingTool.value = tool
   showApiKey.value = false
@@ -1990,7 +1986,6 @@ function resetToolSettings() {
 function syncToolsConfig() {
   if (!agent.value?.id) return
   const toolsConfig = JSON.stringify(tools)
-  localStorage.setItem(toolsStorageKey(agent.value.id), toolsConfig)
   agent.value.toolsConfig = toolsConfig
   if (!canEditAgent.value) return // 只读智能体：改动只在本次调试中生效（页面顶部有提示）
   http.put(`/api/agents/${agent.value.id}`, {
@@ -2047,7 +2042,7 @@ async function loadPlatformCatalog() {
     http.get('/api/mcp-servers/available-tools')
   ])
   const rows = Array.isArray(res?.data) ? res.data : (res?.data?.records || [])
-  const catalog = (res.success && rows.length) ? rows : FALLBACK_PLATFORM_TOOLS
+  const catalog = res?.success ? rows : FALLBACK_PLATFORM_TOOLS
   const mcpTools = (mcpRes?.success && Array.isArray(mcpRes.data)) ? mcpRes.data.map(mcpToDebugTool) : []
   standardToolCatalog.value = catalog
     .filter(t => t.enabled !== false)
@@ -2655,9 +2650,6 @@ async function publish(note) {
     aiPromptState.bannerVisible = false
     aiPromptState.prevDraft = null
     syncRouteFromAgent(res.data)
-    if (agent.value?.id) {
-      localStorage.setItem(toolsStorageKey(agent.value.id), JSON.stringify(tools))
-    }
     showToast('已发布上线，草稿提示词与工具配置已持久化保存', 'success', 2500)
     loadPromptVersions()
     return true
@@ -2971,14 +2963,6 @@ function loadPersistedTools(agentData) {
         saved = JSON.parse(agentData.toolsConfig)
       } catch {}
     }
-    if (!saved && agentData?.id) {
-      const raw = localStorage.getItem(toolsStorageKey(agentData.id))
-      if (raw) {
-        try {
-          saved = JSON.parse(raw)
-        } catch {}
-      }
-    }
     if (Array.isArray(saved) && saved.length) {
       const hasCatalog = standardToolCatalog.value.length > 0
       const loadedList = []
@@ -3281,6 +3265,7 @@ async function handleAssistantUiEffect(effect) {
   }
 
   if (effect.kind === 'agent_settings_updated') {
+    const agentId = agent.value.id
     pageTab.value = 'orchestrate'
     await nextTick()
     const fd = effect.formData || {}
@@ -3344,28 +3329,36 @@ async function handleAssistantUiEffect(effect) {
       }
     }
 
-    const [res] = await Promise.all([http.get(`/api/agents/${agent.value.id}`), loadRouteOptions()])
-    if (res?.success && res.data) {
-      agent.value = res.data
-      setAssistantResource('AGENT', res.data.id, res.data.name)
-      applyAgentSettings(res.data)
-      syncRouteFromAgent(res.data)
-      boundSkillIds.value = Array.isArray(res.data.skillIds) ? [...res.data.skillIds] : []
-      loadPersistedTools(res.data)
-      if (agent.value?.id) {
-        localStorage.setItem(toolsStorageKey(agent.value.id), JSON.stringify(tools))
-      }
-      await nextTick()
-      if (effect.toolsChanged) {
-        spotlightElement('[data-copilot-section="tools"]', { durationMs: 2600, variant: 'flash' })
-      } else if (effect.skillsChanged) {
-        spotlightElement('[data-copilot-section="skills"]', { durationMs: 2600, variant: 'flash' })
-      } else {
-        spotlightElement('.model-settings-wrap', { durationMs: 2400, scroll: false, variant: 'flash' })
-      }
-      showToast(effect.toolsChanged ? 'AI 助手已更新智能体工具开关' : 'AI 助手已同步智能体模型与参数设置', 'success', 2200)
+    const [res] = await Promise.all([http.get('/api/agents/' + agentId), loadRouteOptions()])
+    if (agent.value?.id !== agentId) return
+    if (!res?.success || !res.data) {
+      const message = '配置已保存，页面同步失败，请刷新确认'
+      showToast(message, 'error', 3800)
+      showCopilotHud(message, 'error', 3800)
+      return
     }
-    finishCopilotHud(effect.toolsChanged ? '智能体工具开关已同步更新' : '智能体模型与参数设置已保存')
+    const routeWasEdited = routeDirty.value
+    const unsavedRoute = routeDraft.value
+    agent.value = res.data
+    setAssistantResource('AGENT', res.data.id, res.data.name)
+    applyAgentSettings(res.data)
+    syncRouteFromAgent(res.data)
+    if (routeWasEdited) routeDraft.value = unsavedRoute
+    boundSkillIds.value = Array.isArray(res.data.skillIds) ? [...res.data.skillIds] : []
+    loadPersistedTools(res.data)
+    await nextTick()
+    if (effect.toolsChanged) {
+      spotlightElement('[data-copilot-section="tools"]', { durationMs: 2600, variant: 'flash' })
+    } else if (effect.skillsChanged) {
+      spotlightElement('[data-copilot-section="skills"]', { durationMs: 2600, variant: 'flash' })
+    } else {
+      spotlightElement('.model-settings-wrap', { durationMs: 2400, scroll: false, variant: 'flash' })
+    }
+    const updated = [effect.toolsChanged && '工具开关', effect.skillsChanged && '关联技能',
+      (hasPopoverChange || !effect.toolsChanged && !effect.skillsChanged) && '模型与参数']
+      .filter(Boolean).join('、')
+    showToast('AI 助手已同步' + updated, 'success', 2200)
+    finishCopilotHud('已同步' + updated)
     return
   }
 
