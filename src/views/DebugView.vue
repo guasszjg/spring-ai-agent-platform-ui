@@ -338,7 +338,7 @@
             </div>
           </div>
         </div>
-        <div class="config-card-section">
+        <div class="config-card-section" data-copilot-section="skills">
           <div class="section-header-row">
             <div class="section-title">
               <span>技能</span>
@@ -382,7 +382,7 @@
             </div>
           </div>
         </div>
-        <div class="config-card-section">
+        <div class="config-card-section" data-copilot-section="tools">
           <div class="section-header-row">
             <div class="section-title">
               <span>工具</span>
@@ -3352,11 +3352,20 @@ async function handleAssistantUiEffect(effect) {
       syncRouteFromAgent(res.data)
       boundSkillIds.value = Array.isArray(res.data.skillIds) ? [...res.data.skillIds] : []
       loadPersistedTools(res.data)
+      if (agent.value?.id) {
+        localStorage.setItem(toolsStorageKey(agent.value.id), JSON.stringify(tools))
+      }
       await nextTick()
-      spotlightElement('.model-settings-wrap', { durationMs: 2400, scroll: false, variant: 'flash' })
-      showToast('AI 助手已同步智能体模型与参数设置', 'success', 2200)
+      if (effect.toolsChanged) {
+        spotlightElement('[data-copilot-section="tools"]', { durationMs: 2600, variant: 'flash' })
+      } else if (effect.skillsChanged) {
+        spotlightElement('[data-copilot-section="skills"]', { durationMs: 2600, variant: 'flash' })
+      } else {
+        spotlightElement('.model-settings-wrap', { durationMs: 2400, scroll: false, variant: 'flash' })
+      }
+      showToast(effect.toolsChanged ? 'AI 助手已更新智能体工具开关' : 'AI 助手已同步智能体模型与参数设置', 'success', 2200)
     }
-    finishCopilotHud('智能体模型与参数设置已保存')
+    finishCopilotHud(effect.toolsChanged ? '智能体工具开关已同步更新' : '智能体模型与参数设置已保存')
     return
   }
 
