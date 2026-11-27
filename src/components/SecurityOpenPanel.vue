@@ -1239,10 +1239,18 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { accountLabel } from '../composables/useAccountOptions'
+import {
+  animateFieldType,
+  finishCopilotHud,
+  pressElement,
+  showCopilotHud,
+  sleep,
+  spotlightElement
+} from '../composables/useAssistantUiBridge'
 import OpenApiDocExplorer from './OpenApiDocExplorer.vue'
 
 const props = defineProps({
@@ -2213,9 +2221,51 @@ function resetAndReload(forceReload = true) {
   }
 }
 
+async function applyAssistantUiEffect(effect) {
+  if (!effect) return
+  const tabMap = {
+    api_key: 'keys',
+    terminal: 'clients',
+    audit_log: 'audit',
+    alert_rule: 'alerts',
+    policy: 'policy'
+  }
+  if (effect.subTab && tabMap[effect.subTab]) {
+    innerTab.value = tabMap[effect.subTab]
+  }
+  await nextTick()
+  if (effect.kind === 'resource_created' && effect.operation === 'create' && effect.formData) {
+    const fd = effect.formData
+    showCopilotHud('AI 助手正在打开「签发开放凭证」弹窗…', 'running', 12000)
+    await pressElement('.sec-page .btn-create-agent, .sec-page .sec-btn-primary', 320)
+    Object.assign(keyForm, { name: '', scopes: ['chat'], agentScope: fd.agentId ? [fd.agentId] : [] })
+    keyModalOpen.value = true
+    await nextTick()
+    await sleep(240)
+    try {
+      const dlg = '.sec-page .modal-backdrop.open .modal-dialog, .modal-backdrop.open .modal-dialog'
+      if (fd.name) {
+        showCopilotHud(`AI 助手正在填写凭证名称「${fd.name}」…`, 'running', 12000)
+        await animateFieldType('apikey-name', (v) => { keyForm.name = v }, document.querySelector(`${dlg} input`), fd.name, 420)
+      }
+      showCopilotHud('AI 助手正在签发凭证…', 'running', 10000)
+      await pressElement(`${dlg} button[type="submit"], ${dlg} .btn-create-agent`, 400)
+    } finally {
+      keyModalOpen.value = false
+    }
+  } else if (effect.operation === 'policy') {
+    await pressElement('.sec-page .sec-btn-primary, .sec-page button[type="submit"]', 380)
+  }
+  await loadAll()
+  await nextTick()
+  spotlightElement('.sec-page .sec-card, .sec-page .sec-table, .sec-page', { durationMs: 2200, scroll: false, variant: 'flash' })
+  finishCopilotHud(effect.label || '开放与安全配置已刷新')
+}
+
 defineExpose({
   resetAndReload,
-  loadAll
+  loadAll,
+  applyAssistantUiEffect
 })
 
 onMounted(() => {

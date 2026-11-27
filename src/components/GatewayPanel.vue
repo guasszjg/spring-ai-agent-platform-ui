@@ -62,7 +62,12 @@ function refreshAll() {
   return Promise.all(Object.keys(refs).map(refreshSection))
 }
 
-defineExpose({ refreshSection, refreshAll })
+async function applyAssistantUiEffect(effect) {
+  await refreshAll()
+  return effect
+}
+
+defineExpose({ refreshSection, refreshAll, applyAssistantUiEffect })
 </script>
 
 <style scoped>

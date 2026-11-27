@@ -1,7 +1,5 @@
 <template>
   <div class="app-layout">
-    <!-- 全局 AI 助手：右下角入口 + 右侧对话面板 -->
-    <AssistantDock />
     <aside class="app-sidebar" :class="{ collapsed: sidebarCollapsed }">
       <div class="sidebar-header">
         <div class="sidebar-header-row">
@@ -375,7 +373,7 @@
             </div>
           </div>
           <div v-else-if="viewMode === 'card'" class="agent-grid">
-            <div v-for="a in agents" :key="a.id" class="agent-card">
+            <div v-for="a in agents" :key="a.id" class="agent-card" :data-agent-id="a.id">
               <div class="agent-card-main">
                 <!-- 顶部 Header: 头像 + 标题行 + 运行状态 -->
                 <div class="agent-card-header">
@@ -494,7 +492,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="a in agents" :key="a.id">
+                  <tr v-for="a in agents" :key="a.id" :data-agent-id="a.id">
                     <td>
                       <div class="table-agent-meta">
                         <AgentAvatar :name="a.name" :size="32" />
@@ -873,7 +871,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onActivated, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Chart from 'chart.js/auto'
 import { http } from '../api/http'
@@ -893,8 +891,19 @@ import UserAvatar from '../components/UserAvatar.vue'
 import AgentMascot from '../components/AgentMascot.vue'
 import AgentAvatar from '../components/AgentAvatar.vue'
 import TemplatePicker from '../components/TemplatePicker.vue'
-import AssistantDock from '../components/AssistantDock.vue'
 import { setAssistantPage } from '../composables/useAssistantContext'
+import {
+  animateFieldType,
+  animateTextInput,
+  consumePendingUiEffect,
+  finishCopilotHud,
+  highlightFieldStep,
+  onAssistantUiEffect,
+  pressElement,
+  showCopilotHud,
+  sleep,
+  spotlightElement
+} from '../composables/useAssistantUiBridge'
 import { describeRoute, routeChoiceFromAgent } from '../utils/chatRoute'
 import {
   LayoutDashboard, Bot, LayoutTemplate, Wrench, BookOpen, Link2, Network, Users, ShieldCheck, KeyRound,
@@ -1546,6 +1555,8 @@ watch(() => route.query.kb, () => {
 // 助手的页面上下文：切换模块时登记当前页面（知识库详情等资源由各面板登记）
 watch(currentTab, (tab) => setAssistantPage(tab), { immediate: true })
 
+let skipNextTabRefresh = false
+
 watch(currentTab, (tab) => {
   if (superAdminOnlyTabs.includes(tab) && !isSuperAdmin.value) {
     showToast('无权限访问该模块，已自动返回概览', 'error')
@@ -1554,6 +1565,10 @@ watch(currentTab, (tab) => {
   }
   if (route.query.tab !== tab) {
     router.replace({ query: { ...route.query, tab } }).catch(() => {})
+  }
+  if (skipNextTabRefresh) {
+    skipNextTabRefresh = false
+    return
   }
   nextTick(() => {
     triggerTabRefresh(tab)
@@ -1858,7 +1873,255 @@ function enterDashboard() {
   })
 }
 
+let dashboardActive = true
+let stopAssistantUiBridge = null
+
+function spotlightAgentResult(agentId) {
+  if (agentId) {
+    const card = document.querySelector(`[data-agent-id="${CSS.escape(String(agentId))}"]`)
+    if (card) {
+      spotlightElement(card, { durationMs: 2600, variant: 'flash' })
+      return
+    }
+  }
+  const firstCard = document.querySelector('.agent-grid .agent-card, .agent-table tbody tr')
+  if (firstCard) {
+    spotlightElement(firstCard, { durationMs: 2200, variant: 'flash' })
+  }
+}
+
+async function switchTabForCopilot(tab) {
+  if (superAdminOnlyTabs.includes(tab) && !isSuperAdmin.value) return false
+  if (currentTab.value !== tab) {
+    skipNextTabRefresh = true
+    currentTab.value = tab
+    await nextTick()
+  }
+  return true
+}
+
+async function handleAssistantUiEffect(effect) {
+  if (!dashboardActive || !effect) return
+  const target = effect.target
+
+  // 跨页面或页内显式导航指令（navigate_to_page）
+  if (effect.kind === 'navigate') {
+    const destTab = effect.dashboardTab || target
+    if (destTab === 'overview') {
+      await switchTabForCopilot('overview')
+      await loadStats()
+      finishCopilotHud(effect.label || '已切换到概览页')
+      return
+    }
+    if (destTab === 'gateway') {
+      if (!isSuperAdmin.value) return
+      if (!isGatewayTab.value) await switchTabForCopilot(lastGatewayTab())
+      await gatewayPanelRef.value?.refreshAll?.()
+      finishCopilotHud(effect.label || '已切换到模型网关')
+      return
+    }
+    if (destTab === 'knowledge' || destTab === 'knowledge-dify') {
+      if (destTab === 'knowledge-dify') difyNavVisible.value = true
+      await switchTabForCopilot(destTab)
+      if (effect.kbId) {
+        await kbPanelOf(destTab)?.applyAssistantUiEffect?.({
+          kind: 'focus_kb_tab',
+          target: 'knowledge',
+          kbId: effect.kbId,
+          subTab: effect.subTab || 'documents',
+          keyword: effect.keyword,
+          label: effect.label
+        })
+        return
+      }
+      if (effect.keyword) {
+        await kbPanelOf(destTab)?.applyAssistantUiEffect?.({ kind: 'search', target: 'knowledge', keyword: effect.keyword, label: effect.label })
+        return
+      }
+      await kbPanelOf(destTab)?.resetToList?.(true)
+      finishCopilotHud(effect.label || '已打开知识库列表')
+      return
+    }
+    if (['agents', 'templates', 'skills', 'tools', 'users', 'security'].includes(destTab)) {
+      const follow = effect.keyword
+        ? { kind: 'search', target: destTab, keyword: effect.keyword, subTab: effect.subTab, label: effect.label }
+        : (effect.subTab
+          ? { kind: 'focus', target: destTab, subTab: effect.subTab, label: effect.label }
+          : null)
+      if (follow) {
+        await handleAssistantUiEffect(follow)
+        return
+      }
+      if (await switchTabForCopilot(destTab)) {
+        triggerTabRefresh(destTab)
+        finishCopilotHud(effect.label || '已切换页面')
+      }
+      return
+    }
+  }
+
+  // 在智能体列表页通过 AI 助手修改某智能体提示词/参数/知识库时，也自动刷新卡片并闪烁定位
+  if (target === 'agent_debug' && currentTab.value === 'agents' && effect.agentId) {
+    await loadAgents()
+    await nextTick()
+    spotlightAgentResult(effect.agentId)
+    finishCopilotHud(effect.label || '已同步智能体变更')
+    return
+  }
+
+  if (target === 'agents') {
+    await switchTabForCopilot('agents')
+    if (effect.kind === 'search' || effect.kind === 'focus_agent') {
+      category.value = '全部'
+      page.value = 1
+      statusFilter.value = effect.status || ''
+      scopeFilter.value = (effect.scope === 'mine' || effect.scope === 'system') ? effect.scope : 'all'
+      spotlightElement('.search-box-wrapper', { durationMs: 1800, scroll: false, variant: 'pulse' })
+      if (effect.keyword) {
+        animateTextInput('dashboard-agent-search', (val) => { keyword.value = val }, effect.keyword, {
+          durationMs: 420,
+          async onDone() {
+            await loadAgents()
+            await nextTick()
+            spotlightAgentResult(effect.agentId)
+            finishCopilotHud(`已定位搜索「${effect.keyword}」的结果`)
+          }
+        })
+      } else {
+        keyword.value = ''
+        await loadAgents()
+        await nextTick()
+        spotlightAgentResult(effect.agentId)
+        finishCopilotHud(effect.status ? '已按状态筛选智能体列表' : '已刷新智能体列表')
+      }
+      return
+    }
+    if (effect.kind === 'resource_created') {
+      const fd = effect.formData || {}
+      showCopilotHud('AI 助手正在点击「新建智能体」…', 'running', 12000)
+      await pressElement('.dashboard-header-bar .btn-create-agent', 340)
+      emptyForm()
+      templatePickerRef.value?.reset()
+      agentModalOpen.value = true
+      await nextTick()
+      await sleep(240)
+      try {
+        const dlg = '.modal-backdrop.open .modal-dialog'
+        if (fd.name) {
+          showCopilotHud(`AI 助手正在填写智能体名称「${fd.name}」…`, 'running', 12000)
+          await animateFieldType('agent-name', (v) => { form.name = v }, document.querySelector(`${dlg} input[required]`), fd.name, 420)
+        }
+        if (fd.category) {
+          showCopilotHud(`AI 助手正在选择业务分类「${fd.category}」…`, 'running', 12000)
+          await highlightFieldStep(`${dlg} select`, () => { form.category = fd.category })
+        }
+        if (fd.temperature != null) {
+          await highlightFieldStep(`${dlg} input[type="range"]`, () => { form.temperature = Number(fd.temperature) })
+        }
+        if (fd.status) {
+          await highlightFieldStep(`${dlg} select:last-of-type`, () => { form.status = fd.status })
+        }
+        if (fd.systemPrompt) {
+          showCopilotHud('AI 助手正在写入系统提示词…', 'running', 12000)
+          await animateFieldType('agent-prompt', (v) => { form.systemPrompt = v }, document.querySelector(`${dlg} textarea`), fd.systemPrompt, 750)
+        }
+        if (fd.description) {
+          const inputs = document.querySelectorAll(`${dlg} input.form-control-styled`)
+          const descInput = inputs[inputs.length - 2]
+          await animateFieldType('agent-desc', (v) => { form.description = v }, descInput, fd.description, 360)
+        }
+        if (Array.isArray(fd.tags) && fd.tags.length) {
+          const inputs = document.querySelectorAll(`${dlg} input.form-control-styled`)
+          const tagsInput = inputs[inputs.length - 1]
+          await animateFieldType('agent-tags', (v) => { form.tagsText = v }, tagsInput, fd.tags.join(', '), 320)
+        }
+        showCopilotHud('AI 助手正在保存新智能体…', 'running', 10000)
+        await pressElement(`${dlg} .modal-footer .btn-create-agent`, 400)
+      } finally {
+        agentModalOpen.value = false
+      }
+      keyword.value = ''
+      category.value = '全部'
+      statusFilter.value = ''
+      scopeFilter.value = 'all'
+      page.value = 1
+      await Promise.all([loadAgents(), loadStats()])
+      await nextTick()
+      spotlightAgentResult(effect.resourceId || effect.agentId)
+      finishCopilotHud(fd.name ? `已新建智能体「${fd.name}」` : '已新建智能体并刷新列表')
+      return
+    }
+    if (effect.kind === 'agent_status_updated' && effect.agentId) {
+      const cardEl = document.querySelector(`[data-agent-id="${CSS.escape(String(effect.agentId))}"]`)
+      if (cardEl) {
+        spotlightElement(cardEl, { durationMs: 1400, variant: 'pulse' })
+        await pressElement(cardEl.querySelector('.fa-power-off')?.closest('button'), 380)
+      }
+    } else if (effect.kind === 'resource_deleted' && effect.resourceId) {
+      const cardEl = document.querySelector(`[data-agent-id="${CSS.escape(String(effect.resourceId))}"]`)
+      if (cardEl) {
+        spotlightElement(cardEl, { durationMs: 1200, variant: 'pulse' })
+        await sleep(420)
+      }
+    }
+    await Promise.all([loadAgents(), loadStats()])
+    await nextTick()
+    spotlightAgentResult(effect.resourceId || effect.agentId)
+    finishCopilotHud(effect.label || '智能体列表已同步更新')
+    return
+  }
+
+  if (target === 'knowledge') {
+    const kbTab = currentTab.value === 'knowledge-dify' ? 'knowledge-dify' : 'knowledge'
+    await switchTabForCopilot(kbTab)
+    await kbPanelOf(kbTab)?.applyAssistantUiEffect?.(effect)
+    return
+  }
+
+  if (target === 'templates') {
+    await switchTabForCopilot('templates')
+    await templatesPanelRef.value?.applyAssistantUiEffect?.(effect)
+    return
+  }
+
+  if (target === 'skills') {
+    await switchTabForCopilot('skills')
+    await skillsPanelRef.value?.applyAssistantUiEffect?.(effect)
+    return
+  }
+
+  if (target === 'tools') {
+    await switchTabForCopilot('tools')
+    await toolsPanelRef.value?.applyAssistantUiEffect?.(effect)
+    return
+  }
+
+  if (target === 'users') {
+    if (!(await switchTabForCopilot('users'))) return
+    await usersPanelRef.value?.applyAssistantUiEffect?.(effect)
+    return
+  }
+
+  if (target === 'security') {
+    await switchTabForCopilot('security')
+    await securityPanelRef.value?.applyAssistantUiEffect?.(effect)
+    return
+  }
+
+  if (target === 'gateway') {
+    if (!isSuperAdmin.value) return
+    if (!isGatewayTab.value) {
+      await switchTabForCopilot(lastGatewayTab())
+    }
+    await gatewayPanelRef.value?.refreshAll?.()
+    await nextTick()
+    finishCopilotHud(effect.label || '模型网关配置已刷新')
+  }
+}
+
 onMounted(() => {
+  dashboardActive = true
+  stopAssistantUiBridge = onAssistantUiEffect(handleAssistantUiEffect)
   http.get('/api/auth/me').then(res => {
     if (res.success && res.data) {
       user.value = res.data
@@ -1871,10 +2134,23 @@ onMounted(() => {
 
   loadDifyNavVisibility()
   enterDashboard()
+  const pending = consumePendingUiEffect((e) => e.target && e.target !== 'agent_debug')
+  if (pending) {
+    nextTick(() => handleAssistantUiEffect(pending))
+  }
+})
+
+onUnmounted(() => {
+  dashboardActive = false
+  if (stopAssistantUiBridge) {
+    stopAssistantUiBridge()
+    stopAssistantUiBridge = null
+  }
 })
 
 const skipNextActivate = ref(true)
 onActivated(() => {
+  dashboardActive = true
   if (skipNextActivate.value) {
     skipNextActivate.value = false
     return
@@ -1888,5 +2164,13 @@ onActivated(() => {
   } else if (currentTab.value === 'tools') {
     toolsPanelRef.value?.loadTools?.()
   }
+  const pending = consumePendingUiEffect((e) => e.target && e.target !== 'agent_debug')
+  if (pending) {
+    nextTick(() => handleAssistantUiEffect(pending))
+  }
+})
+
+onDeactivated(() => {
+  dashboardActive = false
 })
 </script>

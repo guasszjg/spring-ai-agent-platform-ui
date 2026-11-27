@@ -538,6 +538,16 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { accountLabel } from '../composables/useAccountOptions'
+import {
+  animateFieldType,
+  animateTextInput,
+  finishCopilotHud,
+  highlightFieldStep,
+  pressElement,
+  showCopilotHud,
+  sleep,
+  spotlightElement
+} from '../composables/useAssistantUiBridge'
 import SceneIcon from './SceneIcon.vue'
 
 const props = defineProps({
@@ -829,9 +839,74 @@ function resetTemplates(forceReload = true) {
   }
 }
 
+async function applyAssistantUiEffect(effect) {
+  if (!effect) return
+  if (effect.kind === 'search') {
+    currentCategory.value = '全部'
+    page.value = 1
+    spotlightElement('.templates-view-container .search-box-wrapper, .templates-view-container input[type="search"], .templates-view-container input', { durationMs: 1800, scroll: false, variant: 'pulse' })
+    if (effect.keyword) {
+      animateTextInput('templates-search', (v) => { searchKeyword.value = v }, effect.keyword, {
+        durationMs: 400,
+        async onDone() {
+          await loadTemplates()
+          await nextTick()
+          spotlightElement('.templates-view-container .template-card, .templates-view-container tbody tr', { durationMs: 2200, variant: 'flash' })
+          finishCopilotHud(`已在场景模板中定位「${effect.keyword}」`)
+        }
+      })
+      return
+    }
+    searchKeyword.value = ''
+    await loadTemplates()
+    await nextTick()
+    finishCopilotHud('已刷新场景模板列表')
+    return
+  }
+  if (effect.kind === 'resource_created' && effect.formData) {
+    const fd = effect.formData
+    showCopilotHud('AI 助手正在打开「新建场景模板」弹窗…', 'running', 12000)
+    await pressElement('.templates-view-container .btn-create-agent', 320)
+    editingId.value = null
+    Object.assign(form, {
+      name: '', category: '通用智能', avatar: '🤖', description: '', systemPrompt: '', temperature: 0.7, tagsText: '', sortOrder: 1
+    })
+    modalOpen.value = true
+    await nextTick()
+    await sleep(240)
+    try {
+      const dlg = '.templates-view-container .modal-backdrop.open .modal-dialog'
+      if (fd.name) {
+        showCopilotHud(`AI 助手正在填写模板名称「${fd.name}」…`, 'running', 12000)
+        await animateFieldType('tpl-name', (v) => { form.name = v }, document.querySelector(`${dlg} input[required]`), fd.name, 400)
+      }
+      if (fd.category) {
+        await highlightFieldStep(`${dlg} select`, () => { form.category = fd.category })
+      }
+      if (fd.description) {
+        const inputs = document.querySelectorAll(`${dlg} input.form-control-styled`)
+        await animateFieldType('tpl-desc', (v) => { form.description = v }, inputs[1], fd.description, 360)
+      }
+      if (fd.systemPrompt) {
+        showCopilotHud('AI 助手正在写入模板系统提示词…', 'running', 12000)
+        await animateFieldType('tpl-prompt', (v) => { form.systemPrompt = v }, document.querySelector(`${dlg} textarea`), fd.systemPrompt, 600)
+      }
+      showCopilotHud('AI 助手正在保存场景模板…', 'running', 10000)
+      await pressElement(`${dlg} button[type="submit"]`, 400)
+    } finally {
+      modalOpen.value = false
+    }
+  }
+  await loadTemplates()
+  await nextTick()
+  spotlightElement('.templates-view-container .template-card, .templates-view-container tbody tr', { durationMs: 2200, variant: 'flash' })
+  finishCopilotHud(effect.label || '场景模板列表已同步')
+}
+
 defineExpose({
   resetTemplates,
-  loadTemplates
+  loadTemplates,
+  applyAssistantUiEffect
 })
 
 onMounted(() => {

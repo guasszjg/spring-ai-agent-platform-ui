@@ -101,6 +101,16 @@
             >
               <History :size="16" :stroke-width="1.75" />
             </button>
+            <button
+              v-if="conversationId && messages.length >= 6 && view === 'chat'"
+              type="button"
+              :title="compacting ? '正在压缩早期对话记忆…' : '立即压缩早期对话为记忆摘要，节省上下文并保留前情'"
+              :disabled="sending || compacting"
+              @click="compactNow"
+            >
+              <LoaderCircle v-if="compacting" :size="15" :stroke-width="2" class="ad-spin" />
+              <Archive v-else :size="15" :stroke-width="1.8" />
+            </button>
             <button type="button" title="新对话" :disabled="sending || (!messages.length && view === 'chat')" @click="newChat">
               <SquarePen :size="16" :stroke-width="1.75" />
             </button>
@@ -199,6 +209,14 @@
 
           <!-- 对话 -->
           <template v-else>
+            <div v-if="memorySummary" class="ad-memory-bar" :class="{ open: memorySummaryOpen }">
+              <button type="button" class="ad-memory-toggle" @click="memorySummaryOpen = !memorySummaryOpen">
+                <Archive :size="13" :stroke-width="2" />
+                <span>已压缩早期 {{ summaryMsgCount }} 条对话记忆</span>
+                <ChevronDown :size="13" :stroke-width="2" class="ad-memory-chevron" :class="{ flipped: memorySummaryOpen }" />
+              </button>
+              <div v-if="memorySummaryOpen" class="ad-memory-content">{{ memorySummary }}</div>
+            </div>
             <div
               v-for="(m, i) in messages"
               :key="i"
@@ -319,6 +337,14 @@
                       </span>
                       <span v-else class="ad-card-hint"><Clock :size="12" :stroke-width="2" /> {{ expiryText(card) }}</span>
                       <div class="ad-card-actions">
+                        <button
+                          v-if="canApplyPromptDraft(card)"
+                          type="button"
+                          class="btn-draft"
+                          :disabled="card.busy"
+                          title="先将新提示词流畅写入左侧草稿框，在右侧试聊验证满意后再确认上线"
+                          @click="applyPromptDraft(card)"
+                        >写入草稿试聊</button>
                         <button type="button" class="btn-cancel" :disabled="card.busy" @click="cancelAction(card)">取消</button>
                         <button
                           type="button"
@@ -461,6 +487,22 @@
         </footer>
       </aside>
     </transition>
+
+    <!-- AI 助手实时界面联动 HUD（顶部轻提示） -->
+    <Teleport to="body">
+      <transition name="ai-hud-fade">
+        <div
+          v-if="copilotHud.visible"
+          class="ai-copilot-hud"
+          :class="{ 'is-done': copilotHud.status === 'done' }"
+          role="status"
+          aria-live="polite"
+        >
+          <span class="ai-copilot-hud-dot"></span>
+          <span class="ai-copilot-hud-text">{{ copilotHud.label }}</span>
+        </div>
+      </transition>
+    </Teleport>
   </div>
 </template>
 
@@ -470,12 +512,13 @@ import {
   Workflow, BookOpen, Network, Wrench, KeyRound, Stethoscope, ArrowUp, SquarePen, X,
   PanelRight, PictureInPicture2, Maximize2, Minimize2, History, Square, LoaderCircle, Check,
   CircleAlert, Trash2, MessageSquare, Zap, ThumbsUp, ThumbsDown, ExternalLink, PencilLine, Plus, Clock,
-  Copy, Crosshair, Link2, Play, ShieldAlert, ChevronLeft, ChevronRight, Pin
+  Copy, Crosshair, Link2, Play, ShieldAlert, ChevronLeft, ChevronRight, ChevronDown, Pin, Archive
 } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { http } from '../api/http'
 import AgentMascot from './AgentMascot.vue'
 import { useAssistantContext } from '../composables/useAssistantContext'
+import { copilotHud, dispatchAssistantUiEffect, queuePendingUiEffect, showCopilotHud } from '../composables/useAssistantUiBridge'
 import { renderMarkdown as renderMarkdownHtml } from '../utils/markdown'
 
 const props = defineProps({
@@ -565,10 +608,48 @@ const focused = ref(false)
 // { role, content, html, meta?, degraded?, streaming?, notice?, tools?: [{ id, label, status }] }
 const messages = ref([])
 const conversationId = ref(null)
+const memorySummary = ref('')
+const summaryMsgCount = ref(0)
+const memorySummaryOpen = ref(false)
+const compacting = ref(false)
 const view = ref('chat') // chat | history
 const historyList = ref([])
 const historyLoading = ref(false)
 let abortCtrl = null
+let activeConvRestored = false
+
+function activeConvStorageKey() {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}')
+    const uid = user?.id || user?.username || 'default'
+    return `agentmatrix.assistant.activeConv:${uid}`
+  } catch {
+    return 'agentmatrix.assistant.activeConv:default'
+  }
+}
+
+function saveActiveConvId(id) {
+  try {
+    if (id) sessionStorage.setItem(activeConvStorageKey(), String(id))
+    else sessionStorage.removeItem(activeConvStorageKey())
+  } catch { /* ignore */ }
+}
+
+function readSavedActiveConvId() {
+  try {
+    return sessionStorage.getItem(activeConvStorageKey()) || null
+  } catch {
+    return null
+  }
+}
+
+async function restoreActiveConversationIfNeeded() {
+  if (activeConvRestored || conversationId.value || messages.value.length) return
+  activeConvRestored = true
+  const savedId = readSavedActiveConvId()
+  if (!savedId) return
+  await openConversation(savedId)
+}
 
 // ==================== 对话模式：执行（可查询平台数据）/ 问答 ====================
 const MODE_KEY = 'agentmatrix.assistant.mode'
@@ -814,12 +895,17 @@ const examples = computed(() => {
 function openPanel() {
   open.value = true
   loadAssistantCapabilities()
+  restoreActiveConversationIfNeeded()
   nextTick(() => inputRef.value && inputRef.value.focus())
 }
 
 function newChat() {
   messages.value = []
   conversationId.value = null
+  memorySummary.value = ''
+  summaryMsgCount.value = 0
+  memorySummaryOpen.value = false
+  saveActiveConvId(null)
   view.value = 'chat'
   draft.value = ''
   nextTick(() => {
@@ -845,9 +931,14 @@ async function openConversation(id) {
   const res = await http.get(`/api/assistant/conversations/${encodeURIComponent(id)}`)
   if (!res || !res.success || !res.data) {
     historyList.value = historyList.value.filter(c => c.id !== id)
+    if (readSavedActiveConvId() === id) saveActiveConvId(null)
     return
   }
   conversationId.value = res.data.id
+  memorySummary.value = res.data.memorySummary || ''
+  summaryMsgCount.value = res.data.summaryMsgCount || 0
+  memorySummaryOpen.value = false
+  saveActiveConvId(res.data.id)
   const actionsByMessage = {}
   for (const card of res.data.actions || []) {
     if (!card.messageId) continue
@@ -890,8 +981,29 @@ async function deleteConversation(id) {
     historyList.value = historyList.value.filter(c => c.id !== id)
     if (conversationId.value === id) {
       conversationId.value = null
+      memorySummary.value = ''
+      summaryMsgCount.value = 0
+      memorySummaryOpen.value = false
+      saveActiveConvId(null)
       messages.value = []
     }
+  }
+}
+
+async function compactNow() {
+  if (!conversationId.value || compacting.value || sending.value) return
+  compacting.value = true
+  try {
+    const res = await http.post(`/api/assistant/conversations/${encodeURIComponent(conversationId.value)}/compact`)
+    if (res && res.success && res.data) {
+      if (res.data.memorySummary) {
+        memorySummary.value = res.data.memorySummary
+        summaryMsgCount.value = res.data.summaryMsgCount || 0
+        memorySummaryOpen.value = true
+      }
+    }
+  } finally {
+    compacting.value = false
   }
 }
 
@@ -979,11 +1091,20 @@ async function send(text) {
       onEvent(event, data) {
         if (event === 'start') {
           conversationId.value = data.conversationId
+          saveActiveConvId(data.conversationId)
         } else if (event === 'tool') {
           upsertTool(reply, data)
+          if (data && data.uiEffect) {
+            handleIncomingUiEffect(data.uiEffect)
+          }
         } else if (event === 'action') {
-          reply.actions.push(stampCardDeadline(data))
+          const card = stampCardDeadline(data)
+          reply.actions.push(card)
           scrollToBottom()
+          // 在当前智能体调试页生成「修改系统提示词」待确认卡片时，自动将新提示词流畅写入左侧草稿框（未上线，可先试聊再点确认修改）
+          if (canApplyPromptDraft(card)) {
+            applyPromptDraft(card)
+          }
         } else if (event === 'message') {
           reply.content += data.delta || ''
           scheduleRender(reply)
@@ -996,7 +1117,14 @@ async function send(text) {
           if (data.notice) reply.notice = data.notice
           reply.meta = data.degraded ? '' : metaText(data.model, data.latencyMs, (data.promptTokens || 0) + (data.completionTokens || 0))
           reply.id = data.messageId
-          if (data.conversationId) conversationId.value = data.conversationId
+          if (data.memorySummary) {
+            memorySummary.value = data.memorySummary
+            summaryMsgCount.value = data.summaryMsgCount || 0
+          }
+          if (data.conversationId) {
+            conversationId.value = data.conversationId
+            saveActiveConvId(data.conversationId)
+          }
         } else if (event === 'error') {
           reply.content = data.message || '请求失败，请稍后重试'
           reply.html = escapeHtml(reply.content)
@@ -1133,9 +1261,70 @@ async function actOnCard(card, verb, body) {
   if (res && res.success && res.data) {
     const { expanded } = card
     Object.assign(card, stampCardDeadline(res.data), { expanded, confirmNameInput: '', secretInputVal: '' })
+    if (verb === 'confirm' && res.data.status === 'EXECUTED' && res.data.uiEffect) {
+      handleIncomingUiEffect(res.data.uiEffect, { allowCrossPage: true })
+    }
   } else {
     card.error = (res && res.message) || '操作失败，请稍后重试'
   }
+}
+
+function handleIncomingUiEffect(effect, { allowCrossPage = false } = {}) {
+  if (!effect || typeof effect !== 'object') return
+  const curRoute = router.currentRoute.value
+  const isNav = effect.kind === 'navigate'
+  const shouldCrossRoute = isNav || allowCrossPage
+
+  if (shouldCrossRoute && effect.target === 'agent_debug' && effect.agentId) {
+    const sameDebug = curRoute.name === 'debug' && String(curRoute.params.id || '') === String(effect.agentId)
+    if (!sameDebug) {
+      const targetUrl = effect.url || `/debug/${encodeURIComponent(effect.agentId)}`
+      queuePendingUiEffect(effect)
+      showCopilotHud(effect.label || 'AI 助手正在打开智能体调试页…', 'running', 8000)
+      router.push(targetUrl).catch(() => {})
+      return
+    }
+    dispatchAssistantUiEffect(effect)
+    return
+  }
+
+  const dashboardTargets = ['overview', 'agents', 'knowledge', 'templates', 'skills', 'tools', 'users', 'gateway', 'security']
+  if (shouldCrossRoute && dashboardTargets.includes(effect.target) && curRoute.name !== 'dashboard') {
+    // 若当前在调试页且仅更新当前智能体运行状态，直接在调试页原地更新即可
+    if (effect.kind === 'agent_status_updated' && curRoute.name === 'debug'
+      && (!effect.agentId || String(curRoute.params.id || '') === String(effect.agentId))) {
+      dispatchAssistantUiEffect(effect)
+      return
+    }
+    const tab = effect.dashboardTab || (effect.target === 'gateway' ? 'gateway-llm' : effect.target)
+    const targetUrl = effect.url || `/dashboard?tab=${encodeURIComponent(tab)}`
+    queuePendingUiEffect(effect)
+    showCopilotHud(effect.label || 'AI 助手正在切换页面执行操作…', 'running', 8000)
+    router.push(targetUrl).catch(() => {})
+    return
+  }
+
+  dispatchAssistantUiEffect(effect)
+}
+
+function canApplyPromptDraft(card) {
+  if (!card || cardStatus(card) !== 'PENDING') return false
+  if (card.toolName !== 'update_agent_prompt') return false
+  if (!(card.preview && card.preview.diff && card.preview.diff.after)) return false
+  if (pageContext.page !== 'debug') return false
+  return !card.resourceId || card.resourceId === pageContext.resourceId
+}
+
+function applyPromptDraft(card) {
+  const after = card?.preview?.diff?.after
+  if (!after) return
+  dispatchAssistantUiEffect({
+    kind: 'agent_prompt_draft',
+    target: 'agent_debug',
+    agentId: card.resourceId || pageContext.resourceId,
+    systemPrompt: after,
+    label: 'AI 助手正在将新提示词写入左侧草稿…'
+  })
 }
 
 const confirmAction = (card) => {
@@ -2371,6 +2560,17 @@ async function sendFeedback(m, rating) {
   color: var(--text-secondary);
 }
 
+.ad-card-actions .btn-draft {
+  border: 1px solid rgba(59, 130, 246, 0.45);
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--accent-blue, #3b82f6);
+  font-weight: 600;
+}
+
+.ad-card-actions .btn-draft:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.18);
+}
+
 .ad-card-actions .btn-confirm {
   border: none;
   background: var(--brand-strong, #c15f3c);
@@ -2619,6 +2819,54 @@ async function sendFeedback(m, rating) {
   }
 }
 
+.ad-memory-bar {
+  margin: 2px 0 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--brand, #c96442) 28%, var(--border-color));
+  background: color-mix(in srgb, var(--brand, #c96442) 6%, var(--surface-subtle, transparent));
+  overflow: hidden;
+}
+
+.ad-memory-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 11px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ad-memory-toggle:hover {
+  color: var(--text-primary);
+}
+
+.ad-memory-chevron {
+  margin-left: auto;
+  transition: transform 0.16s ease;
+}
+
+.ad-memory-chevron.flipped {
+  transform: rotate(180deg);
+}
+
+.ad-memory-content {
+  padding: 0 11px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-top: 1px dashed var(--border-color);
+  padding-top: 8px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ad-slide-enter-active,
   .ad-slide-leave-active,
@@ -2629,3 +2877,5 @@ async function sendFeedback(m, rating) {
   }
 }
 </style>
+
+<style src="../assets/assistant-copilot.css"></style>

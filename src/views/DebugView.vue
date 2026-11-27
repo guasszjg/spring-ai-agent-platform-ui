@@ -116,6 +116,14 @@
                 <input v-model.number="settings.memory.value" class="ms-range" type="range" min="1" max="10" step="1" :disabled="!settings.memory.enabled">
                 <span class="ms-flag ms-memory-flag">{{ settings.memory.enabled ? settings.memory.value + ' 轮' : '已关闭' }}</span>
               </div>
+              <div v-if="settings.memory.enabled" class="ms-row ms-row-choice ms-row-sub">
+                <label class="switch ms-switch">
+                  <input v-model="settings.memoryCompression.enabled" type="checkbox">
+                  <span class="slider-toggle"></span>
+                </label>
+                <div class="ms-label">记忆压缩 <i class="fa-regular fa-circle-question" title="默认关闭。开启后，超出记忆轮数的早期对话会在每轮结束后后台异步浓缩为摘要，长对话也不忘前情，且不拖慢首字；调试页、分享页与开放接口自动生效。"></i></div>
+                <span class="ms-flag">{{ settings.memoryCompression.enabled ? '自动摘要' : '已关闭' }}</span>
+              </div>
               <div class="ms-row ms-row-choice">
                 <label class="switch ms-switch">
                   <input v-model="settings.webSearch.enabled" type="checkbox">
@@ -183,19 +191,33 @@
               <button class="btn-section-action" @click="optimizePrompt"><i class="fa-solid fa-wand-magic-sparkles"></i><span>生成</span></button>
             </div>
           </div>
+          <div v-if="aiPromptState.active || aiPromptState.bannerVisible" class="ai-prompt-live-bar" :class="{ 'is-done': !aiPromptState.active }">
+            <div class="ai-prompt-live-left">
+              <span class="ai-copilot-hud-dot" :style="!aiPromptState.active ? { background: '#10b981', animation: 'none' } : undefined"></span>
+              <span v-if="aiPromptState.active">
+                {{ aiPromptState.phase === 'select' ? 'AI 助手正在选中原提示词…' : (aiPromptState.phase === 'clear' ? 'AI 助手正在清除旧内容…' : `AI 助手正在逐字写入新提示词 · ${aiPromptState.progress}%`) }}
+              </span>
+              <span v-else>✨ AI 已写入优化草稿（尚未发布，可在右侧试聊后点卡片「确认修改」上线）</span>
+            </div>
+            <div v-if="!aiPromptState.active" class="ai-prompt-live-actions">
+              <button v-if="aiPromptState.lastAiPrompt" type="button" class="ai-prompt-live-btn" @click="replayAiPromptDraft">重播</button>
+              <button v-if="aiPromptState.prevDraft !== null" type="button" class="ai-prompt-live-btn" @click="revertAiPromptDraft">撤回</button>
+            </div>
+            <div v-if="aiPromptState.active && aiPromptState.phase === 'type'" class="ai-prompt-live-progress" :style="{ width: aiPromptState.progress + '%' }"></div>
+          </div>
           <textarea ref="promptTextareaRef" v-model="prompt" class="prompt-textarea" placeholder="请输入智能体的角色设定与工作流程..."></textarea>
           <div class="prompt-footer">
             <span>{{ prompt.length }} 字</span>
             <span style="font-size: 11px;">右侧调试用这份草稿；点「发布上线」后才成为线上系统提示词</span>
           </div>
         </div>
-        <div class="config-card-section">
+        <div class="config-card-section" data-copilot-section="variables">
           <div class="section-header-row">
             <div class="section-title"><span>变量</span></div>
             <div class="section-tools-header-right">
               <span v-if="promptVariables.length" class="tools-count-badge">{{ promptVariables.length }} 个自定义</span>
               <span v-if="promptVariables.length" class="tools-header-divider">|</span>
-              <button type="button" class="btn-tools-add" @click="openAddVariableModal">
+              <button ref="varAddBtnRef" type="button" class="btn-tools-add" @click="openAddVariableModal">
                 <i class="fa-solid fa-plus"></i>
                 <span>添加</span>
               </button>
@@ -224,7 +246,7 @@
               <span class="var-group-label">自定义变量</span>
             </div>
             <div class="custom-var-list">
-              <div v-for="(v, idx) in promptVariables" :key="v.key" class="custom-var-row">
+              <div v-for="(v, idx) in promptVariables" :key="v.key" class="custom-var-row" :data-var-key="v.key">
                 <button
                   type="button"
                   class="var-chip var-chip-clickable var-chip-custom"
@@ -255,7 +277,7 @@
             </div>
           </template>
         </div>
-        <div class="config-card-section">
+        <div class="config-card-section" data-copilot-section="kb">
           <div class="section-header-row">
             <div class="section-title">
               <span>知识库</span>
@@ -499,11 +521,11 @@
               type="button"
               class="memory-chip"
               :class="{ off: !memoryTurns }"
-              :title="memoryTurns ? `每次带上最近 ${memoryTurns} 轮问答，点击调整` : '上下文记忆已关闭，每次只发当前问题，点击调整'"
+              :title="memoryTurns ? (memoryCompressionEnabled ? `每次带上最近 ${memoryTurns} 轮原文，更早对话后台自动压缩为摘要，点击调整` : `每次带上最近 ${memoryTurns} 轮问答，点击调整`) : '上下文记忆已关闭，每次只发当前问题，点击调整'"
               @click="openSettings"
             >
               <i class="fa-solid fa-clock-rotate-left"></i>
-              {{ memoryTurns ? `记忆 ${memoryTurns} 轮` : '无记忆' }}
+              {{ memoryTurns ? (memoryCompressionEnabled ? `记忆 ${memoryTurns} 轮 · 压缩` : `记忆 ${memoryTurns} 轮`) : '无记忆' }}
             </button>
             <button class="btn-icon-round" title="清空对话" @click="resetChat"><i class="fa-solid fa-rotate-right"></i></button>
           </div>
@@ -1151,6 +1173,9 @@
           <div class="tool-modal-title">
             <i class="fa-solid fa-sliders" style="color: var(--accent-blue);"></i>
             <span>{{ editingVariableIndex >= 0 ? '编辑变量' : '添加自定义变量' }}</span>
+            <span v-if="aiFillingVariable" class="ai-modal-badge">
+              <span class="ai-copilot-hud-dot"></span> AI 正在自动填写
+            </span>
           </div>
           <button type="button" class="btn-modal-close" @click="variableModalOpen = false">
             <i class="fa-solid fa-xmark"></i>
@@ -1164,6 +1189,7 @@
                 <code class="var-key-preview">{{ formatVarToken(variableForm.key.trim() || 'store_name') }}</code>
               </div>
               <input
+                ref="varKeyInputRef"
                 v-model="variableForm.key"
                 type="text"
                 class="tool-form-input var-control-h"
@@ -1175,6 +1201,7 @@
             <div class="tool-form-group">
               <label class="tool-form-label">显示名称</label>
               <input
+                ref="varLabelInputRef"
                 v-model="variableForm.label"
                 type="text"
                 class="tool-form-input var-control-h"
@@ -1188,7 +1215,7 @@
           <div class="var-modal-grid">
             <div class="tool-form-group">
               <label class="tool-form-label">字段类型</label>
-              <select v-model="variableForm.type" class="tool-form-select var-control-h">
+              <select ref="varTypeSelectRef" v-model="variableForm.type" class="tool-form-select var-control-h">
                 <option value="text">单行文本 (text)</option>
                 <option value="paragraph">多行文本 (paragraph)</option>
                 <option value="select">下拉选项 (select)</option>
@@ -1197,7 +1224,7 @@
             </div>
             <div class="tool-form-group">
               <label class="tool-form-label">必填校验</label>
-              <label class="var-required-toggle" title="设为必填后，未填写且无默认值时将拦截发送">
+              <label ref="varReqLabelRef" class="var-required-toggle" title="设为必填后，未填写且无默认值时将拦截发送">
                 <input v-model="variableForm.required" type="checkbox">
                 <span>设为必填项</span>
                 <span class="var-required-note">默认值可兜底</span>
@@ -1208,6 +1235,7 @@
           <div v-if="variableForm.type === 'select'" class="tool-form-group">
             <label class="tool-form-label">下拉选项 <span class="var-req-star">*</span> <span class="label-sub">每行一个选项</span></label>
             <textarea
+              ref="varOptionsInputRef"
               v-model="variableForm.optionsText"
               class="tool-form-textarea"
               rows="3"
@@ -1218,12 +1246,13 @@
           <div class="var-modal-grid">
             <div class="tool-form-group">
               <label class="tool-form-label">默认值 <span class="label-sub">可选</span></label>
-              <select v-if="variableForm.type === 'select'" v-model="variableForm.defaultValue" class="tool-form-select var-control-h">
+              <select v-if="variableForm.type === 'select'" ref="varDefaultSelectRef" v-model="variableForm.defaultValue" class="tool-form-select var-control-h">
                 <option value="">不设默认值</option>
                 <option v-for="opt in parsedSelectOptions" :key="opt" :value="opt">{{ opt }}</option>
               </select>
               <input
                 v-else
+                ref="varDefaultInputRef"
                 v-model="variableForm.defaultValue"
                 :type="variableForm.type === 'number' ? 'number' : 'text'"
                 class="tool-form-input var-control-h"
@@ -1234,6 +1263,7 @@
             <div class="tool-form-group">
               <label class="tool-form-label">输入提示 <span class="label-sub">可选</span></label>
               <input
+                ref="varPlaceholderInputRef"
                 v-model="variableForm.placeholder"
                 type="text"
                 class="tool-form-input var-control-h"
@@ -1245,7 +1275,7 @@
         </div>
         <div class="tool-modal-footer">
           <button type="button" class="btn-modal-cancel" @click="variableModalOpen = false">取消</button>
-          <button type="button" class="btn-modal-save" :disabled="savingVariables" @click="saveVariableForm">
+          <button ref="varSaveBtnRef" type="button" class="btn-modal-save" :disabled="savingVariables" @click="saveVariableForm">
             {{ savingVariables ? '保存中...' : '保存变量' }}
           </button>
         </div>
@@ -1301,9 +1331,6 @@
         </div>
       </div>
     </div>
-
-    <!-- 平台 AI 助手：页面上下文为当前智能体，可以直接问"这个智能体为什么没回复" -->
-    <AssistantDock :launcher-bottom="132" />
   </div>
 </template>
 
@@ -1319,13 +1346,24 @@ import AgentApiPanel from '../components/AgentApiPanel.vue'
 import ToolGlyph from '../components/ToolGlyph.vue'
 import AgentMascot from '../components/AgentMascot.vue'
 import AgentAvatar from '../components/AgentAvatar.vue'
-import AssistantDock from '../components/AssistantDock.vue'
 import ModelRoutePicker from '../components/ModelRoutePicker.vue'
 import ShareLinksPanel from '../components/ShareLinksPanel.vue'
 import FaqMediaGallery from '../components/FaqMediaGallery.vue'
 import CallTracePanel from '../components/CallTracePanel.vue'
 import { describeRoute, modelOn, routeChoiceFromAgent, sameRouteChoice, emptyRouteChoice } from '../utils/chatRoute'
 import { clearAssistantResource, setAssistantPage, setAssistantResource } from '../composables/useAssistantContext'
+import {
+  animateFieldType,
+  animateReplaceText,
+  consumePendingUiEffect,
+  finishCopilotHud,
+  highlightFieldStep,
+  onAssistantUiEffect,
+  pressElement,
+  showCopilotHud,
+  sleep,
+  spotlightElement
+} from '../composables/useAssistantUiBridge'
 import { copyToClipboard } from '../utils/clipboard'
 import { Check, Copy, User } from 'lucide-vue-next'
 import { FALLBACK_PLATFORM_TOOLS, matchSavedTool, mcpToDebugTool, toDebugTool } from '../composables/platformTools'
@@ -1334,6 +1372,25 @@ import logoDeepseek from '../assets/vendors/deepseek-color.svg'
 const route = useRoute()
 const { showToast } = useToast()
 const promptTextareaRef = ref(null)
+const varAddBtnRef = ref(null)
+const varKeyInputRef = ref(null)
+const varLabelInputRef = ref(null)
+const varTypeSelectRef = ref(null)
+const varReqLabelRef = ref(null)
+const varOptionsInputRef = ref(null)
+const varDefaultInputRef = ref(null)
+const varDefaultSelectRef = ref(null)
+const varPlaceholderInputRef = ref(null)
+const varSaveBtnRef = ref(null)
+const aiFillingVariable = ref(false)
+const aiPromptState = reactive({
+  active: false,
+  phase: '',
+  progress: 0,
+  bannerVisible: false,
+  prevDraft: null,
+  lastAiPrompt: ''
+})
 const BUILTIN_VARIABLES = [
   { key: 'input', label: '用户输入', icon: 'fa-solid fa-code', color: 'var(--accent-blue)', desc: '替换为本轮用户输入的问题原文' },
   { key: 'system_time', label: '时间+星期', icon: 'fa-solid fa-clock', color: 'var(--accent-amber)', desc: '服务端北京时间，如 2026-11-26 16:45:00 (星期四)' },
@@ -2587,6 +2644,7 @@ async function publish(note) {
     topP: Number(appliedSettings.topP.value),
     maxTokens: Number(appliedSettings.maxTokens.value),
     memoryTurns: memoryTurns.value,
+    memoryCompression: memoryCompressionEnabled.value,
     thinkingMode: appliedSettings.thinking.value,
     toolsConfig: JSON.stringify(tools),
     promptVariables: promptVariables.value
@@ -2594,6 +2652,8 @@ async function publish(note) {
   if (res.success) {
     agent.value = res.data
     publishedPrompt.value = prompt.value
+    aiPromptState.bannerVisible = false
+    aiPromptState.prevDraft = null
     syncRouteFromAgent(res.data)
     if (agent.value?.id) {
       localStorage.setItem(toolsStorageKey(agent.value.id), JSON.stringify(tools))
@@ -2793,8 +2853,9 @@ function createDefaultSettings() {
     n: { enabled: false, value: 0 },
     frequencyPenalty: { enabled: false, value: 0 },
     responseFormat: { enabled: false, value: 'text' },
-    // 上下文记忆保存在智能体上（开放接口也按它走），不走本地缓存
+    // 上下文记忆与记忆压缩保存在智能体上（开放接口也按它走），不走本地缓存
     memory: { enabled: false, value: 3 },
+    memoryCompression: { enabled: false },
     webSearch: { enabled: false },
     // 思考模式保存在智能体上（AUTO / ON / OFF），线上调用也按它走，不走本地缓存
     thinking: { value: 'OFF' },
@@ -2823,6 +2884,8 @@ function applyAgentSettings(data) {
   settings.memory.enabled = turns > 0
   settings.memory.value = turns > 0 ? turns : 3
   Object.assign(appliedSettings.memory, settings.memory)
+  settings.memoryCompression.enabled = !!data.memoryCompression
+  appliedSettings.memoryCompression.enabled = settings.memoryCompression.enabled
   settings.thinking.value = data.thinkingMode || 'OFF'
   appliedSettings.thinking.value = settings.thinking.value
 }
@@ -2831,7 +2894,7 @@ function loadPersistedSettings(agentId) {
   try {
     const raw = localStorage.getItem(settingsKey(agentId))
     if (!raw) return
-    const { memory, thinking, ...parsed } = JSON.parse(raw)
+    const { memory, memoryCompression, thinking, ...parsed } = JSON.parse(raw)
     copySettings(parsed, appliedSettings)
     copySettings(parsed, settings)
   } catch {
@@ -2843,6 +2906,7 @@ function loadPersistedSettings(agentId) {
 const memoryTurns = computed(() => appliedSettings.memory.enabled
   ? Math.min(10, Math.max(1, Number(appliedSettings.memory.value) || 3))
   : 0)
+const memoryCompressionEnabled = computed(() => memoryTurns.value > 0 && !!appliedSettings.memoryCompression.enabled)
 
 function openSettings() {
   if (pageTab.value !== 'orchestrate') pageTab.value = 'orchestrate'
@@ -2890,6 +2954,7 @@ async function saveModelSettings() {
       topP: Number(appliedSettings.topP.value),
       maxTokens: Number(appliedSettings.maxTokens.value),
       memoryTurns: memoryTurns.value,
+      memoryCompression: memoryCompressionEnabled.value,
       thinkingMode: appliedSettings.thinking.value
     })
     if (res?.success && res.data) agent.value = res.data
@@ -2961,10 +3026,418 @@ function onDocClick(e) {
   }
 }
 
+let stopAssistantUiBridge = null
+
+async function runCinemaPromptReplace(nextPrompt, { isDraft = true } = {}) {
+  pageTab.value = 'orchestrate'
+  await nextTick()
+  spotlightElement('.prompt-editor-card', { durationMs: 4200, variant: 'pulse' })
+  if (isDraft && !aiPromptState.bannerVisible) {
+    aiPromptState.prevDraft = prompt.value
+  }
+  aiPromptState.lastAiPrompt = nextPrompt || ''
+  aiPromptState.active = true
+  aiPromptState.phase = 'select'
+  aiPromptState.progress = 0
+
+  const completed = await animateReplaceText('debug-prompt', {
+    getCurrent: () => prompt.value,
+    setValue: (v) => { prompt.value = v },
+    getEl: () => promptTextareaRef.value,
+    targetText: nextPrompt || '',
+    onPhase: (phase) => {
+      aiPromptState.phase = phase
+      if (phase === 'select') showCopilotHud('AI 助手正在选中原系统提示词…', 'running', 8000)
+      else if (phase === 'clear') showCopilotHud('AI 助手正在清空旧提示词…', 'running', 8000)
+      else if (phase === 'type') showCopilotHud('AI 助手正在光标逐字写入新提示词…', 'running', 8000)
+    },
+    onProgress: (pct) => {
+      aiPromptState.progress = pct
+    }
+  })
+  aiPromptState.active = false
+  if (!completed) return false
+  aiPromptState.bannerVisible = isDraft
+  spotlightElement('.prompt-editor-card', { durationMs: 2000, scroll: false, variant: 'flash' })
+  return true
+}
+
+function replayAiPromptDraft() {
+  if (!aiPromptState.lastAiPrompt || aiPromptState.active) return
+  if (aiPromptState.prevDraft !== null) {
+    prompt.value = aiPromptState.prevDraft
+  }
+  runCinemaPromptReplace(aiPromptState.lastAiPrompt, { isDraft: true }).then((ok) => {
+    if (ok) finishCopilotHud('已重播 AI 提示词写入效果')
+  })
+}
+
+function revertAiPromptDraft() {
+  if (aiPromptState.prevDraft === null || aiPromptState.active) return
+  prompt.value = aiPromptState.prevDraft
+  aiPromptState.bannerVisible = false
+  aiPromptState.prevDraft = null
+  showToast('已撤回 AI 草稿，恢复为原提示词', 'info', 2000)
+}
+
+async function runVariableModalChoreography(effect) {
+  pageTab.value = 'orchestrate'
+  await nextTick()
+  const op = String(effect.operation || 'add').toLowerCase()
+  const v = effect.variable || {}
+  const key = String(v.key || '').trim()
+
+  spotlightElement('[data-copilot-section="variables"]', { durationMs: 2600, variant: 'pulse' })
+
+  if (op === 'delete') {
+    if (key) {
+      spotlightElement(`[data-var-key="${CSS.escape(key)}"]`, { durationMs: 1400, variant: 'pulse' })
+    }
+    await sleep(520)
+    const res = await http.get(`/api/agents/${agent.value.id}`)
+    if (res?.success && res.data) {
+      agent.value = res.data
+      promptVariables.value = Array.isArray(res.data.promptVariables) ? res.data.promptVariables : []
+      syncVariableValuesFromDefs(promptVariables.value, true)
+    }
+    finishCopilotHud(key ? `已移除自定义变量 {{${key}}}` : '已移除自定义变量')
+    return
+  }
+
+  // 1. 高亮并模拟点击「+ 添加」按钮（或编辑现有变量）
+  if (op === 'add' && varAddBtnRef.value) {
+    varAddBtnRef.value.classList.add('ai-copilot-btn-press')
+    showCopilotHud('AI 助手正在点击「添加变量」…', 'running', 10000)
+    await sleep(360)
+    varAddBtnRef.value.classList.remove('ai-copilot-btn-press')
+  }
+
+  // 2. 真正打开「添加 / 编辑自定义变量」弹窗并清空/准备表单
+  const existingIdx = promptVariables.value.findIndex(item => item.key === key)
+  editingVariableIndex.value = op === 'update' && existingIdx >= 0 ? existingIdx : -1
+  Object.assign(variableForm, {
+    key: '',
+    label: '',
+    type: 'text',
+    required: false,
+    defaultValue: '',
+    optionsText: '',
+    placeholder: ''
+  })
+  aiFillingVariable.value = true
+  variableModalOpen.value = true
+  await nextTick()
+  await sleep(260)
+
+  try {
+    // 3. 逐项高亮焦点并光标流畅键入字段
+    if (key) {
+      showCopilotHud(`AI 助手正在填写变量名 ${key}…`, 'running', 10000)
+      await animateFieldType('var-key', (val) => { variableForm.key = val }, varKeyInputRef.value, key, 440)
+    }
+    const labelText = String(v.label || key)
+    if (labelText) {
+      showCopilotHud(`AI 助手正在填写显示名称「${labelText}」…`, 'running', 10000)
+      await animateFieldType('var-label', (val) => { variableForm.label = val }, varLabelInputRef.value, labelText, 440)
+    }
+
+    const typeVal = String(v.type || 'text').toLowerCase()
+    if (typeVal && typeVal !== 'text') {
+      showCopilotHud(`AI 助手正在选择字段类型「${variableTypeLabel(typeVal)}」…`, 'running', 10000)
+      if (varTypeSelectRef.value) varTypeSelectRef.value.classList.add('ai-copilot-field-active')
+      await sleep(220)
+      variableForm.type = typeVal
+      await nextTick()
+      await sleep(260)
+      if (varTypeSelectRef.value) varTypeSelectRef.value.classList.remove('ai-copilot-field-active')
+    }
+
+    if (v.required) {
+      showCopilotHud('AI 助手正在勾选「设为必填项」…', 'running', 10000)
+      if (varReqLabelRef.value) varReqLabelRef.value.classList.add('ai-copilot-field-active')
+      await sleep(180)
+      variableForm.required = true
+      await sleep(260)
+      if (varReqLabelRef.value) varReqLabelRef.value.classList.remove('ai-copilot-field-active')
+    }
+
+    if (typeVal === 'select' && Array.isArray(v.options) && v.options.length) {
+      showCopilotHud('AI 助手正在输入下拉选项…', 'running', 10000)
+      await nextTick()
+      await animateFieldType('var-opts', (val) => { variableForm.optionsText = val }, varOptionsInputRef.value, v.options.join('\n'), 540)
+    }
+
+    const defVal = String(v.defaultValue || '')
+    if (defVal) {
+      showCopilotHud('AI 助手正在填写默认值…', 'running', 10000)
+      await nextTick()
+      if (typeVal === 'select') {
+        if (varDefaultSelectRef.value) varDefaultSelectRef.value.classList.add('ai-copilot-field-active')
+        await sleep(200)
+        variableForm.defaultValue = defVal
+        await sleep(240)
+        if (varDefaultSelectRef.value) varDefaultSelectRef.value.classList.remove('ai-copilot-field-active')
+      } else {
+        await animateFieldType('var-def', (val) => { variableForm.defaultValue = val }, varDefaultInputRef.value, defVal, 380)
+      }
+    }
+
+    const phVal = String(v.placeholder || '')
+    if (phVal) {
+      showCopilotHud('AI 助手正在填写输入提示…', 'running', 10000)
+      await animateFieldType('var-ph', (val) => { variableForm.placeholder = val }, varPlaceholderInputRef.value, phVal, 380)
+    }
+
+    // 4. 模拟按下「保存变量」按钮
+    showCopilotHud('AI 助手正在保存自定义变量…', 'running', 10000)
+    if (varSaveBtnRef.value) {
+      varSaveBtnRef.value.classList.add('ai-copilot-btn-press')
+      await sleep(420)
+      varSaveBtnRef.value.classList.remove('ai-copilot-btn-press')
+    }
+  } finally {
+    variableModalOpen.value = false
+    aiFillingVariable.value = false
+  }
+
+  // 5. 拉取服务端已落库的最新变量列表，绿闪定位新变量 + 自动展开右侧变量表单
+  const res = await http.get(`/api/agents/${agent.value.id}`)
+  if (res?.success && res.data) {
+    agent.value = res.data
+    promptVariables.value = Array.isArray(res.data.promptVariables) ? res.data.promptVariables : []
+    syncVariableValuesFromDefs(promptVariables.value, true)
+  }
+  debugVarsOpen.value = true
+  await nextTick()
+  if (key) {
+    spotlightElement(`[data-var-key="${CSS.escape(key)}"]`, { durationMs: 2600, variant: 'flash' })
+  }
+  spotlightElement('.debug-vars-panel', { durationMs: 2400, scroll: false, variant: 'flash' })
+  showToast(op === 'update' ? `AI 助手已更新变量 {{${key}}}` : `AI 助手已添加并保存变量 {{${key}}}`, 'success', 2600)
+  finishCopilotHud(`已保存变量 {{${key}}} 并展开右侧变量表单`)
+}
+
+async function handleAssistantUiEffect(effect) {
+  if (!effect || !agent.value?.id) return
+  if (effect.agentId && effect.agentId !== agent.value.id) return
+
+  if (effect.kind === 'agent_prompt_draft') {
+    const ok = await runCinemaPromptReplace(effect.systemPrompt || '', { isDraft: true })
+    if (ok) {
+      showToast('AI 助手已将新提示词写入左侧草稿，可在右侧试聊确认后再发布上线', 'success', 3000)
+      finishCopilotHud('已写入左侧草稿，可在右侧试聊验证')
+    }
+    return
+  }
+
+  if (effect.kind === 'agent_prompt_updated') {
+    pageTab.value = 'orchestrate'
+    await nextTick()
+    const res = await http.get(`/api/agents/${agent.value.id}`)
+    const latestAgent = res?.success && res.data ? res.data : null
+    const nextPrompt = latestAgent && latestAgent.systemPrompt != null
+      ? latestAgent.systemPrompt
+      : (effect.systemPrompt ?? prompt.value)
+
+    if (prompt.value === nextPrompt) {
+      // 草稿已由 AI 提前实时写入：直接闪绿确认上线并刷新版本号，避免重复清空重写
+      aiPromptState.bannerVisible = false
+      aiPromptState.prevDraft = null
+      if (latestAgent) {
+        agent.value = latestAgent
+        publishedPrompt.value = latestAgent.systemPrompt || ''
+      } else {
+        publishedPrompt.value = nextPrompt
+      }
+      await loadPromptVersions()
+      await nextTick()
+      spotlightElement('.prompt-editor-card', { durationMs: 2200, variant: 'flash' })
+      spotlightElement('.pv-online-chip', { durationMs: 2200, scroll: false, variant: 'flash' })
+      showToast('系统提示词已保存并发布上线', 'success', 2400)
+      finishCopilotHud('系统提示词已保存并发布上线')
+      return
+    }
+
+    const ok = await runCinemaPromptReplace(nextPrompt, { isDraft: false })
+    if (ok) {
+      if (latestAgent) {
+        agent.value = latestAgent
+        publishedPrompt.value = latestAgent.systemPrompt || ''
+      } else {
+        publishedPrompt.value = nextPrompt
+      }
+      aiPromptState.bannerVisible = false
+      aiPromptState.prevDraft = null
+      await loadPromptVersions()
+      showToast('系统提示词已同步更新并保存上线', 'success', 2400)
+      finishCopilotHud('系统提示词已同步并保存上线')
+    }
+    return
+  }
+
+  if (effect.kind === 'agent_variable_mutated') {
+    await runVariableModalChoreography(effect)
+    return
+  }
+
+  if (effect.kind === 'agent_settings_updated') {
+    pageTab.value = 'orchestrate'
+    await nextTick()
+    const fd = effect.formData || {}
+    const hasPopoverChange = ['temperature', 'maxTokens', 'topP', 'memoryTurns', 'memoryCompression', 'thinkingMode']
+      .some((k) => fd[k] !== undefined && fd[k] !== null)
+
+    if (hasPopoverChange) {
+      showCopilotHud('AI 助手正在打开「模型设置」调整参数…', 'running', 10000)
+      await pressElement('.btn-model-settings', 320)
+      copySettings(appliedSettings, settings)
+      settingsOpen.value = true
+      await nextTick()
+      await sleep(220)
+      try {
+        if (fd.temperature != null) {
+          showCopilotHud(`AI 助手正在调整温度 → ${fd.temperature}…`, 'running', 10000)
+          await highlightFieldStep('.model-settings-panel .ms-row:nth-child(1)', () => {
+            settings.temperature.enabled = true
+            settings.temperature.value = Number(fd.temperature)
+          })
+        }
+        if (fd.maxTokens != null) {
+          showCopilotHud(`AI 助手正在调整最大标记 → ${fd.maxTokens}…`, 'running', 10000)
+          await highlightFieldStep('.model-settings-panel .ms-row:nth-child(2)', () => {
+            settings.maxTokens.enabled = true
+            settings.maxTokens.value = Number(fd.maxTokens)
+          })
+        }
+        if (fd.topP != null) {
+          showCopilotHud(`AI 助手正在调整 Top P → ${fd.topP}…`, 'running', 10000)
+          await highlightFieldStep('.model-settings-panel .ms-row:nth-child(3)', () => {
+            settings.topP.enabled = true
+            settings.topP.value = Number(fd.topP)
+          })
+        }
+        if (fd.memoryTurns != null) {
+          const turns = Number(fd.memoryTurns)
+          showCopilotHud(turns > 0 ? `AI 助手正在开启上下文记忆 (${turns} 轮)…` : 'AI 助手正在关闭上下文记忆…', 'running', 10000)
+          await highlightFieldStep('.model-settings-panel .ms-row:nth-child(7)', () => {
+            settings.memory.enabled = turns > 0
+            if (turns > 0) settings.memory.value = turns
+          })
+          await nextTick()
+        }
+        if (fd.memoryCompression != null && settings.memory.enabled) {
+          showCopilotHud(fd.memoryCompression ? 'AI 助手正在开启记忆压缩…' : 'AI 助手正在关闭记忆压缩…', 'running', 10000)
+          await highlightFieldStep('.model-settings-panel .ms-row-sub', () => {
+            settings.memoryCompression.enabled = !!fd.memoryCompression
+          })
+        }
+        if (fd.thinkingMode != null) {
+          showCopilotHud(`AI 助手正在切换思考模式 → ${fd.thinkingMode}…`, 'running', 10000)
+          await highlightFieldStep('.model-settings-panel select.ms-select:last-of-type', () => {
+            settings.thinking.value = String(fd.thinkingMode)
+          })
+        }
+        showCopilotHud('AI 助手正在保存模型设置…', 'running', 8000)
+        await pressElement('.model-settings-panel .ms-footer .ms-save', 380)
+      } finally {
+        settingsOpen.value = false
+      }
+    }
+
+    const [res] = await Promise.all([http.get(`/api/agents/${agent.value.id}`), loadRouteOptions()])
+    if (res?.success && res.data) {
+      agent.value = res.data
+      setAssistantResource('AGENT', res.data.id, res.data.name)
+      applyAgentSettings(res.data)
+      syncRouteFromAgent(res.data)
+      boundSkillIds.value = Array.isArray(res.data.skillIds) ? [...res.data.skillIds] : []
+      loadPersistedTools(res.data)
+      await nextTick()
+      spotlightElement('.model-settings-wrap', { durationMs: 2400, scroll: false, variant: 'flash' })
+      showToast('AI 助手已同步智能体模型与参数设置', 'success', 2200)
+    }
+    finishCopilotHud('智能体模型与参数设置已保存')
+    return
+  }
+
+  if (effect.kind === 'agent_kb_updated') {
+    pageTab.value = 'orchestrate'
+    await nextTick()
+    spotlightElement('[data-copilot-section="kb"]', { durationMs: 2600, variant: 'pulse' })
+    const isUnbind = effect.operation === 'unbind'
+    if (isUnbind) {
+      showCopilotHud('AI 助手正在取消关联知识库…', 'running', 8000)
+      await sleep(450)
+    } else {
+      showCopilotHud('AI 助手正在打开「关联知识库」弹窗…', 'running', 10000)
+      await pressElement('[data-copilot-section="kb"] .btn-tools-add', 340)
+      await loadKnowledgeCatalog()
+      addKnowledgeModalOpen.value = true
+      await nextTick()
+      await sleep(260)
+      try {
+        showCopilotHud('AI 助手正在勾选目标知识库并保存…', 'running', 10000)
+        await pressElement('.tool-modal-dialog .btn-catalog-add:not(:disabled), .tool-modal-dialog .btn-modal-cancel', 420)
+      } finally {
+        addKnowledgeModalOpen.value = false
+      }
+    }
+    const [res] = await Promise.all([http.get(`/api/agents/${agent.value.id}`), loadKnowledgeCatalog()])
+    if (res?.success && res.data) {
+      agent.value = res.data
+      boundKbIds.value = Array.isArray(res.data.knowledgeBaseIds) ? [...res.data.knowledgeBaseIds] : []
+      await nextTick()
+      spotlightElement('[data-copilot-section="kb"]', { durationMs: 2400, variant: 'flash' })
+      showToast(isUnbind ? 'AI 助手已取消关联知识库' : 'AI 助手已关联知识库', 'success', 2200)
+    }
+    finishCopilotHud(isUnbind ? '已取消关联知识库' : '智能体关联知识库已保存')
+    return
+  }
+
+  if (effect.kind === 'agent_share_updated') {
+    pageTab.value = 'api'
+    accessTab.value = 'web'
+    await nextTick()
+    spotlightElement('.access-entry-switch', { durationMs: 2200, scroll: false, variant: 'flash' })
+    finishCopilotHud('分享链接状态已更新')
+    return
+  }
+
+  if (effect.kind === 'agent_status_updated') {
+    const res = await http.get(`/api/agents/${agent.value.id}`)
+    if (res?.success && res.data) {
+      agent.value = res.data
+      await nextTick()
+      spotlightElement('.header-agent-badge', { durationMs: 2200, scroll: false, variant: 'flash' })
+    }
+    finishCopilotHud('智能体运行状态已更新')
+    return
+  }
+
+  if (effect.kind === 'navigate' && effect.target === 'agent_debug') {
+    const sub = String(effect.subTab || '').toLowerCase()
+    if (sub === 'logs') pageTab.value = 'logs'
+    else if (sub === 'monitor') pageTab.value = 'monitor'
+    else if (sub === 'api' || sub === 'access') pageTab.value = 'api'
+    else pageTab.value = 'orchestrate'
+    await nextTick()
+    spotlightElement(pageTab.value === 'orchestrate' ? '.prompt-editor-card' : '.debug-tabs', { durationMs: 2000, scroll: false, variant: 'flash' })
+    finishCopilotHud(effect.label ? effect.label.replace('正在打开', '已打开') : `已进入「${agent.value.name}」调试页`)
+    return
+  }
+
+  if (effect.kind === 'focus_agent' && effect.openTab === 'logs') {
+    pageTab.value = 'logs'
+    await nextTick()
+    finishCopilotHud('已切换到智能体调用日志')
+  }
+}
+
 onMounted(async () => {
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp)
   document.addEventListener('mousedown', onDocClick)
+  stopAssistantUiBridge = onAssistantUiEffect(handleAssistantUiEffect)
   setAssistantPage('debug')
   const [res] = await Promise.all([http.get(`/api/agents/${route.params.id}`), loadRouteOptions()])
   if (res.success && res.data) {
@@ -2985,10 +3458,17 @@ onMounted(async () => {
     await loadKnowledgeCatalog()
     if (boundSkillIds.value.length) loadSkillOptions()
     resetChat()
-    // 从智能体列表的「链接即将到期」进来时直接打开分享链接
-    if (route.query.tab === 'access') {
+    // 支持通过 URL 参数直接打开指定子页签（如 ?tab=access / logs / monitor / api）
+    if (route.query.tab === 'access' || route.query.tab === 'api') {
       pageTab.value = 'api'
       accessTab.value = 'web'
+    } else if (route.query.tab === 'logs' || route.query.tab === 'monitor') {
+      pageTab.value = route.query.tab
+    }
+    const pending = consumePendingUiEffect((e) => e.target === 'agent_debug' && (!e.agentId || e.agentId === res.data.id))
+    if (pending) {
+      await nextTick()
+      await handleAssistantUiEffect(pending)
     }
   } else {
     showToast('未能加载智能体信息', 'error')
@@ -2996,6 +3476,10 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  if (stopAssistantUiBridge) {
+    stopAssistantUiBridge()
+    stopAssistantUiBridge = null
+  }
   clearAssistantResource()
   document.removeEventListener('mousemove', onMove)
   document.removeEventListener('mouseup', onUp)
@@ -3674,5 +4158,11 @@ onUnmounted(() => {
 .debug-var-textarea {
   resize: vertical;
   min-height: 48px;
+}
+
+.ms-row-sub {
+  padding-left: 16px;
+  border-left: 2px solid rgba(59, 130, 246, 0.28);
+  margin-left: 8px;
 }
 </style>

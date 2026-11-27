@@ -212,9 +212,18 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { nextTick, onMounted, reactive, ref } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
+import {
+  animateFieldType,
+  finishCopilotHud,
+  highlightFieldStep,
+  pressElement,
+  showCopilotHud,
+  sleep,
+  spotlightElement
+} from '../composables/useAssistantUiBridge'
 
 const emit = defineEmits(['changed'])
 const { showToast } = useToast()
@@ -435,8 +444,44 @@ async function updateTool(server, tool, body) {
   return true
 }
 
+async function applyAssistantUiEffect(effect) {
+  if (!effect) return
+  if (effect.kind === 'resource_created' && effect.formData) {
+    const fd = effect.formData
+    showCopilotHud('AI 助手正在打开「新增 MCP 服务」弹窗…', 'running', 12000)
+    await pressElement('.mcp-intro .btn-create-agent, .btn-create-agent', 320)
+    Object.assign(form, emptyForm())
+    editorOpen.value = true
+    await nextTick()
+    await sleep(240)
+    try {
+      const dlg = '.tool-modal-dialog'
+      const inputs = document.querySelectorAll(`${dlg} input[type="text"], ${dlg} input[type="url"], ${dlg} input:not([type])`)
+      if (fd.name) {
+        showCopilotHud(`AI 助手正在填写 MCP 服务名称「${fd.name}」…`, 'running', 12000)
+        await animateFieldType('mcp-name', (v) => { form.name = v }, inputs[0], fd.name, 400)
+      }
+      if (fd.url) {
+        showCopilotHud('AI 助手正在填写 MCP 服务地址…', 'running', 12000)
+        await animateFieldType('mcp-url', (v) => { form.url = v }, inputs[1], fd.url, 440)
+      }
+      if (fd.transport) {
+        await highlightFieldStep(`${dlg} select`, () => { form.transport = fd.transport })
+      }
+      showCopilotHud('AI 助手正在保存 MCP 服务…', 'running', 10000)
+      await pressElement(`${dlg} .btn-modal-save`, 400)
+    } finally {
+      editorOpen.value = false
+    }
+  }
+  await load()
+  await nextTick()
+  spotlightElement('.mcp-server-card, .mcp-panel', { durationMs: 2200, variant: 'flash' })
+  finishCopilotHud(effect.label || 'MCP 服务列表已同步')
+}
+
 onMounted(load)
-defineExpose({ load })
+defineExpose({ load, applyAssistantUiEffect })
 </script>
 
 <style scoped>

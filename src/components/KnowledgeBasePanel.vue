@@ -2245,8 +2245,18 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { clearAssistantResource, setAssistantResource } from '../composables/useAssistantContext'
+import {
+  animateFieldType,
+  animateTextInput,
+  finishCopilotHud,
+  highlightFieldStep,
+  pressElement,
+  showCopilotHud,
+  sleep,
+  spotlightElement
+} from '../composables/useAssistantUiBridge'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import KbAvatar from './KbAvatar.vue'
@@ -2346,10 +2356,264 @@ async function openById(id) {
   return false
 }
 
+async function applyAssistantUiEffect(effect) {
+  if (!effect) return
+  if (effect.kind === 'search') {
+    currentView.value = 'list'
+    selectedKb.value = null
+    clearAssistantResource()
+    scopeFilter.value = 'all'
+    kbPage.value = 1
+    await nextTick()
+    spotlightElement('.kb-toolbar .search-box-wrapper, .kb-list-view input[type="search"], .kb-list-view input', { durationMs: 1800, scroll: false, variant: 'pulse' })
+    if (effect.keyword) {
+      animateTextInput('kb-search', (v) => { searchKeyword.value = v }, effect.keyword, {
+        durationMs: 400,
+        async onDone() {
+          await loadKnowledgeBases()
+          await nextTick()
+          spotlightElement('.kb-card, .kb-table tbody tr', { durationMs: 2200, variant: 'flash' })
+          finishCopilotHud(`已在知识库中搜索「${effect.keyword}」`)
+        }
+      })
+      return
+    }
+    searchKeyword.value = ''
+    await loadKnowledgeBases()
+    finishCopilotHud('已刷新知识库列表')
+    return
+  }
+
+  if (effect.kind === 'resource_created') {
+    const fd = effect.formData || {}
+    currentView.value = 'list'
+    selectedKb.value = null
+    clearAssistantResource()
+    await nextTick()
+    showCopilotHud('AI 助手正在点击「新建知识库」…', 'running', 12000)
+    await pressElement('.kb-list-view .btn-create-agent, .btn-create-agent', 340)
+    Object.assign(kbForm, {
+      id: '',
+      name: '',
+      description: '',
+      provider: fd.provider || props.provider || 'SPRING_AI',
+      searchMethod: 'hybrid_search',
+      topK: 3,
+      scoreThreshold: 0.5,
+      vectorWeight: 0.5,
+      keywordWeight: 0.5,
+      rerankMode: 'weighted_score'
+    })
+    kbModalOpen.value = true
+    await nextTick()
+    await sleep(240)
+    try {
+      const dlg = '.modal-backdrop.open .modal-dialog'
+      if (fd.name) {
+        showCopilotHud(`AI 助手正在填写知识库名称「${fd.name}」…`, 'running', 12000)
+        await animateFieldType('kb-name', (v) => { kbForm.name = v }, document.querySelector(`${dlg} input[required]`), fd.name, 420)
+      }
+      if (fd.description) {
+        showCopilotHud('AI 助手正在填写知识库描述…', 'running', 12000)
+        await animateFieldType('kb-desc', (v) => { kbForm.description = v }, document.querySelector(`${dlg} textarea`), fd.description, 420)
+      }
+      showCopilotHud('AI 助手正在点击「立即创建知识库」…', 'running', 10000)
+      await pressElement(`${dlg} button[type="submit"]`, 400)
+    } finally {
+      kbModalOpen.value = false
+    }
+    searchKeyword.value = ''
+    kbPage.value = 1
+    await loadKnowledgeBases()
+    await nextTick()
+    spotlightElement('.kb-card, .kb-table tbody tr', { durationMs: 2400, variant: 'flash' })
+    finishCopilotHud(fd.name ? `已新建知识库「${fd.name}」` : '知识库已创建并刷新列表')
+    return
+  }
+
+  if (effect.kind === 'kb_settings_updated') {
+    if (effect.kbId && (!selectedKb.value || selectedKb.value.id !== effect.kbId)) {
+      await openById(effect.kbId)
+    }
+    await nextTick()
+    const fd = effect.formData || {}
+    if (selectedKb.value) {
+      showCopilotHud('AI 助手正在打开「编辑知识库配置」弹窗…', 'running', 12000)
+      await pressElement('button[title="编辑知识库信息"]', 320)
+      openEditKb(selectedKb.value)
+      await nextTick()
+      await sleep(240)
+      try {
+        const dlg = '.modal-backdrop.open .modal-dialog'
+        if (fd.searchMethod) {
+          showCopilotHud(`AI 助手正在切换检索方式…`, 'running', 10000)
+          await highlightFieldStep(`${dlg} .search-method-cards, ${dlg} .modal-body`, () => { kbForm.searchMethod = fd.searchMethod })
+        }
+        if (fd.topK != null) {
+          showCopilotHud(`AI 助手正在调整 Top K → ${fd.topK}…`, 'running', 10000)
+          await highlightFieldStep(`${dlg} input[type="range"]`, () => { kbForm.topK = Number(fd.topK) })
+        }
+        if (fd.vectorWeight != null) {
+          await highlightFieldStep(`${dlg} .weights-control-card`, () => {
+            kbForm.vectorWeight = Number(fd.vectorWeight)
+            kbForm.keywordWeight = Number((1 - Number(fd.vectorWeight)).toFixed(2))
+          })
+        }
+        if (fd.rerankMode) {
+          await highlightFieldStep(`${dlg} .hybrid-rerank-container`, () => { kbForm.rerankMode = fd.rerankMode })
+        }
+        showCopilotHud('AI 助手正在保存知识库配置…', 'running', 10000)
+        await pressElement(`${dlg} button[type="submit"]`, 400)
+      } finally {
+        kbModalOpen.value = false
+      }
+      await openById(selectedKb.value.id)
+    } else {
+      await loadKnowledgeBases()
+    }
+    finishCopilotHud('知识库检索参数已更新保存')
+    return
+  }
+
+  if (effect.kind === 'kb_rebuild') {
+    if (effect.kbId && (!selectedKb.value || selectedKb.value.id !== effect.kbId)) {
+      await openById(effect.kbId)
+    }
+    activeSubTab.value = 'documents'
+    await nextTick()
+    await loadDocuments()
+    spotlightElement('.kb-detail-header, .kb-tab-content', { durationMs: 2200, scroll: false, variant: 'flash' })
+    finishCopilotHud('已启动知识库索引重建')
+    return
+  }
+
+  if (effect.kind === 'kb_eval') {
+    if (effect.kbId && (!selectedKb.value || selectedKb.value.id !== effect.kbId)) {
+      await openById(effect.kbId)
+    }
+    activeSubTab.value = 'evaluation'
+    await nextTick()
+    spotlightElement('.kb-tab-content', { durationMs: 2200, scroll: false, variant: 'flash' })
+    finishCopilotHud('已切换到检索评测并启动评测任务')
+    return
+  }
+
+  if (effect.kind === 'focus_kb_tab' || effect.kind === 'faq_mutated') {
+    if (effect.kbId && (!selectedKb.value || selectedKb.value.id !== effect.kbId)) {
+      await openById(effect.kbId)
+    }
+    await nextTick()
+    if (selectedKb.value) {
+      if (effect.kind === 'faq_mutated' && effect.formData) {
+        activeSubTab.value = 'faqs'
+        await nextTick()
+        const fd = effect.formData
+        const isUpdate = effect.operation === 'update'
+        showCopilotHud(isUpdate ? 'AI 助手正在打开「编辑 FAQ」弹窗…' : 'AI 助手正在点击「新增 FAQ」…', 'running', 12000)
+        await pressElement('.kb-tab-content .btn-create-agent', 320)
+        Object.assign(faqForm, {
+          id: isUpdate ? (effect.faqId || 'edit') : '',
+          question: '',
+          category: '',
+          answer: '',
+          imageUrls: Array.isArray(fd.imageUrls) ? [...fd.imageUrls] : [],
+          videoUrls: Array.isArray(fd.videoUrls) ? [...fd.videoUrls] : []
+        })
+        faqModalOpen.value = true
+        await nextTick()
+        await sleep(240)
+        try {
+          const dlg = '.modal-backdrop.open .modal-dialog'
+          if (fd.question) {
+            showCopilotHud('AI 助手正在输入 FAQ 问题…', 'running', 12000)
+            await animateFieldType('faq-q', (v) => { faqForm.question = v }, document.querySelector(`${dlg} input[required]`), fd.question, 420)
+          }
+          if (fd.category) {
+            const inputs = document.querySelectorAll(`${dlg} input.form-control-styled`)
+            await animateFieldType('faq-cat', (v) => { faqForm.category = v }, inputs[1], fd.category, 300)
+          }
+          if (fd.answer) {
+            showCopilotHud('AI 助手正在输入 FAQ 标准答案…', 'running', 12000)
+            await animateFieldType('faq-a', (v) => { faqForm.answer = v }, document.querySelector(`${dlg} textarea`), fd.answer, 620)
+          }
+          showCopilotHud('AI 助手正在保存 FAQ…', 'running', 10000)
+          await pressElement(`${dlg} button[type="submit"]`, 400)
+        } finally {
+          faqModalOpen.value = false
+        }
+        faqPage.value = 1
+        await loadFaqs()
+        await nextTick()
+        spotlightElement('.faq-item, .faq-card, .kb-tab-content tbody tr', { durationMs: 2400, variant: 'flash' })
+        finishCopilotHud(isUpdate ? 'FAQ 已更新并保存' : 'FAQ 已新增并保存')
+        return
+      }
+      if (effect.subTab === 'faqs') {
+        activeSubTab.value = 'faqs'
+        await nextTick()
+        if (effect.keyword) {
+          animateTextInput('kb-faq-search', (v) => { faqSearchKeyword.value = v }, effect.keyword, {
+            durationMs: 400,
+            async onDone() {
+              faqPage.value = 1
+              await loadFaqs()
+              await nextTick()
+              spotlightElement('.faq-item, .faq-card, .kb-tab-content tbody tr', { durationMs: 2200, variant: 'flash' })
+              finishCopilotHud(`已在 FAQ 中搜索「${effect.keyword}」`)
+            }
+          })
+          return
+        }
+        faqPage.value = 1
+        await loadFaqs()
+        await nextTick()
+        spotlightElement('.faq-item, .faq-card, .kb-tab-content tbody tr', { durationMs: 2200, variant: 'flash' })
+        finishCopilotHud(effect.label || 'FAQ 列表已刷新')
+        return
+      }
+      if (effect.subTab === 'documents') {
+        activeSubTab.value = 'documents'
+        await nextTick()
+        if (effect.keyword) {
+          animateTextInput('kb-doc-search', (v) => { docSearchKeyword.value = v }, effect.keyword, {
+            durationMs: 400,
+            async onDone() {
+              docPage.value = 1
+              await loadDocuments()
+              await nextTick()
+              spotlightElement('.doc-item, .kb-tab-content tbody tr', { durationMs: 2200, variant: 'flash' })
+              finishCopilotHud(`已在文档中搜索「${effect.keyword}」`)
+            }
+          })
+          return
+        }
+        docPage.value = 1
+        await loadDocuments()
+        finishCopilotHud(effect.label || '文档列表已刷新')
+        return
+      }
+    }
+  }
+
+  if (currentView.value === 'detail' && selectedKb.value) {
+    if (effect.kind === 'resource_deleted' && effect.resourceId === selectedKb.value.id) {
+      resetToList(true)
+    } else {
+      await Promise.all([loadDocuments(), loadFaqs()])
+    }
+  } else {
+    await loadKnowledgeBases()
+    await nextTick()
+    spotlightElement('.kb-card, .kb-table tbody tr', { durationMs: 2200, variant: 'flash' })
+  }
+  finishCopilotHud(effect.label || '知识库已同步更新')
+}
+
 defineExpose({
   resetToList,
   loadKnowledgeBases,
-  openById
+  openById,
+  applyAssistantUiEffect
 })
 
 // ==================== 重建索引（3.2：切片加上下文标题后，已有文档重建一次才生效） ====================

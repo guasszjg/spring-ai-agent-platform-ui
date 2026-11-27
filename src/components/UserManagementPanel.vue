@@ -740,9 +740,19 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
+import {
+  animateFieldType,
+  animateTextInput,
+  finishCopilotHud,
+  highlightFieldStep,
+  pressElement,
+  showCopilotHud,
+  sleep,
+  spotlightElement
+} from '../composables/useAssistantUiBridge'
 import UserAvatar from './UserAvatar.vue'
 
 const props = defineProps({
@@ -1120,9 +1130,64 @@ function resetUsers(forceReload = true) {
   }
 }
 
+async function applyAssistantUiEffect(effect) {
+  if (!effect) return
+  if (effect.kind === 'search') {
+    selectedRole.value = ''
+    selectedStatus.value = ''
+    spotlightElement('.users-panel-page .search-box-wrapper, .users-panel-page input[type="search"], .users-panel-page input', { durationMs: 1800, scroll: false, variant: 'pulse' })
+    if (effect.keyword) {
+      animateTextInput('users-search', (v) => { searchKeyword.value = v }, effect.keyword, {
+        durationMs: 400,
+        async onDone() {
+          await fetchUsers()
+          spotlightElement('.users-panel-page tbody tr, .users-panel-page .user-card', { durationMs: 2200, variant: 'flash' })
+          finishCopilotHud(`已在用户列表中搜索「${effect.keyword}」`)
+        }
+      })
+      return
+    }
+    searchKeyword.value = ''
+    await fetchUsers()
+    finishCopilotHud('已刷新用户列表')
+    return
+  }
+  if (effect.kind === 'resource_created' && effect.formData) {
+    const fd = effect.formData
+    showCopilotHud('AI 助手正在打开「新建用户」弹窗…', 'running', 12000)
+    await pressElement('.users-panel-page .btn-create-agent, .users-panel-page .btn-primary', 320)
+    Object.assign(createForm, { username: '', nickname: '', role: 'DEVELOPER', password: '', mustChangePassword: true, providerCodes: [] })
+    showCreateModal.value = true
+    await nextTick()
+    await sleep(240)
+    try {
+      const dlg = '.users-panel-page .modal-backdrop.open .modal-dialog'
+      const inputs = document.querySelectorAll(`${dlg} input[type="text"], ${dlg} input:not([type])`)
+      if (fd.username) {
+        showCopilotHud(`AI 助手正在填写用户名「${fd.username}」…`, 'running', 12000)
+        await animateFieldType('user-name', (v) => { createForm.username = v }, inputs[0], fd.username, 380)
+      }
+      if (fd.nickname) {
+        await animateFieldType('user-nick', (v) => { createForm.nickname = v }, inputs[1], fd.nickname, 380)
+      }
+      if (fd.role) {
+        await highlightFieldStep(`${dlg} .role-radio-card`, () => { createForm.role = fd.role })
+      }
+      showCopilotHud('AI 助手正在保存新用户…', 'running', 10000)
+      await pressElement(`${dlg} button[type="submit"], ${dlg} .btn-create-agent`, 400)
+    } finally {
+      showCreateModal.value = false
+    }
+  }
+  await fetchUsers()
+  spotlightElement('.users-panel-page tbody tr, .users-panel-page .user-card', { durationMs: 2200, variant: 'flash' })
+  finishCopilotHud(effect.label || '用户列表已同步更新')
+}
+
 defineExpose({
   resetUsers,
-  fetchUsers
+  fetchUsers,
+  applyAssistantUiEffect
 })
 
 onMounted(() => {

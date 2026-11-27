@@ -103,6 +103,15 @@
           <button type="button" class="ms-close" @click="closeDetail"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="logs-drawer-body">
+          <div v-if="detail.conversation?.memorySummary" class="logs-memory-summary">
+            <div class="logs-memory-head">
+              <span><i class="fa-solid fa-compress"></i> 早期记忆摘要</span>
+              <span v-if="detail.conversation?.summaryMsgCount" class="logs-memory-count">
+                已压缩前 {{ detail.conversation.summaryMsgCount }} 条消息
+              </span>
+            </div>
+            <div class="logs-memory-body">{{ detail.conversation.memorySummary }}</div>
+          </div>
           <div v-for="msg in detail.messages || []" :key="msg.id" class="logs-msg" :class="'logs-msg-' + msg.role">
             <div class="logs-msg-role">{{ msg.role === 'user' ? '用户' : '智能体' }}</div>
             <div class="logs-msg-content">{{ msg.content }}</div>
@@ -292,5 +301,38 @@ onMounted(reload)
 
 .logs-trace-panel-wrap {
   margin-top: 10px;
+}
+
+.logs-memory-summary {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.logs-memory-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-blue, #3b82f6);
+}
+
+.logs-memory-count {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.logs-memory-body {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>

@@ -14,15 +14,19 @@
       <component :is="Component" :key="route.name === 'debug' ? route.path : undefined" />
     </keep-alive>
   </router-view>
+  <!-- 全局单实例 AI 助手：跨路由跳转（控制台 ↔ 调试页）时不断流、不关闭、持续联动 -->
+  <AssistantDock v-if="showAssistantDock" :launcher-bottom="route.name === 'debug' ? 132 : 28" />
 </template>
 
 <script setup>
-import { watch } from 'vue'
+import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useToast } from './composables/useToast'
+import AssistantDock from './components/AssistantDock.vue'
 
 const route = useRoute()
 const { toasts } = useToast()
+const showAssistantDock = computed(() => Boolean(route.name && route.name !== 'login' && route.name !== 'share-chat'))
 
 function applyBodyClass(name) {
   if (name === 'share-chat') {

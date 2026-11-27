@@ -35,7 +35,7 @@
       </button>
     </div>
 
-    <McpServersPanel v-if="isSuperAdmin && tab === 'mcp'" @changed="onMcpChanged" />
+    <McpServersPanel v-if="isSuperAdmin && tab === 'mcp'" ref="mcpPanelRef" @changed="onMcpChanged" />
 
     <div v-show="tab === 'tools'">
     <div class="tools-settings-bar">
@@ -614,10 +614,20 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { categoryLabel, FALLBACK_PLATFORM_TOOLS, freshnessLabel, timezoneLabel } from '../composables/platformTools'
+import {
+  animateFieldType,
+  animateTextInput,
+  finishCopilotHud,
+  highlightFieldStep,
+  pressElement,
+  showCopilotHud,
+  sleep,
+  spotlightElement
+} from '../composables/useAssistantUiBridge'
 import ToolGlyph from './ToolGlyph.vue'
 import McpServersPanel from './McpServersPanel.vue'
 
@@ -629,6 +639,7 @@ const props = defineProps({
 const { showToast } = useToast()
 const VIEW_MODE_KEY = 'toolsViewMode'
 const tab = ref('tools')
+const mcpPanelRef = ref(null)
 const mcpPending = ref(0)
 
 function onMcpChanged(servers) {
@@ -1115,7 +1126,87 @@ async function saveEditor() {
   }
 }
 
-defineExpose({ loadTools: reloadAll })
+async function applyAssistantUiEffect(effect) {
+  if (!effect) return
+  if (effect.subTab === 'mcp') {
+    tab.value = 'mcp'
+    await nextTick()
+    if (mcpPanelRef.value?.applyAssistantUiEffect) {
+      await mcpPanelRef.value.applyAssistantUiEffect(effect)
+      return
+    }
+    spotlightElement('.tools-tabs, .mcp-panel', { durationMs: 2000, scroll: false, variant: 'flash' })
+    finishCopilotHud(effect.label || '已切换到 MCP 服务列表')
+    return
+  }
+  tab.value = 'tools'
+  await nextTick()
+  if (effect.kind === 'search') {
+    category.value = 'ALL'
+    page.value = 1
+    spotlightElement('.tools-toolbar .search-box-wrapper, .tools-toolbar input', { durationMs: 1800, scroll: false, variant: 'pulse' })
+    if (effect.keyword) {
+      animateTextInput('tools-search', (v) => { keyword.value = v }, effect.keyword, {
+        durationMs: 400,
+        async onDone() {
+          await loadTools()
+          await nextTick()
+          spotlightElement('.tool-card, .tools-table tbody tr', { durationMs: 2200, variant: 'flash' })
+          finishCopilotHud(`已在工具管理中搜索「${effect.keyword}」`)
+        }
+      })
+      return
+    }
+    keyword.value = ''
+    await loadTools()
+    finishCopilotHud('已刷新工具列表')
+    return
+  }
+  if (effect.kind === 'resource_created' && effect.formData) {
+    const fd = effect.formData
+    showCopilotHud('AI 助手正在打开「新建自定义 HTTP 工具」弹窗…', 'running', 12000)
+    await pressElement('.tools-header .btn-create-agent, .btn-create-agent', 320)
+    creating.value = true
+    editing.value = null
+    Object.assign(form, {
+      name: '', apiKey: '', count: 5, freshness: 'noLimit', summary: true,
+      timezone: 'Asia/Shanghai', format: 'yyyy-MM-dd HH:mm:ss', description: '',
+      method: 'POST', url: '', timeoutSeconds: 8, unitPrice: ''
+    })
+    editorOpen.value = true
+    await nextTick()
+    await sleep(240)
+    try {
+      const dlg = '.tool-modal-dialog'
+      const inputs = document.querySelectorAll(`${dlg} input[type="text"], ${dlg} input[type="url"], ${dlg} input:not([type])`)
+      if (fd.title || fd.name) {
+        showCopilotHud(`AI 助手正在填写工具名称「${fd.title || fd.name}」…`, 'running', 12000)
+        await animateFieldType('tool-name', (v) => { form.name = v }, inputs[0], fd.title || fd.name, 400)
+      }
+      if (fd.method) {
+        await highlightFieldStep(`${dlg} select`, () => { form.method = fd.method })
+      }
+      if (fd.url) {
+        showCopilotHud('AI 助手正在填写接口地址…', 'running', 12000)
+        await animateFieldType('tool-url', (v) => { form.url = v }, inputs[1], fd.url, 440)
+      }
+      if (fd.description) {
+        showCopilotHud('AI 助手正在填写工具提示词描述…', 'running', 12000)
+        await animateFieldType('tool-desc', (v) => { form.description = v }, document.querySelector(`${dlg} textarea`), fd.description, 520)
+      }
+      showCopilotHud('AI 助手正在保存自定义工具…', 'running', 10000)
+      await pressElement(`${dlg} .btn-modal-save`, 400)
+    } finally {
+      editorOpen.value = false
+    }
+  }
+  await reloadAll()
+  await nextTick()
+  spotlightElement('.tool-card, .tools-table tbody tr', { durationMs: 2200, variant: 'flash' })
+  finishCopilotHud(effect.label || '工具列表已同步更新')
+}
+
+defineExpose({ loadTools: reloadAll, applyAssistantUiEffect })
 
 watch(viewMode, (mode) => {
   localStorage.setItem(VIEW_MODE_KEY, mode)

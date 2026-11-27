@@ -283,10 +283,19 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { renderMarkdown } from '../utils/markdown'
+import {
+  animateFieldType,
+  animateTextInput,
+  finishCopilotHud,
+  pressElement,
+  showCopilotHud,
+  sleep,
+  spotlightElement
+} from '../composables/useAssistantUiBridge'
 
 const props = defineProps({
   canManage: { type: Boolean, default: false },
@@ -583,7 +592,64 @@ onMounted(() => {
   if (props.active) load()
 })
 
-defineExpose({ load })
+async function applyAssistantUiEffect(effect) {
+  if (!effect) return
+  await load()
+  await nextTick()
+  if (effect.kind === 'search') {
+    scope.value = 'all'
+    spotlightElement('.skill-search, .skills-panel input, .skill-toolbar input', { durationMs: 1800, scroll: false, variant: 'pulse' })
+    if (effect.keyword) {
+      animateTextInput('skills-search', (v) => { keyword.value = v }, effect.keyword, {
+        durationMs: 400,
+        async onDone() {
+          await nextTick()
+          spotlightElement('.skill-card, .skill-item', { durationMs: 2200, variant: 'flash' })
+          finishCopilotHud(`已在技能库中筛选「${effect.keyword}」`)
+        }
+      })
+      return
+    }
+    keyword.value = ''
+    finishCopilotHud('已刷新技能库列表')
+    return
+  }
+  if (effect.kind === 'resource_created' && effect.formData) {
+    const fd = effect.formData
+    showCopilotHud('AI 助手正在打开「新建技能」弹窗…', 'running', 12000)
+    await pressElement('.skill-header .btn-create-agent, .btn-create-agent', 320)
+    Object.assign(form, emptyForm())
+    readonly.value = false
+    editorOpen.value = true
+    await nextTick()
+    await sleep(240)
+    try {
+      const dlg = '.tool-modal-dialog'
+      if (fd.name) {
+        showCopilotHud(`AI 助手正在填写技能名称「${fd.name}」…`, 'running', 12000)
+        await animateFieldType('skill-name', (v) => { form.name = v }, document.querySelector(`${dlg} input`), fd.name, 400)
+      }
+      if (fd.description) {
+        const inputs = document.querySelectorAll(`${dlg} input`)
+        await animateFieldType('skill-desc', (v) => { form.description = v }, inputs[1], fd.description, 380)
+      }
+      if (fd.content) {
+        showCopilotHud('AI 助手正在编写技能步骤内容…', 'running', 12000)
+        await animateFieldType('skill-content', (v) => { form.content = v }, document.querySelector(`${dlg} textarea`), fd.content, 650)
+      }
+      showCopilotHud('AI 助手正在保存技能…', 'running', 10000)
+      await pressElement(`${dlg} .btn-modal-save`, 400)
+    } finally {
+      editorOpen.value = false
+    }
+    await load()
+    await nextTick()
+  }
+  spotlightElement('.skill-card, .skill-item', { durationMs: 2200, variant: 'flash' })
+  finishCopilotHud(effect.label || '技能库列表已同步')
+}
+
+defineExpose({ load, applyAssistantUiEffect })
 </script>
 
 <style scoped>
