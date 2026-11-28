@@ -228,10 +228,12 @@ async function reload() {
     records.value = res.data.records || []
     total.value = res.data.total || 0
     totalPages.value = res.data.totalPages || 1
+    return true
   } else {
     records.value = []
     total.value = 0
     totalPages.value = 1
+    return false
   }
 }
 
@@ -264,8 +266,31 @@ async function openDetail(item) {
   const res = await http.get(`/api/agents/${props.agentId}/logs/${item.id}`)
   if (res.success) {
     detail.value = res.data
+    return true
   }
+  return false
 }
+
+async function applyAssistantUiEffect(effect) {
+  if (detail.value) return false
+  const ref = effect.resourceRef
+  const traceId = effect.formData?.traceMessageId
+  if (ref) {
+    if (!(await openDetail({ id: encodeURIComponent(ref) }))) return false
+    if (traceId) {
+      const message = detail.value?.messages?.find(msg => String(msg.id) === traceId)
+      if (!message || !parseTrace(message.traceJson)) return false
+      toggleTrace(message.id)
+    }
+    return true
+  }
+  clearTimeout(searchTimer)
+  keyword.value = typeof effect.formData?.keyword === 'string' ? effect.formData.keyword : ''
+  page.value = 1
+  return reload()
+}
+
+defineExpose({ applyAssistantUiEffect })
 
 onMounted(reload)
 </script>

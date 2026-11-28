@@ -63,8 +63,9 @@ function refreshAll() {
 }
 
 async function applyAssistantUiEffect(effect) {
-  await refreshAll()
-  return effect
+  if (effect.kind === 'console_form') return refs[props.section]?.value?.applyAssistantUiEffect?.(effect)
+  await refreshSection(props.section)
+  return true
 }
 
 defineExpose({ refreshSection, refreshAll, applyAssistantUiEffect })

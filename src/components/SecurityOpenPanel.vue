@@ -893,7 +893,7 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-secondary" @click="clientModalOpen = false">取消</button>
-          <button type="submit" class="btn-create-agent">
+          <button type="submit" class="btn-create-agent" :disabled="savingClient">
             <i class="fa-solid fa-check"></i>
             <span>{{ clientForm.id ? '保存修改' : '确认登记' }}</span>
           </button>
@@ -1239,6 +1239,7 @@
 </template>
 
 <script setup>
+import { findAssistantResource, fillAssistantDraft } from '../composables/useAssistantUiBridge'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
@@ -1369,6 +1370,7 @@ function scopeName(id) {
 const plaintextModal = reactive({ open: false, value: '' })
 
 const clientModalOpen = ref(false)
+const savingClient = ref(false)
 const clientForm = reactive({ id: '', clientType: 'SN', clientId: '', label: '', rateLimitRpm: null, dailyTokenQuota: null })
 
 const providerModalOpen = ref(false)
@@ -1763,6 +1765,7 @@ function openEditClient(c) {
 }
 
 async function saveClient() {
+  if (savingClient.value) return
   const payload = {
     clientType: clientForm.clientType,
     clientId: clientForm.clientId,
@@ -1771,12 +1774,17 @@ async function saveClient() {
     dailyTokenQuota: clientForm.dailyTokenQuota || null
   }
   if (clientForm.id) payload.id = clientForm.id
-  const res = await http.post('/api/security/clients', payload)
-  if (res.success) {
-    clientModalOpen.value = false
-    showToast(clientForm.id ? '终端配置已更新' : '终端已成功登记', 'success')
-    await loadAll()
-  } else showToast(res.message || '保存失败', 'error')
+  savingClient.value = true
+  try {
+    const res = await http.post('/api/security/clients', payload)
+    if (res.success) {
+      clientModalOpen.value = false
+      showToast(clientForm.id ? '终端配置已更新' : '终端已成功登记', 'success')
+      await loadAll()
+    } else showToast(res.message || '保存失败', 'error')
+  } finally {
+    savingClient.value = false
+  }
 }
 
 async function setClientStatus(c, status) {
@@ -2123,6 +2131,7 @@ function editAlertRule(r) {
 }
 
 async function saveAlertRuleForm() {
+  if (alertModal.saving) return
   alertModal.saving = true
   try {
     const res = await http.post('/api/security/alerts/rules', {
@@ -2177,7 +2186,7 @@ function openRotateModal(k) {
 }
 
 async function confirmRotateKey() {
-  if (!rotateModal.key) return
+  if (!rotateModal.key || rotateModal.saving) return
   rotateModal.saving = true
   try {
     const res = await http.post(`/api/open-api-keys/${rotateModal.key.id}/rotate`, {
@@ -2223,6 +2232,45 @@ function resetAndReload(forceReload = true) {
 
 async function applyAssistantUiEffect(effect) {
   if (!effect) return
+  if (effect.kind === 'console_form') {
+    if (isViewer.value || keyModalOpen.value || clientModalOpen.value || savingClient.value || alertModal.open || rotateModal.open) return false
+    const { operation, resourceRef, formData } = effect
+    if (operation === 'key_create' || operation === 'key_rotate') {
+      innerTab.value = 'keys'
+      if (operation === 'key_create') {
+        openCreateKey()
+        fillAssistantDraft(keyForm, formData, ['name'])
+      } else {
+        const res = await http.get('/api/open-api-keys')
+        const key = res?.success && findAssistantResource(res.data || [], resourceRef)
+        if (!key || key.status !== 'ACTIVE') return false
+        openRotateModal(key)
+      }
+    } else {
+      if (operation.startsWith('terminal_')) {
+        innerTab.value = 'clients'
+        if (operation === 'terminal_create') openCreateClient()
+        else {
+          const res = await http.get('/api/security/clients')
+          const client = res?.success && findAssistantResource(res.data || [], resourceRef, row => row.clientId)
+          if (!client) return false
+          openEditClient(client)
+        }
+        fillAssistantDraft(clientForm, formData, ['label', 'rateLimitRpm', 'dailyTokenQuota'])
+      } else if (operation.startsWith('alert_')) {
+        innerTab.value = 'alerts'
+        if (operation === 'alert_create') openCreateAlertModal()
+        else {
+          await loadAlertRules()
+          const rule = findAssistantResource(alertRules.value, resourceRef)
+          if (!rule) return false
+          editAlertRule(rule)
+        }
+        fillAssistantDraft(alertModal, formData, ['name', 'threshold', 'timeWindowMinutes', 'silenceMinutes', 'enabled'])
+      } else return false
+    }
+    return true
+  }
   const tabMap = {
     api_key: 'keys',
     terminal: 'clients',

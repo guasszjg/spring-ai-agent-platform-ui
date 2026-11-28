@@ -551,6 +551,11 @@
           <!-- 拖拽上传框 -->
           <div
             class="kb-dropzone"
+            tabindex="0"
+            role="button"
+            aria-label="选择要上传的文档"
+            @keydown.enter.prevent="triggerFileInput"
+            @keydown.space.prevent="triggerFileInput"
             :class="{ dragging: isDragging }"
             @dragover.prevent="isDragging = true"
             @dragleave.prevent="isDragging = false"
@@ -571,10 +576,10 @@
               </div>
               <div class="dropzone-text">
                 <div class="dropzone-primary">
-                  {{ uploading ? '正在向 Dify 知识库切片上传中...' : '拖拽文档到此处，或点击浏览本地文件' }}
+                  {{ uploading ? '正在上传文档…' : '拖拽文档到此处，或点击浏览本地文件' }}
                 </div>
                 <div class="dropzone-hint">
-                  已适配 Dify 1.16+ 标准处理规则，上传后自动启动后台语义向量嵌入
+                  {{ isDifyPage ? '上传后由 Dify 处理和索引文档' : '上传后由平台解析、切片并建立索引' }}
                 </div>
               </div>
             </div>
@@ -790,7 +795,7 @@
         </div>
 
         <div v-else class="faq-cards-list">
-          <div v-for="faq in faqList" :key="faq.id" class="faq-card">
+          <div v-for="faq in faqList" :key="faq.id" class="faq-card" :data-copilot-faq="faq.id">
             <div class="faq-card-header">
               <div class="faq-q-line">
                 <span class="badge-q">问</span>
@@ -1499,6 +1504,7 @@
       <!-- TAB 4: 知识库成本与治理看板 -->
       <div v-if="activeSubTab === 'evaluation' && selectedKb" class="kb-tab-content">
         <KnowledgeEvalPanel
+          ref="knowledgeEvalPanel"
           :key="selectedKb.id"
           :kb="selectedKb"
           :can-manage="canManageKb(selectedKb)"
@@ -1849,14 +1855,20 @@
       <div class="modal-dialog" style="max-width: 600px;">
         <div class="modal-header">
           <h3>{{ faqForm.id ? '编辑问答 (FAQ)' : '新增高频问答 (FAQ)' }}</h3>
-          <button class="btn-modal-close" @click="faqModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
+          <button class="btn-modal-close" :disabled="savingFaq" @click="closeFaqModal"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <form @submit.prevent="saveFaq">
           <div class="modal-body">
+            <p v-if="faqPreview" class="section-hint">AI 助手已填入草稿，可以修改，确认后才会保存。</p>
+            <p v-if="faqPreview && typeof faqPreview.formData?.enabled === 'boolean'" class="section-hint">
+              问答状态将改为{{ faqPreview.formData.enabled ? '启用' : '停用' }}
+            </p>
+            <p v-if="faqPreviewError" role="alert">{{ faqPreviewError }}</p>
             <div class="form-group">
               <label class="form-label">用户常见问题 (Question) *</label>
               <input
                 v-model="faqForm.question"
+                ref="faqQuestionInput"
                 class="form-control-styled"
                 placeholder="例如：智能体 API 密钥丢失如何重置？"
                 required
@@ -2026,10 +2038,10 @@
           </div>
 
           <div class="modal-footer">
-            <button type="button" class="btn-secondary" @click="faqModalOpen = false">取消</button>
+            <button type="button" class="btn-secondary" :disabled="savingFaq" @click="closeFaqModal">{{ faqPreview ? '返回卡片' : '取消' }}</button>
             <button type="submit" class="btn-create-agent" :disabled="savingFaq">
               <i :class="savingFaq ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-check'"></i>
-              <span>{{ savingFaq ? '保存并同步中...' : (faqForm.id ? '保存修改' : '保存并向量化') }}</span>
+              <span>{{ savingFaq ? '保存并同步中...' : (faqPreview ? '确认并保存' : (faqForm.id ? '保存修改' : '保存并向量化')) }}</span>
             </button>
           </div>
         </form>
@@ -2245,17 +2257,19 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { clearAssistantResource, setAssistantResource } from '../composables/useAssistantContext'
 import {
   animateFieldType,
+  assistantPreview,
   animateTextInput,
   finishCopilotHud,
   highlightFieldStep,
   pressElement,
   showCopilotHud,
   sleep,
-  spotlightElement
+  spotlightElement,
+  submitAssistantCard
 } from '../composables/useAssistantUiBridge'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
@@ -2356,8 +2370,62 @@ async function openById(id) {
   return false
 }
 
+const knowledgeEvalPanel = ref(null)
+
+async function prepareKnowledgeAction(effect) {
+  if (kbModalOpen.value || faqModalOpen.value || deleteModalOpen.value) {
+    showToast('请先完成或关闭当前知识库表单', 'warning')
+    return false
+  }
+  if (!effect.kbId || uploading.value || (selectedKb.value?.id !== effect.kbId && pendingFiles.value.length)) {
+    showToast('请先处理当前知识库待上传的文件', 'warning')
+    return false
+  }
+  if (selectedKb.value?.id !== effect.kbId) {
+    if (effect.knowledgeBase?.id === effect.kbId) openKbDetail(effect.knowledgeBase)
+    else if (!(await openById(effect.kbId))) return false
+  }
+  if (!canManageKb(selectedKb.value)) return false
+  if (effect.operation === 'kb_retrieval') {
+    await openRetrievalTestTab()
+    if (selectedKb.value?.id !== effect.kbId) return false
+    if (typeof effect.formData?.query === 'string') retrievalQuery.value = effect.formData.query
+    const topK = effect.formData?.topK
+    if (Number.isInteger(topK) && topK >= 1 && topK <= 10) testParams.topK = topK
+    await nextTick()
+    spotlightElement('.retrieval-test-tab', { durationMs: 2400, variant: 'pulse' })
+    finishCopilotHud('召回测试已准备，请核对后执行')
+    return true
+  }
+  if (effect.operation === 'kb_eval') {
+    activeSubTab.value = 'evaluation'
+    await nextTick()
+    spotlightElement('.re-page', { durationMs: 2400, variant: 'pulse' })
+    finishCopilotHud('已打开检索评测，可核对配置并启动')
+    return true
+  }
+  activeSubTab.value = 'documents'
+  await nextTick()
+  if (effect.operation === 'kb_upload') {
+    const dropzone = document.querySelector('.kb-dropzone')
+    dropzone?.focus({ preventScroll: true })
+    spotlightElement(dropzone, { durationMs: 2400, variant: 'pulse' })
+    finishCopilotHud('请选择文件，再确认上传')
+    return Boolean(dropzone)
+  }
+  if (effect.operation === 'kb_rebuild') {
+    await pollRebuild(effect.kbId, true)
+    if (selectedKb.value?.id !== effect.kbId) return false
+    spotlightElement('.kb-detail-header', { durationMs: 2400, variant: 'pulse' })
+    finishCopilotHud(rebuildRunning.value ? '已显示索引重建进度' : '已定位重建索引入口')
+    return true
+  }
+  return false
+}
+
 async function applyAssistantUiEffect(effect) {
   if (!effect) return
+  if (effect.kind === 'console_form') return prepareKnowledgeAction(effect)
   if (effect.kind === 'search') {
     currentView.value = 'list'
     selectedKb.value = null
@@ -2476,78 +2544,50 @@ async function applyAssistantUiEffect(effect) {
   }
 
   if (effect.kind === 'kb_rebuild') {
-    if (effect.kbId && (!selectedKb.value || selectedKb.value.id !== effect.kbId)) {
-      await openById(effect.kbId)
-    }
+    if (!effect.kbId) return false
+    if (selectedKb.value?.id !== effect.kbId && !(await openById(effect.kbId))) return false
     activeSubTab.value = 'documents'
+    await Promise.all([loadDocuments(), pollRebuild(effect.kbId, true)])
+    if (selectedKb.value?.id !== effect.kbId) return false
     await nextTick()
-    await loadDocuments()
-    spotlightElement('.kb-detail-header, .kb-tab-content', { durationMs: 2200, scroll: false, variant: 'flash' })
-    finishCopilotHud('已启动知识库索引重建')
-    return
+    spotlightElement('.kb-detail-header', { durationMs: 2200, variant: 'flash' })
+    finishCopilotHud('已刷新知识库索引重建进度')
+    return true
   }
 
   if (effect.kind === 'kb_eval') {
-    if (effect.kbId && (!selectedKb.value || selectedKb.value.id !== effect.kbId)) {
-      await openById(effect.kbId)
-    }
+    if (!effect.kbId) return false
+    if (selectedKb.value?.id !== effect.kbId && !(await openById(effect.kbId))) return false
     activeSubTab.value = 'evaluation'
     await nextTick()
-    spotlightElement('.kb-tab-content', { durationMs: 2200, scroll: false, variant: 'flash' })
-    finishCopilotHud('已切换到检索评测并启动评测任务')
-    return
+    if (effect.runId && !(await knowledgeEvalPanel.value?.focusRun(effect.runId))) {
+      showCopilotHud('评测已启动，暂未加载到对应记录', 'error', 3800)
+      return false
+    }
+    spotlightElement('.re-page', { durationMs: 2200, variant: 'flash' })
+    finishCopilotHud('已打开检索评测运行记录')
+    return true
   }
 
-  if (effect.kind === 'focus_kb_tab' || effect.kind === 'faq_mutated') {
-    if (effect.kbId && (!selectedKb.value || selectedKb.value.id !== effect.kbId)) {
-      await openById(effect.kbId)
+  if (effect.kind === 'faq_preview' || effect.kind === 'faq_mutated') {
+    if (!effect.kbId) return false
+    if (effect.kind === 'faq_preview' && (faqModalOpen.value || assistantPreview.actionId !== effect.actionId)) {
+      showToast('请先完成或关闭当前的 FAQ 表单', 'warning')
+      return false
     }
+    if (selectedKb.value?.id !== effect.kbId) {
+      if (effect.knowledgeBase?.id === effect.kbId) openKbDetail(effect.knowledgeBase)
+      else if (!(await openById(effect.kbId))) return false
+    }
+    activeSubTab.value = 'faqs'
+    if (effect.kind === 'faq_preview') return openFaqAssistantPreview(effect)
+    return refreshFaqAssistantResult(effect)
+  }
+
+  if (effect.kind === 'focus_kb_tab') {
+    if (effect.kbId && selectedKb.value?.id !== effect.kbId && !(await openById(effect.kbId))) return false
     await nextTick()
     if (selectedKb.value) {
-      if (effect.kind === 'faq_mutated' && effect.formData) {
-        activeSubTab.value = 'faqs'
-        await nextTick()
-        const fd = effect.formData
-        const isUpdate = effect.operation === 'update'
-        showCopilotHud(isUpdate ? 'AI 助手正在打开「编辑 FAQ」弹窗…' : 'AI 助手正在点击「新增 FAQ」…', 'running', 12000)
-        await pressElement('.kb-tab-content .btn-create-agent', 320)
-        Object.assign(faqForm, {
-          id: isUpdate ? (effect.faqId || 'edit') : '',
-          question: '',
-          category: '',
-          answer: '',
-          imageUrls: Array.isArray(fd.imageUrls) ? [...fd.imageUrls] : [],
-          videoUrls: Array.isArray(fd.videoUrls) ? [...fd.videoUrls] : []
-        })
-        faqModalOpen.value = true
-        await nextTick()
-        await sleep(240)
-        try {
-          const dlg = '.modal-backdrop.open .modal-dialog'
-          if (fd.question) {
-            showCopilotHud('AI 助手正在输入 FAQ 问题…', 'running', 12000)
-            await animateFieldType('faq-q', (v) => { faqForm.question = v }, document.querySelector(`${dlg} input[required]`), fd.question, 420)
-          }
-          if (fd.category) {
-            const inputs = document.querySelectorAll(`${dlg} input.form-control-styled`)
-            await animateFieldType('faq-cat', (v) => { faqForm.category = v }, inputs[1], fd.category, 300)
-          }
-          if (fd.answer) {
-            showCopilotHud('AI 助手正在输入 FAQ 标准答案…', 'running', 12000)
-            await animateFieldType('faq-a', (v) => { faqForm.answer = v }, document.querySelector(`${dlg} textarea`), fd.answer, 620)
-          }
-          showCopilotHud('AI 助手正在保存 FAQ…', 'running', 10000)
-          await pressElement(`${dlg} button[type="submit"]`, 400)
-        } finally {
-          faqModalOpen.value = false
-        }
-        faqPage.value = 1
-        await loadFaqs()
-        await nextTick()
-        spotlightElement('.faq-item, .faq-card, .kb-tab-content tbody tr', { durationMs: 2400, variant: 'flash' })
-        finishCopilotHud(isUpdate ? 'FAQ 已更新并保存' : 'FAQ 已新增并保存')
-        return
-      }
       if (effect.subTab === 'faqs') {
         activeSubTab.value = 'faqs'
         await nextTick()
@@ -2620,6 +2660,7 @@ defineExpose({
 const rebuildStatus = ref({ state: 'IDLE', total: 0, done: 0 })
 const rebuildRunning = computed(() => rebuildStatus.value.state === 'RUNNING')
 let rebuildTimer = null
+let rebuildPollFailures = 0
 
 async function startRebuildIndex() {
   const kb = selectedKb.value
@@ -2645,7 +2686,13 @@ function watchRebuild(kbId) {
 
 async function pollRebuild(kbId, quiet = false) {
   const res = await http.get(`/api/knowledge-bases/${kbId}/rebuild-index`)
-  if (!res.success || selectedKb.value?.id !== kbId) return
+  if (selectedKb.value?.id !== kbId) return
+  if (!res.success || !res.data) {
+    if (rebuildRunning.value && rebuildPollFailures++ < 2) watchRebuild(kbId)
+    else if (!quiet) showToast('索引状态暂未更新，请刷新查看', 'warning')
+    return
+  }
+  rebuildPollFailures = 0
   const before = rebuildStatus.value.state
   rebuildStatus.value = res.data
   if (res.data.state === 'RUNNING') {
@@ -2683,6 +2730,7 @@ async function refreshRebuiltEmbedding(kbId) {
 watch(() => selectedKb.value?.id, (id) => {
   clearTimeout(rebuildTimer)
   rebuildStatus.value = { state: 'IDLE', total: 0, done: 0 }
+  rebuildPollFailures = 0
   if (id && selectedKb.value?.provider === 'SPRING_AI' && canManageKb(selectedKb.value)) {
     pollRebuild(id, true)
   }
@@ -2895,6 +2943,10 @@ const MAX_FAQ_IMAGES = 9
 const MAX_FAQ_VIDEOS = 3
 const MAX_FAQ_VIDEO_MB = 500
 
+const faqPreview = ref(null)
+const faqPreviewError = ref('')
+const faqQuestionInput = ref(null)
+let faqPreviewValues = null
 const faqModalOpen = ref(false)
 const savingFaq = ref(false)
 const uploadingFaqImg = ref(false)
@@ -3215,6 +3267,7 @@ async function saveKnowledgeBase() {
 }
 
 function openKbDetail(kb) {
+  if (selectedKb.value?.id !== kb.id) pendingFiles.value = []
   selectedKb.value = kb
   currentView.value = 'detail'
   setAssistantResource('KNOWLEDGE_BASE', kb.id, kb.name)
@@ -3566,24 +3619,48 @@ function removePendingFile(idx) {
   pendingFiles.value.splice(idx, 1)
 }
 
+let uploadIndexTimer = null
+
+function followUploadedDocuments(kbId, documentIds, remaining = 20) {
+  clearTimeout(uploadIndexTimer)
+  if (!documentIds.length || remaining <= 0) return
+  const pending = docList.value.some(doc => documentIds.includes(doc.id)
+    && !['completed', 'error', 'failed'].includes(String(doc.indexingStatus || '').toLowerCase()))
+  if (!pending) return
+  uploadIndexTimer = setTimeout(async () => {
+    if (!props.active || selectedKb.value?.id !== kbId || activeSubTab.value !== 'documents') return
+    await loadDocuments()
+    if (selectedKb.value?.id === kbId) followUploadedDocuments(kbId, documentIds, remaining - 1)
+  }, 3000)
+}
+
+onBeforeUnmount(() => clearTimeout(uploadIndexTimer))
+
 async function executeUpload() {
-  if (!selectedKb.value || pendingFiles.value.length === 0) return
+  const targetId = selectedKb.value?.id
+  if (!targetId || !pendingFiles.value.length || uploading.value) return
   uploading.value = true
-
   const formData = new FormData()
-  pendingFiles.value.forEach(f => {
-    formData.append('files', f)
-  })
-
-  const res = await http.upload(`/api/knowledge-bases/${selectedKb.value.id}/documents/upload`, formData)
-  uploading.value = false
-
-  if (res.success) {
-    showToast(`成功上传 ${pendingFiles.value.length} 个文件并启动 Dify 语义切片`, 'success')
-    pendingFiles.value = []
-    loadDocuments()
-  } else {
-    showToast(res.message || '文档上传失败', 'error', 6000)
+  pendingFiles.value.forEach(file => formData.append('files', file))
+  try {
+    const res = await http.upload('/api/knowledge-bases/' + encodeURIComponent(targetId) + '/documents/upload', formData)
+    if (!res.success) {
+      showToast(res.message || '文档上传失败', 'error', 6000)
+      return
+    }
+    showToast('文件已提交，可在文档列表查看索引状态', 'success')
+    if (selectedKb.value?.id === targetId) {
+      pendingFiles.value = []
+      docPage.value = 1
+      docSearchKeyword.value = ''
+      docStatusFilter.value = ''
+      await loadDocuments()
+      if (selectedKb.value?.id === targetId) {
+        followUploadedDocuments(targetId, (Array.isArray(res.data) ? res.data : []).map(doc => doc.id))
+      }
+    }
+  } finally {
+    uploading.value = false
   }
 }
 
@@ -3626,6 +3703,7 @@ async function loadFaqs() {
       selectedKb.value.faqCount = res.data.total
     }
   }
+  return Boolean(res?.success && res.data)
 }
 
 function selectFaqCategory(cat) {
@@ -3863,6 +3941,78 @@ function previewVideo(url) {
   previewVideoUrl.value = url
 }
 
+function faqFormValues() {
+  return {
+    question: faqForm.question.trim(),
+    answer: faqForm.answer.trim(),
+    category: faqForm.category.trim() || '通用问答',
+    imageUrls: [...faqForm.imageUrls],
+    videoUrls: [...faqForm.videoUrls]
+  }
+}
+
+function closeFaqModal() {
+  if (assistantPreview.actionId === faqPreview.value?.actionId) assistantPreview.actionId = null
+  faqPreview.value = null
+  faqPreviewValues = null
+  faqPreviewError.value = ''
+  faqModalOpen.value = false
+}
+
+watch(() => props.active, (active) => {
+  if (!active && faqPreview.value) closeFaqModal()
+})
+
+function faqDetailPath(effect) {
+  return '/api/knowledge-bases/' + encodeURIComponent(effect.kbId) + '/faqs/' + encodeURIComponent(effect.faqId)
+}
+
+async function openFaqAssistantPreview(effect) {
+  if (!canManageKb(selectedKb.value)) return false
+  if (effect.faqId) {
+    const response = await http.get(faqDetailPath(effect))
+    if (!response?.success || response.data?.id !== effect.faqId || selectedKb.value?.id !== effect.kbId
+        || assistantPreview.actionId !== effect.actionId || faqModalOpen.value) return false
+    openEditFaq(response.data)
+  } else {
+    openCreateFaq()
+  }
+  for (const field of ['question', 'answer', 'category', 'imageUrls', 'videoUrls']) {
+    if (Object.hasOwn(effect.formData || {}, field)) faqForm[field] = effect.formData[field]
+  }
+  faqPreview.value = effect
+  faqPreviewValues = faqFormValues()
+  await nextTick()
+  faqQuestionInput.value?.focus({ preventScroll: true })
+  finishCopilotHud('FAQ 草稿已填入，请核对后保存')
+  return true
+}
+
+async function refreshFaqAssistantResult(effect) {
+  if (faqPreview.value?.actionId && faqPreview.value.actionId === effect.actionId) closeFaqModal()
+  let keyword = effect.keyword || ''
+  if (!keyword && effect.faqId) {
+    const response = await http.get(faqDetailPath(effect))
+    if (response?.success) keyword = response.data?.question || ''
+    if (selectedKb.value?.id !== effect.kbId) return false
+  }
+  faqSearchKeyword.value = keyword
+  selectedFaqCategory.value = '全部'
+  faqPage.value = 1
+  const loaded = await loadFaqs()
+  if (!loaded) {
+    showCopilotHud('FAQ 已保存，列表刷新失败，请重试刷新', 'error', 3800)
+    return false
+  }
+  await nextTick()
+  if (effect.faqId) {
+    const row = document.querySelector('[data-copilot-faq="' + CSS.escape(effect.faqId) + '"]')
+    if (row) spotlightElement(row, { durationMs: 2400, variant: 'flash' })
+  }
+  finishCopilotHud('FAQ 已保存并刷新列表')
+  return true
+}
+
 async function saveFaq() {
   if (!faqForm.question.trim() || !faqForm.answer.trim()) {
     showToast('请完整填写 FAQ 问题与回答内容', 'warning')
@@ -3873,6 +4023,22 @@ async function saveFaq() {
     return
   }
   if (!selectedKb.value) return
+
+  if (faqPreview.value) {
+    if (faqPreview.value.kbId !== selectedKb.value.id || savingFaq.value) return
+    savingFaq.value = true
+    faqPreviewError.value = ''
+    try {
+      const changedFields = Object.fromEntries(Object.entries(faqFormValues())
+        .filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(faqPreviewValues[key])))
+      const result = await submitAssistantCard(faqPreview.value.actionId, changedFields)
+      if (result.ok) closeFaqModal()
+      else faqPreviewError.value = result.message
+    } finally {
+      savingFaq.value = false
+    }
+    return
+  }
 
   savingFaq.value = true
   let res

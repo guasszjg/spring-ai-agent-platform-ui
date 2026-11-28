@@ -292,6 +292,15 @@
               </button>
             </div>
           </div>
+          <div v-if="agentActionPreview?.kind === 'agent_kb_preview'" class="config-card-section assistant-kb-preview" role="region" aria-label="助手知识库关联预览">
+            <strong>{{ agentActionPreview.operation === 'unbind' ? '确认取消关联' : '确认关联知识库' }}</strong>
+            <p class="section-hint">{{ agentActionPreview.kbName }}</p>
+            <p v-if="agentActionPreviewError" role="alert">{{ agentActionPreviewError }}</p>
+            <button type="button" class="btn-secondary" :disabled="agentActionPreviewBusy" @click="closeAgentActionPreview">返回卡片</button>
+            <button type="button" class="btn-tools-add" :disabled="agentActionPreviewBusy" @click="confirmAgentActionPreview">
+              {{ agentActionPreviewBusy ? '保存中…' : '确认并保存' }}
+            </button>
+          </div>
           <p v-if="!boundKnowledgeBases.length" class="section-hint">尚未关联知识库。对话前会按这里绑定的库做检索并注入提示词。</p>
           <div v-else class="kb-mode-row">
             <span class="kb-mode-label">使用方式</span>
@@ -320,6 +329,7 @@
             v-for="kb in boundKnowledgeBases"
             :key="kb.id"
             class="knowledge-item-card"
+            :data-copilot-kb="kb.id"
           >
             <div class="knowledge-meta">
               <i class="fa-solid fa-book" style="color: #ec4899;"></i>
@@ -405,11 +415,23 @@
             <i class="fa-solid fa-triangle-exclamation"></i>
             {{ hint }}，建议只保留一个，避免模型选择不稳定和重复计费。
           </p>
+          <div v-if="agentActionPreview?.kind === 'agent_tools_preview'" class="config-card-section assistant-tool-preview" role="region" aria-label="助手工具变更预览">
+            <strong>确认工具开关变更</strong>
+            <p v-for="(change, index) in agentActionPreview.toolChanges" :key="change.code || change.id || index" class="section-hint">
+              {{ change.title || change.name || change.code }} · {{ change.before ? '开启' : '关闭' }} → {{ change.after ? '开启' : '关闭' }}
+            </p>
+            <p v-if="agentActionPreviewError" role="alert">{{ agentActionPreviewError }}</p>
+            <button type="button" class="btn-secondary" :disabled="agentActionPreviewBusy" @click="closeAgentActionPreview">返回卡片</button>
+            <button type="button" class="btn-tools-add" :disabled="agentActionPreviewBusy" @click="confirmAgentActionPreview">
+              {{ agentActionPreviewBusy ? '保存中…' : '确认并保存' }}
+            </button>
+          </div>
           <div class="tools-grid">
             <div
               v-for="tool in tools"
               :key="tool.id || tool.code || tool.name"
               class="tool-item-card"
+              :data-copilot-tool="tool.code || tool.name"
               :class="{ 'tool-disabled': !tool.enabled || tool.unavailable }"
               :title="tool.unavailable ? '这个 MCP 工具已被管理员停用、等待重新审核或已删除，对话中不会生效' : ''"
             >
@@ -699,7 +721,7 @@
       </section>
     </main>
 
-    <AgentLogsPanel v-if="pageTab === 'logs' && agent" :agent-id="agent.id" />
+    <AgentLogsPanel ref="agentLogsPanel" v-if="pageTab === 'logs' && agent" :agent-id="agent.id" />
     <AgentMonitorPanel v-if="pageTab === 'monitor' && agent" :agent-id="agent.id" />
     <div v-if="pageTab === 'api' && agent" class="access-entry-switch">
       <div class="access-entry-seg" role="tablist">
@@ -712,7 +734,7 @@
       </div>
     </div>
     <section v-if="pageTab === 'api' && agent && accessTab === 'web'" class="debug-workspace access-web-workspace">
-      <ShareLinksPanel :agent="agent" :can-manage="canEditAgent" />
+      <ShareLinksPanel ref="shareLinksPanel" :agent="agent" :can-manage="canEditAgent" />
     </section>
     <AgentApiPanel
       v-if="pageTab === 'api' && agent && accessTab === 'api'"
@@ -1355,14 +1377,16 @@ import { clearAssistantResource, setAssistantPage, setAssistantResource } from '
 import {
   animateFieldType,
   animateReplaceText,
-  consumePendingUiEffect,
+  applyPendingUiEffects,
+  assistantPreview,
   finishCopilotHud,
   highlightFieldStep,
   onAssistantUiEffect,
   pressElement,
   showCopilotHud,
   sleep,
-  spotlightElement
+  spotlightElement,
+  submitAssistantCard
 } from '../composables/useAssistantUiBridge'
 import { copyToClipboard } from '../utils/clipboard'
 import { Check, Copy, User } from 'lucide-vue-next'
@@ -2644,9 +2668,10 @@ async function publish(note) {
     toolsConfig: JSON.stringify(tools),
     promptVariables: promptVariables.value
   })
-  if (res.success) {
+  if (res.success && res.data) {
     agent.value = res.data
-    publishedPrompt.value = prompt.value
+    publishedPrompt.value = res.data.systemPrompt || ''
+    prompt.value = publishedPrompt.value
     aiPromptState.bannerVisible = false
     aiPromptState.prevDraft = null
     syncRouteFromAgent(res.data)
@@ -3201,9 +3226,126 @@ async function runVariableModalChoreography(effect) {
   finishCopilotHud(`已保存变量 {{${key}}} 并展开右侧变量表单`)
 }
 
+const agentActionPreview = ref(null)
+const agentActionPreviewBusy = ref(false)
+const agentActionPreviewError = ref('')
+
+function closeAgentActionPreview() {
+  if (assistantPreview.actionId === agentActionPreview.value?.actionId) assistantPreview.actionId = null
+  agentActionPreview.value = null
+  agentActionPreviewError.value = ''
+}
+
+function spotlightToolChanges(changes) {
+  for (const change of changes || []) {
+    const key = change.code || change.name
+    if (!key) continue
+    const target = document.querySelector('[data-copilot-tool="' + CSS.escape(key) + '"]')
+    if (target) spotlightElement(target, { durationMs: 2400, variant: 'flash' })
+  }
+}
+
+async function confirmAgentActionPreview() {
+  if (!agentActionPreview.value || agentActionPreviewBusy.value) return
+  agentActionPreviewBusy.value = true
+  try {
+    const result = await submitAssistantCard(agentActionPreview.value.actionId)
+    if (result.ok) closeAgentActionPreview()
+    else agentActionPreviewError.value = result.message
+  } finally {
+    agentActionPreviewBusy.value = false
+  }
+}
+
+const shareLinksPanel = ref(null)
+
+const agentLogsPanel = ref(null)
+async function prepareDebugAction(effect) {
+  if (effect.operation === 'agent_logs') {
+    pageTab.value = 'logs'
+    await nextTick()
+    return agentLogsPanel.value?.applyAssistantUiEffect?.(effect)
+  }
+  if (!canEditAgent.value) return false
+  if (effect.operation?.startsWith('share_')) {
+    pageTab.value = 'api'
+    accessTab.value = 'web'
+    await nextTick()
+    return shareLinksPanel.value?.prepareAssistantAction(effect)
+  }
+  if (draftDirty.value || publishDialog.open) {
+    showToast('请先处理当前未发布草稿，避免覆盖', 'warning')
+    return false
+  }
+  const fields = effect.formData || {}
+  pageTab.value = 'orchestrate'
+  if (effect.operation === 'prompt_publish') {
+    if (typeof fields.systemPrompt !== 'string' || !fields.systemPrompt.trim()
+        || fields.systemPrompt === publishedPrompt.value) return false
+    const complete = await runCinemaPromptReplace(fields.systemPrompt, { isDraft: true })
+    if (!complete) return false
+    openPublishDialog()
+    finishCopilotHud('提示词草稿已填入，请核对后发布')
+    return true
+  }
+  if (effect.operation !== 'route_edit') return false
+  const agentId = agent.value.id
+  await loadRouteOptions()
+  if (draftDirty.value || publishDialog.open || agent.value?.id !== agentId) return false
+  const draft = { ...publishedRoute.value }
+  for (const key of ['primaryProviderId', 'fallbackProviderId', 'modelName']) {
+    if (typeof fields[key] === 'string') draft[key] = fields[key]
+  }
+  const allowed = routeOptions.value.channels.filter(channel => channel.selectable)
+  const primary = allowed.find(channel => channel.id === draft.primaryProviderId)
+  if ((draft.primaryProviderId && !primary)
+      || (draft.fallbackProviderId && !allowed.some(channel => channel.id === draft.fallbackProviderId))
+      || (draft.primaryProviderId && draft.primaryProviderId === draft.fallbackProviderId)) {
+    showToast('主备通道必须可用且不能相同，请在通道面板核对', 'error')
+    return false
+  }
+  if (primary && fields.modelName && modelOn(primary, fields.modelName).toLowerCase() !== fields.modelName.toLowerCase()) {
+    showToast('所选模型不在主通道的可用模型中', 'error')
+    return false
+  }
+  routeDraft.value = normalizedChoice(draft)
+  if (!routeDirty.value) return false
+  await nextTick()
+  openPublishDialog()
+  finishCopilotHud('主备通道草稿已准备，请核对后发布')
+  return true
+}
+
 async function handleAssistantUiEffect(effect) {
   if (!effect || !agent.value?.id) return
   if (effect.agentId && effect.agentId !== agent.value.id) return
+
+  if (effect.kind === 'console_form') return prepareDebugAction(effect)
+
+  if (effect.kind === 'agent_kb_preview') {
+    if (!canEditAgent.value || assistantPreview.actionId !== effect.actionId) return false
+    const res = await http.get('/api/knowledge-bases/' + encodeURIComponent(effect.kbId))
+    if (!res?.success || res.data?.id !== effect.kbId || assistantPreview.actionId !== effect.actionId) {
+      return false
+    }
+    agentActionPreview.value = { ...effect, kbName: res.data.name }
+    pageTab.value = 'orchestrate'
+    await nextTick()
+    spotlightElement('.assistant-kb-preview', { durationMs: 2200, variant: 'pulse' })
+    finishCopilotHud('请确认目标知识库')
+    return true
+  }
+
+  if (effect.kind === 'agent_tools_preview') {
+    if (!canEditAgent.value || assistantPreview.actionId !== effect.actionId) return false
+    agentActionPreview.value = effect
+    pageTab.value = 'orchestrate'
+    await nextTick()
+    spotlightElement('.assistant-tool-preview', { durationMs: 2200, variant: 'pulse' })
+    spotlightToolChanges(effect.toolChanges)
+    finishCopilotHud('请确认要修改的工具开关')
+    return true
+  }
 
   if (effect.kind === 'agent_prompt_draft') {
     const ok = await runCinemaPromptReplace(effect.systemPrompt || '', { isDraft: true })
@@ -3348,7 +3490,8 @@ async function handleAssistantUiEffect(effect) {
     loadPersistedTools(res.data)
     await nextTick()
     if (effect.toolsChanged) {
-      spotlightElement('[data-copilot-section="tools"]', { durationMs: 2600, variant: 'flash' })
+      if (effect.toolChanges?.length) spotlightToolChanges(effect.toolChanges)
+      else spotlightElement('[data-copilot-section="tools"]', { durationMs: 2600, variant: 'flash' })
     } else if (effect.skillsChanged) {
       spotlightElement('[data-copilot-section="skills"]', { durationMs: 2600, variant: 'flash' })
     } else {
@@ -3363,46 +3506,48 @@ async function handleAssistantUiEffect(effect) {
   }
 
   if (effect.kind === 'agent_kb_updated') {
+    const agentId = agent.value.id
+    const [res] = await Promise.all([http.get('/api/agents/' + encodeURIComponent(agentId)), loadKnowledgeCatalog()])
+    if (agent.value?.id !== agentId) return false
+    if (!res?.success || !res.data) {
+      showCopilotHud('关联已保存，页面刷新失败', 'error', 3800)
+      return false
+    }
+    const ids = Array.isArray(res.data.knowledgeBaseIds) ? res.data.knowledgeBaseIds : []
+    const unbind = effect.operation === 'unbind'
+    if (effect.kbId && ids.includes(effect.kbId) === unbind) {
+      showCopilotHud('回读的知识库关联状态与预期不一致', 'error', 3800)
+      return false
+    }
+    if (!unbind && effect.kbId && !knowledgeCatalog.value.some(kb => kb.id === effect.kbId)) {
+      const kb = await http.get('/api/knowledge-bases/' + encodeURIComponent(effect.kbId))
+      if (agent.value?.id !== agentId) return false
+      if (kb?.success && kb.data) knowledgeCatalog.value = [...knowledgeCatalog.value, kb.data]
+    }
+    agent.value = res.data
+    boundKbIds.value = [...ids]
     pageTab.value = 'orchestrate'
     await nextTick()
-    spotlightElement('[data-copilot-section="kb"]', { durationMs: 2600, variant: 'pulse' })
-    const isUnbind = effect.operation === 'unbind'
-    if (isUnbind) {
-      showCopilotHud('AI 助手正在取消关联知识库…', 'running', 8000)
-      await sleep(450)
-    } else {
-      showCopilotHud('AI 助手正在打开「关联知识库」弹窗…', 'running', 10000)
-      await pressElement('[data-copilot-section="kb"] .btn-tools-add', 340)
-      await loadKnowledgeCatalog()
-      addKnowledgeModalOpen.value = true
-      await nextTick()
-      await sleep(260)
-      try {
-        showCopilotHud('AI 助手正在勾选目标知识库并保存…', 'running', 10000)
-        await pressElement('.tool-modal-dialog .btn-catalog-add:not(:disabled), .tool-modal-dialog .btn-modal-cancel', 420)
-      } finally {
-        addKnowledgeModalOpen.value = false
-      }
-    }
-    const [res] = await Promise.all([http.get(`/api/agents/${agent.value.id}`), loadKnowledgeCatalog()])
-    if (res?.success && res.data) {
-      agent.value = res.data
-      boundKbIds.value = Array.isArray(res.data.knowledgeBaseIds) ? [...res.data.knowledgeBaseIds] : []
-      await nextTick()
-      spotlightElement('[data-copilot-section="kb"]', { durationMs: 2400, variant: 'flash' })
-      showToast(isUnbind ? 'AI 助手已取消关联知识库' : 'AI 助手已关联知识库', 'success', 2200)
-    }
-    finishCopilotHud(isUnbind ? '已取消关联知识库' : '智能体关联知识库已保存')
-    return
+    const row = !unbind && effect.kbId
+      ? document.querySelector('[data-copilot-kb="' + CSS.escape(effect.kbId) + '"]')
+      : null
+    spotlightElement(row || '[data-copilot-section="kb"]', { durationMs: 2400, variant: 'flash' })
+    finishCopilotHud(unbind ? '已取消关联知识库' : '已关联目标知识库')
+    return true
   }
 
   if (effect.kind === 'agent_share_updated') {
     pageTab.value = 'api'
     accessTab.value = 'web'
     await nextTick()
-    spotlightElement('.access-entry-switch', { durationMs: 2200, scroll: false, variant: 'flash' })
+    const loaded = await shareLinksPanel.value?.load()
+    if (loaded === false) {
+      showCopilotHud('分享链接已更新，列表刷新失败', 'error', 3800)
+      return false
+    }
+    await shareLinksPanel.value?.focusShareLink(effect.linkId)
     finishCopilotHud('分享链接状态已更新')
-    return
+    return true
   }
 
   if (effect.kind === 'agent_status_updated') {
@@ -3467,17 +3612,16 @@ onMounted(async () => {
     } else if (route.query.tab === 'logs' || route.query.tab === 'monitor') {
       pageTab.value = route.query.tab
     }
-    const pending = consumePendingUiEffect((e) => e.target === 'agent_debug' && (!e.agentId || e.agentId === res.data.id))
-    if (pending) {
-      await nextTick()
-      await handleAssistantUiEffect(pending)
-    }
+    await nextTick()
+    await applyPendingUiEffects((e) => e.target === 'agent_debug' && (!e.agentId || e.agentId === res.data.id),
+      handleAssistantUiEffect)
   } else {
     showToast('未能加载智能体信息', 'error')
   }
 })
 
 onUnmounted(() => {
+  closeAgentActionPreview()
   if (stopAssistantUiBridge) {
     stopAssistantUiBridge()
     stopAssistantUiBridge = null

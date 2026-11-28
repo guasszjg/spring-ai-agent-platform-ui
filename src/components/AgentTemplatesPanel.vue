@@ -106,7 +106,7 @@
 
     <div v-else-if="viewMode === 'card'" class="templates-grid">
       <div
-        v-for="tpl in templates"
+        v-for="tpl in templates" :data-template-id="tpl.id"
         :key="tpl.id"
         class="template-card"
       >
@@ -231,7 +231,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="tpl in templates" :key="tpl.id">
+          <tr v-for="tpl in templates" :data-template-id="tpl.id" :key="tpl.id">
             <td>
               <div class="table-agent-meta">
                 <SceneIcon :category="tpl.category" :size="30" />
@@ -534,6 +534,7 @@
 </template>
 
 <script setup>
+import { fillAssistantDraft } from '../composables/useAssistantUiBridge'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
@@ -754,6 +755,7 @@ function insertPromptTemplate() {
 }
 
 async function saveTemplate() {
+  if (saving.value) return
   if (!form.name.trim() || !form.systemPrompt.trim()) {
     showToast('模板名称与系统提示词为必填项', 'warning')
     return
@@ -767,7 +769,7 @@ async function saveTemplate() {
     description: form.description.trim(),
     systemPrompt: form.systemPrompt.trim(),
     temperature: Number(form.temperature),
-    tags: form.tagsText ? form.tagsText.split(/[,，]/).map(t => t.trim()).filter(Boolean) : [],
+    tags: form.tagsText.split(/[,，]/).map(t => t.trim()).filter(Boolean).join(', '),
     sortOrder: Number(form.sortOrder || 0),
     isBuiltin: false
   }
@@ -841,6 +843,31 @@ function resetTemplates(forceReload = true) {
 
 async function applyAssistantUiEffect(effect) {
   if (!effect) return
+  if (effect.kind === 'console_form') {
+    if (modalOpen.value || deleteModalOpen.value) return false
+    const { operation, resourceRef, formData } = effect
+    if (operation === 'template_create') openCreateModal()
+    else {
+      if (!resourceRef) return false
+      const response = await http.get('/api/agent-templates/' + encodeURIComponent(resourceRef))
+      const template = response?.success ? response.data : null
+      if (!template) return false
+      if (operation === 'template_focus') {
+        currentCategory.value = '全部'
+        searchKeyword.value = template.name
+        page.value = 1
+        await loadTemplates()
+        await nextTick()
+        return !!spotlightElement(`[data-template-id="${CSS.escape(String(template.id))}"]`)
+      }
+      if (template.isBuiltin && !props.isSuperAdmin) return false
+      if (operation === 'template_delete') { openDeleteModal(template); return true }
+      if (operation !== 'template_edit') return false
+      openEditModal(template)
+    }
+    fillAssistantDraft(form, formData, ['name', 'category', 'description', 'systemPrompt', 'temperature'])
+    return true
+  }
   if (effect.kind === 'search') {
     currentCategory.value = '全部'
     page.value = 1

@@ -192,6 +192,7 @@
 </template>
 
 <script setup>
+import { findAssistantResource, fillAssistantDraft } from '../../composables/useAssistantUiBridge'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../../api/http'
 import { useToast } from '../../composables/useToast'
@@ -297,6 +298,7 @@ async function loadDifys() {
 }
 
 async function saveDify() {
+  if (savingDify.value) return
   if (!difyForm.name.trim() || !difyForm.baseUrl.trim()) {
     showToast('请填写实例名称与服务器 API 地址', 'error')
     return
@@ -385,7 +387,20 @@ const status = computed(() => {
 
 watch(status, (value) => emit('status', value), { immediate: true })
 
-defineExpose({ refresh })
+async function applyAssistantUiEffect(effect) {
+  if (difyModalOpen.value) return false
+  await refresh()
+  if (effect.operation === 'gateway_create') openCreateDify()
+  else if (effect.operation === 'gateway_edit') {
+    const item = findAssistantResource(difys.value, effect.resourceRef)
+    if (!item) return false
+    openEditDify(item)
+  } else return false
+  fillAssistantDraft(difyForm, effect.formData, ["name", "timeoutMs"])
+  return true
+}
+
+defineExpose({ refresh, applyAssistantUiEffect })
 
 onMounted(refresh)
 </script>

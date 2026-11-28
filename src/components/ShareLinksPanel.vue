@@ -47,7 +47,7 @@
         <span class="slp-col-actions">操作</span>
       </div>
       <div v-if="!visibleLinks.length" class="slp-empty">没有符合条件的链接</div>
-      <article v-for="l in visibleLinks" :key="l.id" class="slp-row slp-card" :class="{ 'slp-card-off': l.state !== 'ACTIVE' }">
+      <article v-for="l in visibleLinks" :key="l.id" :data-copilot-share-link="l.id" class="slp-row slp-card" :class="{ 'slp-card-off': l.state !== 'ACTIVE' }">
         <div class="slp-card-name">
           <span class="slp-name" :title="l.name">{{ l.name }}</span>
           <span class="slp-badges">
@@ -89,6 +89,24 @@
     </template>
 
     <!-- 新建 / 编辑 -->
+    <div v-if="assistantLinkAction" class="slp-backdrop" role="dialog" aria-label="确认分享链接操作">
+      <div class="slp-modal">
+        <div class="slp-modal-head">
+          <h3>{{ assistantLinkAction.label }}分享链接</h3>
+        </div>
+        <p>目标链接「{{ assistantLinkAction.link.name }}」</p>
+        <p v-if="assistantLinkAction.action === 'delete'">删除后链接立即失效，访客的对话记录仍保留。</p>
+        <p v-else-if="assistantLinkAction.action === 'disable'">停用后，正在对话的访客发下一条消息时会被拒绝。</p>
+        <p v-else>启用后，仍须满足有效期、用量及访问条件。</p>
+        <div class="slp-modal-foot">
+          <button type="button" class="slp-btn" :disabled="!!busyId" @click="assistantLinkAction = null">取消</button>
+          <button type="button" class="slp-btn slp-btn-primary" :disabled="!!busyId" @click="confirmAssistantLinkAction">
+            {{ busyId ? '处理中…' : '确认' + assistantLinkAction.label }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="form.open" class="slp-backdrop" @click.self="form.open = false">
       <div class="slp-modal" role="dialog" :aria-label="form.id ? '编辑分享链接' : '新建分享链接'">
         <div class="slp-modal-head">
@@ -124,7 +142,7 @@
           <div class="slp-field">
             <span class="slp-label">有效期</span>
             <div class="slp-seg">
-              <button v-for="d in [1, 7, 30]" :key="d" type="button" :class="{ active: form.expiryMode === String(d) }" @click="form.expiryMode = String(d)">{{ d }} 天</button>
+              <button v-for="d in expiryDays" :key="d" type="button" :class="{ active: form.expiryMode === String(d) }" @click="form.expiryMode = String(d)">{{ d }} 天</button>
               <button type="button" :class="{ active: form.expiryMode === 'custom' }" @click="form.expiryMode = 'custom'">自定义</button>
               <button v-if="form.id" type="button" :class="{ active: form.expiryMode === 'keep' }" @click="form.expiryMode = 'keep'">不改</button>
             </div>
@@ -242,8 +260,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import QRCode from 'qrcode'
+import { finishCopilotHud, spotlightElement } from '../composables/useAssistantUiBridge'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { copyToClipboard } from '../utils/clipboard'
@@ -307,6 +326,7 @@ async function load() {
     if (res.success) links.value = res.data || []
     else loadError.value = res.message || '加载分享链接失败'
     if (settings.success && settings.data) publicEnabled.value = !!settings.data.sharePublicEnabled
+    return res.success === true
   } finally {
     loading.value = false
   }
@@ -314,6 +334,8 @@ async function load() {
 
 // ==================== 新建 / 编辑 ====================
 const form = reactive({})
+const expiryDays = computed(() => [...new Set([1, 7, 30, Number(form.expiryMode)])]
+  .filter(day => Number.isInteger(day) && day > 0).sort((a, b) => a - b))
 function resetForm(l) {
   Object.assign(form, {
     open: true,
@@ -373,7 +395,8 @@ async function save() {
     if (!res.success) { showToast(res.message || '保存失败', 'error'); return }
     const creating = !form.id
     form.open = false
-    await load()
+    if (await load()) await focusShareLink(res.data?.id)
+    else showToast('链接已保存，列表加载失败，请刷新确认', 'warning')
     if (creating || res.data?.accessCode) {
       await openShare(res.data, creating ? '分享链接已创建' : '访问码已更新')
     } else {
@@ -424,8 +447,12 @@ async function run(l, action, confirmText, okText) {
       : await http.post(`${base.value}/${l.id}/${action}`)
     if (!res.success) { showToast(res.message || '操作失败', 'error'); return null }
     showToast(okText || res.message || '已完成', 'success')
-    await load()
-    return res.data
+    if (await load()) {
+      if (action !== 'delete') await focusShareLink(l.id)
+    } else {
+      showToast('操作已保存，列表加载失败，请刷新确认', 'warning')
+    }
+    return { data: res.data }
   } finally {
     busyId.value = ''
   }
@@ -437,10 +464,81 @@ function toggle(l) {
 }
 async function reset(l) {
   const data = await run(l, 'reset', `重置「${l.name}」的地址？旧地址立即失效，已进入的访客需要用新地址重新进入。访问码不变。`, '已生成新地址')
-  if (data) openShare(data, '新地址已生成')
+  if (data?.data) openShare(data.data, '新地址已生成')
 }
 function remove(l) {
   return run(l, 'delete', `删除「${l.name}」？链接立即失效，访客的对话记录仍保留在智能体日志里。`, '分享链接已删除')
+}
+
+const assistantLinkAction = ref(null)
+const SHARE_ACTION_LABELS = { enable: '启用', disable: '停用', delete: '删除' }
+
+async function focusShareLink(id) {
+  if (!id) return
+  filter.value = 'all'
+  keyword.value = ''
+  await nextTick()
+  const row = document.querySelector('[data-copilot-share-link="' + CSS.escape(id) + '"]')
+  if (row) spotlightElement(row, { durationMs: 2400, variant: 'flash' })
+}
+
+async function prepareAssistantAction(effect) {
+  if (!props.canManage || form.open || assistantLinkAction.value || saving.value || busyId.value) return false
+  if (!(await load()) || form.open || assistantLinkAction.value) return false
+  if (effect.formData?.accessMode === 'PUBLIC' && !publicEnabled.value) {
+    showToast('平台尚未允许创建公开链接，请在工具设置中检查', 'warning')
+    return false
+  }
+  if (effect.operation === 'share_create') {
+    if (links.value.length >= MAX_LINKS) {
+      showToast('分享链接数量已达上限', 'warning')
+      return false
+    }
+    openCreate()
+  } else {
+    const link = links.value.find(item => item.id === effect.linkId)
+    if (!link) return false
+    await focusShareLink(link.id)
+    if (effect.operation === 'share_focus') {
+      finishCopilotHud('已定位分享链接')
+      return true
+    }
+    if (effect.operation === 'share_edit') {
+      openEdit(link)
+    } else {
+      const action = effect.operation.slice('share_'.length)
+      if (!SHARE_ACTION_LABELS[action]) return false
+      assistantLinkAction.value = { action, label: SHARE_ACTION_LABELS[action], link }
+      finishCopilotHud('请确认分享链接操作')
+      return true
+    }
+  }
+  const values = effect.formData || {}
+  for (const key of ['name', 'title', 'welcomeMessage']) {
+    if (typeof values[key] === 'string') form[key] = values[key]
+  }
+  for (const key of ['maxMessages', 'maxTokens', 'maxVisitors', 'visitorRpm']) {
+    if (Number.isSafeInteger(values[key]) && values[key] >= 0) form[key] = values[key]
+  }
+  if (values.accessMode === 'ACCESS_CODE' || (values.accessMode === 'PUBLIC' && publicEnabled.value)) {
+    form.accessMode = values.accessMode
+  }
+  if (typeof values.showRecordNotice === 'boolean') form.showRecordNotice = values.showRecordNotice
+  if (Array.isArray(values.exampleQuestions)) form.examplesText = values.exampleQuestions
+    .filter(value => typeof value === 'string').join('\n')
+  if (Number.isInteger(values.expiresInDays) && values.expiresInDays >= 1 && values.expiresInDays <= 365) {
+    form.expiryMode = String(values.expiresInDays)
+  }
+  finishCopilotHud('分享链接表单已打开，请核对后保存')
+  return true
+}
+
+async function confirmAssistantLinkAction() {
+  const pending = assistantLinkAction.value
+  if (!pending || busyId.value) return
+  if (await run(pending.link, pending.action, null, '分享链接已' + pending.label)) {
+    assistantLinkAction.value = null
+  }
 }
 
 // ==================== 访客记录 ====================
@@ -473,7 +571,7 @@ function formatNum(n) {
 }
 
 onMounted(load)
-defineExpose({ load })
+defineExpose({ load, prepareAssistantAction, focusShareLink })
 </script>
 
 <style scoped>

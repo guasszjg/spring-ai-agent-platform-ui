@@ -352,10 +352,10 @@
                           :class="{ danger: card.riskLevel === 'D' }"
                           :disabled="card.busy || !!blockedBy(card) || !canConfirmCard(card)"
                           :title="confirmDisableReason(card)"
-                          @click="confirmAction(card)"
+                          @click="card.previewUiEffect ? openCardPreview(card) : confirmAction(card)"
                         >
                           <LoaderCircle v-if="card.busy" :size="13" :stroke-width="2" class="ad-spin" />
-                          {{ confirmButtonText(card.riskLevel) }}
+                          {{ card.previewUiEffect ? '在页面预览' : confirmButtonText(card.riskLevel) }}
                         </button>
                       </div>
                     </template>
@@ -518,7 +518,10 @@ import { useRouter } from 'vue-router'
 import { http } from '../api/http'
 import AgentMascot from './AgentMascot.vue'
 import { useAssistantContext } from '../composables/useAssistantContext'
-import { copilotHud, dispatchAssistantUiEffect, queuePendingUiEffect, showCopilotHud } from '../composables/useAssistantUiBridge'
+import {
+  assistantPreview, copilotHud, dispatchAssistantUiEffect, enqueueAssistantNavigation,
+  queuePendingUiEffect, setAssistantCardActionHandler, showCopilotHud
+} from '../composables/useAssistantUiBridge'
 import { renderMarkdown as renderMarkdownHtml } from '../utils/markdown'
 
 const props = defineProps({
@@ -1251,60 +1254,115 @@ function confirmDisableReason(card) {
   return ''
 }
 
+function findActionCard(id) {
+  return messages.value.flatMap(message => message.actions || []).find(action => action.id === id)
+}
+
+let removeCardActionHandler
+onMounted(() => {
+  removeCardActionHandler = setAssistantCardActionHandler((id, formData) => {
+    const card = findActionCard(id)
+    if (!card || cardStatus(card) !== 'PENDING') {
+      return Promise.resolve({ ok: false, message: '操作卡片已失效，请重新生成' })
+    }
+    return actOnCard(card, 'confirm', formData ? { formData } : undefined)
+  })
+})
+onBeforeUnmount(() => removeCardActionHandler?.())
+
 async function actOnCard(card, verb, body) {
+  if (card.busy) return { ok: false, message: '正在处理，请稍候' }
   card.busy = true
   card.error = ''
-  const res = body
-    ? await http.post(`/api/assistant/actions/${encodeURIComponent(card.id)}/${verb}`, body)
-    : await http.post(`/api/assistant/actions/${encodeURIComponent(card.id)}/${verb}`)
-  card.busy = false
-  if (res && res.success && res.data) {
+  try {
+    const res = await http.post('/api/assistant/actions/' + encodeURIComponent(card.id) + '/' + verb, body)
+    if (!res?.success || !res.data) {
+      return { ok: false, message: (card.error = res?.message || '操作失败，请稍后重试') }
+    }
     const { expanded } = card
     Object.assign(card, stampCardDeadline(res.data), { expanded, confirmNameInput: '', secretInputVal: '' })
-    if (verb === 'confirm' && res.data.status === 'EXECUTED' && res.data.uiEffect) {
-      handleIncomingUiEffect(res.data.uiEffect, { allowCrossPage: true })
+    if (verb === 'cancel') return { ok: true }
+    if (res.data.status !== 'EXECUTED') {
+      return { ok: false, message: res.data.result?.error || '操作尚未执行，请检查卡片状态' }
     }
-  } else {
-    card.error = (res && res.message) || '操作失败，请稍后重试'
+    if (res.data.uiEffect) handleIncomingUiEffect(res.data.uiEffect, { allowCrossPage: true })
+    return { ok: true }
+  } catch {
+    return { ok: false, message: (card.error = '请求结果未确认，请检查卡片状态后再试') }
+  } finally {
+    card.busy = false
+  }
+}
+
+async function openCardPreview(card) {
+  if (card.busy || blockedBy(card) || cardStatus(card) !== 'PENDING') return
+  if (assistantPreview.actionId) {
+    card.error = '请先完成或关闭当前的操作预览'
+    return
+  }
+  const effect = { ...card.previewUiEffect }
+  if (!effect.kbId && effect.kbFrom) {
+    effect.kbId = findActionCard(effect.kbFrom)?.resourceId
+  }
+  if (!effect.agentId && effect.agentFrom) {
+    effect.agentId = findActionCard(effect.agentFrom)?.resourceId
+  }
+  if ((effect.kind === 'faq_preview' || effect.kind === 'agent_kb_preview') && !effect.kbId) {
+    card.error = '请先确认创建目标知识库的操作'
+    return
+  }
+  if (effect.target === 'agent_debug' && !effect.agentId) {
+    card.error = '请先确认创建目标智能体的操作'
+    return
+  }
+  card.error = ''
+  assistantPreview.actionId = card.id
+  if (isNarrow.value || mode.value === 'full') open.value = false
+  const handled = await handleIncomingUiEffect(effect, { allowCrossPage: true })
+  if (!handled) {
+    if (assistantPreview.actionId === card.id) assistantPreview.actionId = null
+    card.error = '无法打开操作预览，请检查资源是否仍可访问'
   }
 }
 
 function handleIncomingUiEffect(effect, { allowCrossPage = false } = {}) {
-  if (!effect || typeof effect !== 'object') return
-  const curRoute = router.currentRoute.value
-  const isNav = effect.kind === 'navigate'
-  const shouldCrossRoute = isNav || allowCrossPage
-
-  if (shouldCrossRoute && effect.target === 'agent_debug' && effect.agentId) {
-    const sameDebug = curRoute.name === 'debug' && String(curRoute.params.id || '') === String(effect.agentId)
-    if (!sameDebug) {
-      const targetUrl = effect.url || `/debug/${encodeURIComponent(effect.agentId)}`
-      queuePendingUiEffect(effect)
-      showCopilotHud(effect.label || 'AI 助手正在打开智能体调试页…', 'running', 8000)
-      router.push(targetUrl).catch(() => {})
-      return
+  if (!effect || typeof effect !== 'object') return Promise.resolve(false)
+  if (!allowCrossPage && assistantPreview.actionId) return Promise.resolve(false)
+  if (!['navigate', 'console_form'].includes(effect.kind) && !allowCrossPage) return dispatchAssistantUiEffect(effect)
+  return enqueueAssistantNavigation(async () => {
+    const curRoute = router.currentRoute.value
+    let targetUrl
+    if (effect.target === 'agent_debug' && effect.agentId) {
+      const sameDebug = curRoute.name === 'debug' && String(curRoute.params.id || '') === String(effect.agentId)
+      if (!sameDebug) targetUrl = effect.url || '/debug/' + encodeURIComponent(effect.agentId)
     }
-    dispatchAssistantUiEffect(effect)
-    return
-  }
-
-  const dashboardTargets = ['overview', 'agents', 'knowledge', 'templates', 'skills', 'tools', 'users', 'gateway', 'security']
-  if (shouldCrossRoute && dashboardTargets.includes(effect.target) && curRoute.name !== 'dashboard') {
-    // 若当前在调试页且仅更新当前智能体运行状态，直接在调试页原地更新即可
-    if (effect.kind === 'agent_status_updated' && curRoute.name === 'debug'
-      && (!effect.agentId || String(curRoute.params.id || '') === String(effect.agentId))) {
-      dispatchAssistantUiEffect(effect)
-      return
+    const dashboardTargets = ['overview', 'agents', 'knowledge', 'knowledge-dify', 'templates', 'skills', 'tools',
+      'users', 'roles', 'assistant-eval', 'gateway', 'security']
+    if (dashboardTargets.includes(effect.target) && curRoute.name !== 'dashboard') {
+      const currentAgentStatus = effect.kind === 'agent_status_updated' && curRoute.name === 'debug'
+        && String(curRoute.params.id || '') === String(effect.agentId || '')
+      if (!currentAgentStatus) {
+        const tab = effect.dashboardTab || (effect.target === 'gateway' ? 'gateway-llm' : effect.target)
+        targetUrl = effect.url || '/dashboard?tab=' + encodeURIComponent(tab)
+      }
     }
-    const tab = effect.dashboardTab || (effect.target === 'gateway' ? 'gateway-llm' : effect.target)
-    const targetUrl = effect.url || `/dashboard?tab=${encodeURIComponent(tab)}`
-    queuePendingUiEffect(effect)
-    showCopilotHud(effect.label || 'AI 助手正在切换页面执行操作…', 'running', 8000)
-    router.push(targetUrl).catch(() => {})
-    return
-  }
-
-  dispatchAssistantUiEffect(effect)
+    if (!targetUrl) {
+      const handled = await dispatchAssistantUiEffect(effect)
+      if (!handled && effect.kind === 'console_form') showCopilotHud('未能打开操作表单', 'error', 3800)
+      return handled
+    }
+    const pending = queuePendingUiEffect(effect)
+    showCopilotHud(effect.label || 'AI 助手正在打开目标页面…', 'running', 8000)
+    try {
+      const failure = await router.push(targetUrl)
+      if (failure) pending.cancel()
+    } catch {
+      pending.cancel()
+    }
+    const ready = await pending.done
+    if (!ready) showCopilotHud('未能同步到目标页面', 'error', 4000)
+    return ready
+  })
 }
 
 function canApplyPromptDraft(card) {

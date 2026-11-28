@@ -56,7 +56,7 @@
     </div>
 
     <div class="skill-grid">
-      <article v-for="skill in filtered" :key="skill.id" class="skill-card" :class="{ off: !skill.enabled }">
+      <article v-for="skill in filtered" :data-skill-id="skill.id" :key="skill.id" class="skill-card" :class="{ off: !skill.enabled }">
         <header class="skill-card-head">
           <div class="skill-card-title">
             <i class="fa-solid fa-wand-magic-sparkles skill-icon"></i>
@@ -283,6 +283,7 @@
 </template>
 
 <script setup>
+import { findAssistantResource, fillAssistantDraft } from '../composables/useAssistantUiBridge'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
@@ -438,6 +439,7 @@ function removeTool(code) {
 }
 
 async function save() {
+  if (saving.value) return
   saving.value = true
   const body = {
     name: form.name,
@@ -464,11 +466,11 @@ async function toggle(skill, enabled) {
   busy.value = ''
   if (res.success) {
     showToast(res.message, 'success', 2000)
-    load()
   } else {
     showToast(res.message || '操作失败', 'error')
-    load()
   }
+  await load()
+  return res.success
 }
 
 async function remove(skill) {
@@ -594,6 +596,35 @@ onMounted(() => {
 
 async function applyAssistantUiEffect(effect) {
   if (!effect) return
+  if (effect.kind === 'console_form') {
+    if (editorOpen.value) return false
+    const { operation, resourceRef, formData } = effect
+    if (operation === 'skill_create') {
+      if (!props.canManage) return false
+      await openCreate()
+    } else {
+      await load()
+      const skill = findAssistantResource(skills.value, resourceRef)
+      if (!skill) return false
+      if (operation === 'skill_focus') {
+        scope.value = 'all'
+        keyword.value = ''
+        await nextTick()
+        return !!spotlightElement(`[data-skill-id="${CSS.escape(String(skill.id))}"]`)
+      }
+      if (operation === 'skill_enable' || operation === 'skill_disable') {
+        const enabled = operation === 'skill_enable'
+        if (!skill.canManage || !!skill.enabled === enabled) return false
+        if (!window.confirm(`确认${enabled ? '启用' : '停用'}「${skill.name}」？`)) return true
+        return toggle(skill, enabled)
+      }
+      if (operation !== 'skill_edit' || !skill.canManage) return false
+      await openEdit(skill)
+      if (!editorOpen.value || readonly.value) return false
+    }
+    fillAssistantDraft(form, formData, ['name', 'description', 'content', 'changeNote'])
+    return true
+  }
   await load()
   await nextTick()
   if (effect.kind === 'search') {

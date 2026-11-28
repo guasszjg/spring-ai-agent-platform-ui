@@ -214,6 +214,7 @@
 </template>
 
 <script setup>
+import { findAssistantResource, fillAssistantDraft } from '../../composables/useAssistantUiBridge'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../../api/http'
 import { useToast } from '../../composables/useToast'
@@ -353,6 +354,7 @@ async function loadOcrs() {
 }
 
 async function saveOcr() {
+  if (savingOcr.value) return
   if (!ocrForm.name.trim() || !ocrForm.endpoint.trim()) {
     showToast('请填写名称与接口地址', 'error')
     return
@@ -443,7 +445,20 @@ const status = computed(() => {
 
 watch(status, (value) => emit('status', value), { immediate: true })
 
-defineExpose({ refresh })
+async function applyAssistantUiEffect(effect) {
+  if (ocrModalOpen.value) return false
+  await refresh()
+  if (effect.operation === 'gateway_create') openCreateOcr()
+  else if (effect.operation === 'gateway_edit') {
+    const item = findAssistantResource(ocrs.value, effect.resourceRef)
+    if (!item) return false
+    openEditOcr(item)
+  } else return false
+  fillAssistantDraft(ocrForm, effect.formData, ["name", "modelName", "timeoutMs"])
+  return true
+}
+
+defineExpose({ refresh, applyAssistantUiEffect })
 
 onMounted(refresh)
 </script>

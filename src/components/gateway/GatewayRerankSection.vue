@@ -204,6 +204,7 @@
 </template>
 
 <script setup>
+import { findAssistantResource, fillAssistantDraft } from '../../composables/useAssistantUiBridge'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../../api/http'
 import { useToast } from '../../composables/useToast'
@@ -301,6 +302,7 @@ async function testInModal() {
 }
 
 async function save() {
+  if (saving.value) return
   saving.value = true
   const payload = {
     name: form.name.trim(),
@@ -380,7 +382,20 @@ const status = computed(() => {
 
 watch(status, (value) => emit('status', value), { immediate: true })
 
-defineExpose({ refresh })
+async function applyAssistantUiEffect(effect) {
+  if (modalOpen.value) return false
+  await refresh()
+  if (effect.operation === 'gateway_create') openCreate()
+  else if (effect.operation === 'gateway_edit') {
+    const item = findAssistantResource(configs.value, effect.resourceRef)
+    if (!item) return false
+    openEdit(item)
+  } else return false
+  fillAssistantDraft(form, effect.formData, ["name", "modelName"])
+  return true
+}
+
+defineExpose({ refresh, applyAssistantUiEffect })
 
 onMounted(refresh)
 </script>

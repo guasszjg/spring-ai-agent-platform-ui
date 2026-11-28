@@ -126,7 +126,7 @@
     </div>
     <div v-else-if="viewMode === 'card'" class="tools-mgmt-grid">
       <article
-        v-for="tool in tools"
+        v-for="tool in tools" :data-http-tool-id="tool.id"
         :key="tool.id"
         class="tools-mgmt-card"
         :class="{ disabled: !tool.enabled }"
@@ -208,7 +208,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="tool in tools" :key="tool.id" :class="{ 'row-disabled': !tool.enabled }">
+          <tr v-for="tool in tools" :data-http-tool-id="tool.id" :key="tool.id" :class="{ 'row-disabled': !tool.enabled }">
             <td>
               <div class="table-agent-meta">
                 <ToolGlyph :icon="tool.icon" :icon-class="tool.iconClass" :custom-icon="tool.customIcon" />
@@ -614,6 +614,7 @@
 </template>
 
 <script setup>
+import { findAssistantResource, fillAssistantDraft } from '../composables/useAssistantUiBridge'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
@@ -961,6 +962,7 @@ async function toggleEnabled(tool, enabled) {
     showToast(res.message || '更新失败', 'error')
     await reloadAll()
   }
+  return res.success
 }
 
 async function removeTool(tool) {
@@ -1095,6 +1097,7 @@ function buildConfigPayload() {
 
 async function saveEditor() {
   if (saving.value) return
+  if (saving.value) return
   if ((creating.value || isHttp(editing.value)) && !form.name.trim()) {
     showToast('请填写工具名称', 'error')
     return
@@ -1128,12 +1131,45 @@ async function saveEditor() {
 
 async function applyAssistantUiEffect(effect) {
   if (!effect) return
+  if (effect.kind === 'console_form' && effect.subTab !== 'mcp') {
+    if (editorOpen.value) return false
+    const { operation, resourceRef, formData } = effect
+    tab.value = 'tools'
+    if (operation === 'http_create') {
+      if (!props.canManage) return false
+      openCreate()
+    } else {
+      if (!resourceRef) return false
+      const response = await http.get('/api/platform-tools')
+      if (!response?.success || !Array.isArray(response.data)) return false
+      const tool = findAssistantResource(response.data.filter(isHttp), resourceRef, t => t.title || t.name)
+      if (!tool) return false
+      if (operation === 'http_focus') {
+        category.value = 'ALL'
+        page.value = 1
+        keyword.value = tool.title || tool.name
+        await loadTools()
+        await nextTick()
+        return !!spotlightElement(`[data-http-tool-id="${CSS.escape(String(tool.id))}"]`)
+      }
+      if (operation === 'http_enable' || operation === 'http_disable') {
+        const enabled = operation === 'http_enable'
+        if (!props.canManage || tool.builtin || !!tool.enabled === enabled) return false
+        if (!window.confirm(`确认${enabled ? '启用' : '停用'}「${tool.title || tool.name}」？`)) return true
+        return toggleEnabled(tool, enabled)
+      }
+      if (operation !== 'http_edit' || !props.canManage || tool.builtin) return false
+      openEditor(tool)
+    }
+    fillAssistantDraft(form, formData, ['name', 'description'])
+    return true
+  }
   if (effect.subTab === 'mcp') {
+    if (!props.isSuperAdmin || editorOpen.value) return false
     tab.value = 'mcp'
     await nextTick()
     if (mcpPanelRef.value?.applyAssistantUiEffect) {
-      await mcpPanelRef.value.applyAssistantUiEffect(effect)
-      return
+      return mcpPanelRef.value.applyAssistantUiEffect(effect)
     }
     spotlightElement('.tools-tabs, .mcp-panel', { durationMs: 2000, scroll: false, variant: 'flash' })
     finishCopilotHud(effect.label || '已切换到 MCP 服务列表')

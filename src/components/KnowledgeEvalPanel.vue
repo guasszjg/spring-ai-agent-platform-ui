@@ -344,6 +344,16 @@ async function loadRuns() {
   schedulePoll()
 }
 
+async function focusRun(id) {
+  await loadRuns()
+  const run = runs.value.find(item => item.id === id)
+  if (!run) return false
+  await selectRun(run)
+  return true
+}
+
+defineExpose({ focusRun })
+
 async function loadActiveRerank() {
   const res = await http.get('/api/model-gateway/reranks/active')
   if (res.success && res.data) Object.assign(activeRerank, { configured: false, modelName: '' }, res.data)

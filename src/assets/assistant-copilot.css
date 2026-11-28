@@ -193,3 +193,10 @@
   background: rgba(59, 130, 246, 0.12);
   border: 1px solid rgba(59, 130, 246, 0.3);
 }
+
+/* Preserve the chat while exposing the entire console dialog on narrow screens. */
+@media (max-width: 640px) {
+  body:has(.tool-modal-backdrop) .ad {
+    visibility: hidden;
+  }
+}

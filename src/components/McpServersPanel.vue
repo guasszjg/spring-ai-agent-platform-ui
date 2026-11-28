@@ -25,7 +25,7 @@
       <span>还没有 MCP 服务。只支持远程地址（Streamable HTTP 或 SSE），不支持本地命令方式。</span>
     </div>
 
-    <article v-for="server in servers" :key="server.id" class="mcp-server" :class="{ disabled: !server.enabled }">
+    <article v-for="server in servers" :data-mcp-id="server.id" :key="server.id" class="mcp-server" :class="{ disabled: !server.enabled }">
       <header class="mcp-server-head" @click="toggleExpand(server.id)">
         <i class="fa-solid mcp-chevron" :class="expanded[server.id] ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
         <div class="mcp-server-main">
@@ -212,6 +212,7 @@
 </template>
 
 <script setup>
+import { findAssistantResource, fillAssistantDraft } from '../composables/useAssistantUiBridge'
 import { nextTick, onMounted, reactive, ref } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
@@ -351,6 +352,7 @@ async function testDraft() {
 }
 
 async function save() {
+  if (saving.value) return
   if (!form.name.trim()) {
     showToast('请填写服务名称', 'warning')
     return
@@ -400,6 +402,7 @@ async function toggleServer(server, enabled) {
     showToast(res.message || '操作失败', 'error')
     await load()
   }
+  return res.success
 }
 
 async function removeServer(server) {
@@ -446,6 +449,30 @@ async function updateTool(server, tool, body) {
 
 async function applyAssistantUiEffect(effect) {
   if (!effect) return
+  if (effect.kind === 'console_form') {
+    if (editorOpen.value) return false
+    const { operation, resourceRef, formData } = effect
+    if (operation === 'mcp_create') openCreate()
+    else {
+      await load()
+      const server = findAssistantResource(servers.value, resourceRef)
+      if (!server) return false
+      if (operation === 'mcp_focus') {
+        await nextTick()
+        return !!spotlightElement(`[data-mcp-id="${CSS.escape(String(server.id))}"]`)
+      }
+      if (operation === 'mcp_enable' || operation === 'mcp_disable') {
+        const enabled = operation === 'mcp_enable'
+        if (!!server.enabled === enabled) return false
+        if (!window.confirm(`确认${enabled ? '启用' : '停用'}「${server.name}」？`)) return true
+        return toggleServer(server, enabled)
+      }
+      if (operation !== 'mcp_edit') return false
+      openEdit(server)
+    }
+    fillAssistantDraft(form, formData, ['name'])
+    return true
+  }
   if (effect.kind === 'resource_created' && effect.formData) {
     const fd = effect.formData
     showCopilotHud('AI 助手正在打开「新增 MCP 服务」弹窗…', 'running', 12000)

@@ -740,6 +740,7 @@
 </template>
 
 <script setup>
+import { findAssistantResource, fillAssistantDraft } from '../composables/useAssistantUiBridge'
 import { ref, reactive, computed, nextTick, onMounted } from 'vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
@@ -967,6 +968,7 @@ function openEditModal(user) {
 }
 
 async function handleUpdateProfile() {
+  if (submitting.value) return
   if (!editForm.nickname.trim()) {
     showToast('用户昵称不能为空', 'error')
     return
@@ -998,6 +1000,7 @@ function openRoleModal(user) {
 }
 
 async function handleUpdateRole() {
+  if (submitting.value) return
   submitting.value = true
   try {
     const res = await http.put(`/api/users/${roleUser.value.id}/role`, {
@@ -1132,6 +1135,35 @@ function resetUsers(forceReload = true) {
 
 async function applyAssistantUiEffect(effect) {
   if (!effect) return
+  if (effect.kind === 'console_form') {
+    if (showCreateModal.value || showEditModal.value || showRoleModal.value ||
+        showStatusModal.value || showPasswordModal.value || submitting.value) return false
+    if (effect.operation === 'user_create') { openCreateModal(); return true }
+    const response = await http.get('/api/users')
+    if (!response?.success || !Array.isArray(response.data)) return false
+    const user = findAssistantResource(response.data, effect.resourceRef, row => row.username)
+    if (!user) return false
+    switch (effect.operation) {
+      case 'user_edit':
+        openEditModal(user)
+        fillAssistantDraft(editForm, effect.formData, ['nickname'])
+        break
+      case 'user_role':
+        if (isSelf(user)) return false
+        openRoleModal(user)
+        break
+      case 'user_enable':
+        if (user.status !== 'DISABLED') return false
+        openStatusModal(user, 'ACTIVE')
+        break
+      case 'user_disable':
+        if (isSelf(user) || user.status !== 'ACTIVE') return false
+        openStatusModal(user, 'DISABLED')
+        break
+      default: return false
+    }
+    return true
+  }
   if (effect.kind === 'search') {
     selectedRole.value = ''
     selectedStatus.value = ''

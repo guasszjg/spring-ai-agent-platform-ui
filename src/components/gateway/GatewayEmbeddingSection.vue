@@ -256,6 +256,7 @@
 </template>
 
 <script setup>
+import { findAssistantResource, fillAssistantDraft } from '../../composables/useAssistantUiBridge'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../../api/http'
 import { useToast } from '../../composables/useToast'
@@ -436,6 +437,7 @@ async function loadEmbeddings() {
 }
 
 async function saveEmbedding() {
+  if (savingEmb.value) return
   if (!embForm.name.trim() || !embForm.modelName.trim()) {
     showToast('请填写配置名称与模型名称', 'error')
     return
@@ -523,7 +525,20 @@ const status = computed(() => {
 
 watch(status, (value) => emit('status', value), { immediate: true })
 
-defineExpose({ refresh })
+async function applyAssistantUiEffect(effect) {
+  if (embModalOpen.value) return false
+  await refresh()
+  if (effect.operation === 'gateway_create') openCreateEmbedding()
+  else if (effect.operation === 'gateway_edit') {
+    const item = findAssistantResource(embeddings.value, effect.resourceRef)
+    if (!item) return false
+    openEditEmbedding(item)
+  } else return false
+  fillAssistantDraft(embForm, effect.formData, ["name", "modelName", "timeoutMs"])
+  return true
+}
+
+defineExpose({ refresh, applyAssistantUiEffect })
 
 onMounted(refresh)
 </script>

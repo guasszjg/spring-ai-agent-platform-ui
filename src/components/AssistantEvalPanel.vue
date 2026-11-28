@@ -239,7 +239,9 @@ async function openCompare() {
 async function openReview() {
   activeTab.value = 'review'
   const res = await http.get('/api/assistant/evals/review-queue')
-  if (res && res.success) reviewItems.value = res.data || []
+  if (!res?.success) return false
+  reviewItems.value = res.data || []
+  return true
 }
 
 async function convertToDraft(item) {
@@ -342,7 +344,9 @@ async function selectRun(id) {
   if (res && res.success) {
     selected.value = res.data
     expanded.value = {}
+    return true
   }
+  return false
 }
 
 async function startRun() {
@@ -389,7 +393,16 @@ async function refresh() {
 
 onBeforeUnmount(() => clearTimeout(pollTimer))
 
-defineExpose({ refresh })
+async function applyAssistantUiEffect(effect) {
+  await refresh()
+  if (effect.resourceRef) {
+    activeTab.value = 'runs'
+    return selectRun(effect.resourceRef)
+  }
+  return openReview()
+}
+
+defineExpose({ refresh, applyAssistantUiEffect })
 </script>
 
 <style scoped>

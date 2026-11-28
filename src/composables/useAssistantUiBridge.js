@@ -8,26 +8,74 @@ import { reactive } from 'vue'
  *    让用户在当前界面直观看到 AI 正在搜索、改提示词、调参数、增删改列表。
  */
 
-const listeners = new Set()
-let pendingEffect = null
-
-export function queuePendingUiEffect(effect, ttlMs = 15000) {
-  if (!effect || typeof effect !== 'object') return
-  pendingEffect = { effect, expiresAt: Date.now() + ttlMs }
+// Resolve by stable ID first. A label is usable only when it identifies a single row.
+export function findAssistantResource(rows, ref, label = row => row.name) {
+  if (!ref) return null
+  const exact = rows.find(row => String(row.id) === String(ref))
+  if (exact) return exact
+  const normalized = String(ref).trim().toLowerCase()
+  const matches = rows.filter(row => String(label(row) ?? '').trim().toLowerCase() === normalized)
+  return matches.length === 1 ? matches[0] : null
 }
 
-export function consumePendingUiEffect(matcher) {
-  if (!pendingEffect) return null
-  if (Date.now() > pendingEffect.expiresAt) {
-    pendingEffect = null
-    return null
+export function fillAssistantDraft(form, fields, keys) {
+  for (const key of keys) {
+    const value = fields?.[key]
+    if (typeof value === 'string' || typeof value === 'boolean' || Number.isFinite(value)) {
+      if (typeof form[key] === typeof value || form[key] == null) form[key] = value
+    }
   }
-  const { effect } = pendingEffect
-  if (typeof matcher === 'function' && !matcher(effect)) {
-    return null
+}
+
+const listeners = new Set()
+const pendingEffects = []
+let navigationTail = Promise.resolve()
+let cardActionHandler = null
+export const assistantPreview = reactive({ actionId: null })
+
+export function setAssistantCardActionHandler(handler) {
+  cardActionHandler = handler
+  return () => { if (cardActionHandler === handler) cardActionHandler = null }
+}
+
+export function submitAssistantCard(actionId, formData) {
+  if (!cardActionHandler) return Promise.resolve({ ok: false, message: '请重新打开 AI 助手' })
+  return cardActionHandler(actionId, formData)
+}
+
+export function enqueueAssistantNavigation(task) {
+  const next = navigationTail.then(task)
+  navigationTail = next.catch(() => {})
+  return next
+}
+
+export function queuePendingUiEffect(effect, ttlMs = 20000) {
+  let resolve
+  const done = new Promise((settle) => { resolve = settle })
+  const entry = { effect }
+  const timer = setTimeout(() => entry.finish(false), ttlMs)
+  entry.finish = (ok) => {
+    clearTimeout(timer)
+    const i = pendingEffects.indexOf(entry)
+    if (i !== -1) pendingEffects.splice(i, 1)
+    resolve(ok)
   }
-  pendingEffect = null
-  return effect
+  pendingEffects.push(entry)
+  return { done, cancel: () => entry.finish(false) }
+}
+
+export async function applyPendingUiEffects(matcher, handler) {
+  let index
+  while ((index = pendingEffects.findIndex(({ effect }) => matcher(effect))) !== -1) {
+    const [entry] = pendingEffects.splice(index, 1)
+    try {
+      const handled = await handler(entry.effect)
+      entry.finish(handled !== false)
+    } catch (error) {
+      console.warn('Assistant UI navigation effect failed:', error)
+      entry.finish(false)
+    }
+  }
 }
 
 export const copilotHud = reactive({
@@ -59,18 +107,18 @@ export function finishCopilotHud(label, hideDelayMs = 2200) {
   showCopilotHud(label || copilotHud.label || '操作已完成', 'done', hideDelayMs)
 }
 
-export function dispatchAssistantUiEffect(effect) {
-  if (!effect || typeof effect !== 'object') return
-  if (effect.label) {
-    showCopilotHud(effect.label, 'running', 6000)
-  }
-  for (const fn of [...listeners]) {
+export async function dispatchAssistantUiEffect(effect) {
+  if (!effect || typeof effect !== 'object') return false
+  if (effect.label) showCopilotHud(effect.label, 'running', 6000)
+  const results = await Promise.all([...listeners].map(async (fn) => {
     try {
-      Promise.resolve(fn(effect)).catch(err => console.warn('Assistant UI effect handler failed:', err))
-    } catch (err) {
-      console.warn('Assistant UI effect handler failed:', err)
+      return await fn(effect)
+    } catch (error) {
+      console.warn('Assistant UI effect handler failed:', error)
+      return false
     }
-  }
+  }))
+  return results.some(result => result === true)
 }
 
 export function onAssistantUiEffect(handler) {

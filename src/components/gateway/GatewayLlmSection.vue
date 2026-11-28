@@ -42,6 +42,7 @@
         <input v-model="policy.failoverEnabled" type="checkbox">
         <span>自动故障转移 (Failover)</span>
       </label>
+      <button v-if="routingDraft" class="btn-secondary" :disabled="savingPolicy" @click="cancelRoutingDraft">取消预填</button>
       <button class="btn-secondary" :disabled="savingPolicy" @click="savePolicy">
         {{ savingPolicy ? '保存中...' : '保存路由策略' }}
       </button>
@@ -434,6 +435,7 @@
 </template>
 
 <script setup>
+import { findAssistantResource, fillAssistantDraft, spotlightElement } from '../../composables/useAssistantUiBridge'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { http } from '../../api/http'
 import { useToast } from '../../composables/useToast'
@@ -464,6 +466,7 @@ const toggling = ref('')
 const testing = ref(false)
 const testResult = ref(null)
 const fetchedModels = ref([])
+const routingDraft = ref(null)
 const policy = reactive({
   defaultProviderId: '',
   fallbackProviderId: '',
@@ -604,14 +607,16 @@ async function load() {
   if (ov.success) {
     overview.value = ov.data || {}
     const p = ov.data?.policy || {}
-    policy.defaultProviderId = p.defaultProviderId || ''
-    policy.fallbackProviderId = p.fallbackProviderId || ''
-    policy.failoverEnabled = p.failoverEnabled !== false
-    policy.timeoutMs = p.timeoutMs || 30000
-    policy.maxRetries = p.maxRetries == null ? 1 : p.maxRetries
-    policy.assistantProviderId = p.assistantProviderId || ''
-    policy.assistantModel = p.assistantModel || ''
-    ensureDefaultProvider()
+    if (!routingDraft.value) {
+      policy.defaultProviderId = p.defaultProviderId || ''
+      policy.fallbackProviderId = p.fallbackProviderId || ''
+      policy.failoverEnabled = p.failoverEnabled !== false
+      policy.timeoutMs = p.timeoutMs || 30000
+      policy.maxRetries = p.maxRetries == null ? 1 : p.maxRetries
+      policy.assistantProviderId = p.assistantProviderId || ''
+      policy.assistantModel = p.assistantModel || ''
+      ensureDefaultProvider()
+    }
   }
   if (cat.success) catalog.value = cat.data || []
 }
@@ -746,6 +751,7 @@ function loadSampleCustomConfig() {
 }
 
 async function saveProvider() {
+  if (saving.value) return
   if (form.protocol === 'CUSTOM_HTTP') {
     if (!form.baseUrl.trim()) {
       showToast('请填写接口地址 (Endpoint URL)', 'error')
@@ -958,11 +964,18 @@ async function removeCustom(p) {
   }
 }
 
+function cancelRoutingDraft() {
+  Object.assign(policy, routingDraft.value)
+  routingDraft.value = null
+}
+
 async function savePolicy() {
+  if (savingPolicy.value) return
   savingPolicy.value = true
   const res = await http.put('/api/model-gateway/policy', policy)
   savingPolicy.value = false
   if (res.success) {
+    routingDraft.value = null
     showToast('路由策略已保存', 'success')
     await load()
   } else {
@@ -995,7 +1008,32 @@ const status = computed(() => {
 
 watch(status, (value) => emit('status', value), { immediate: true })
 
-defineExpose({ refresh })
+async function applyAssistantUiEffect(effect) {
+  if (modalOpen.value || savingPolicy.value || routingDraft.value) return false
+  if (effect.operation === 'gateway_routing') {
+    const draft = { ...policy }
+    fillAssistantDraft(draft, effect.formData, ['defaultProviderId', 'fallbackProviderId', 'failoverEnabled'])
+    for (const id of [draft.defaultProviderId, draft.fallbackProviderId]) {
+      if (id && !readyProviders.value.some(provider => String(provider.id) === String(id))) return false
+    }
+    const el = spotlightElement('.gateway-policy-bar')
+    if (!el) return false
+    routingDraft.value = { ...policy }
+    Object.assign(policy, draft)
+    return true
+  }
+  await refresh()
+  if (effect.operation === 'gateway_create') openCreate()
+  else if (effect.operation === 'gateway_edit') {
+    const item = findAssistantResource(providers.value, effect.resourceRef)
+    if (!item) return false
+    openEdit(item)
+  } else return false
+  fillAssistantDraft(form, effect.formData, ["name", "defaultModel", "timeoutMs"])
+  return true
+}
+
+defineExpose({ refresh, applyAssistantUiEffect })
 
 onMounted(refresh)
 </script>

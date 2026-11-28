@@ -661,14 +661,26 @@
     </div>
   </div>
 
+  <div v-if="assistantCopyTarget" class="modal-backdrop open" role="dialog" aria-label="确认复制智能体">
+    <div class="modal-dialog">
+      <div class="modal-header"><h3>复制智能体</h3></div>
+      <div class="modal-body">将「{{ assistantCopyTarget.name }}」复制为你的独立智能体。</div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" :disabled="copying" @click="assistantCopyTarget = null">取消</button>
+        <button type="button" class="btn-create-agent" :disabled="copying" @click="confirmAssistantCopy">确认复制</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-backdrop" :class="{ open: agentModalOpen }">
     <div class="modal-dialog">
       <div class="modal-header">
         <h3>{{ form.id ? '编辑智能体' : '注册新智能体' }}</h3>
-        <button class="btn-modal-close" @click="agentModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
+        <button class="btn-modal-close" :disabled="saving" @click="agentModalOpen = false"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <form @submit.prevent="saveAgent">
         <div class="modal-body">
+          <p v-if="assistantAgentForm" class="section-hint">AI 助手已准备表单，请核对后保存。</p>
           <div v-if="!form.id" class="form-group">
             <label class="form-label">行业模板</label>
             <TemplatePicker ref="templatePickerRef" @select="applyTemplate" />
@@ -712,7 +724,7 @@
           <div class="form-group"><label class="form-label">业务标签 (逗号分隔)</label><input v-model="form.tagsText" class="form-control-styled"></div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn-secondary" @click="agentModalOpen = false">取消</button>
+          <button type="button" class="btn-secondary" :disabled="saving" @click="agentModalOpen = false">取消</button>
           <button type="submit" class="btn-create-agent" :disabled="saving">
             <i :class="saving ? 'fa-solid fa-spinner fa-spin' : (form.id ? 'fa-solid fa-floppy-disk' : 'fa-solid fa-check')"></i>
             <span>{{ saving ? '保存中...' : (form.id ? '保存修改' : '保存并生效') }}</span>
@@ -893,11 +905,9 @@ import AgentAvatar from '../components/AgentAvatar.vue'
 import TemplatePicker from '../components/TemplatePicker.vue'
 import { setAssistantPage } from '../composables/useAssistantContext'
 import {
-  animateFieldType,
   animateTextInput,
-  consumePendingUiEffect,
+  applyPendingUiEffects,
   finishCopilotHud,
-  highlightFieldStep,
   onAssistantUiEffect,
   pressElement,
   showCopilotHud,
@@ -1704,22 +1714,97 @@ function applyTemplate(t) {
   form.tagsText = Array.isArray(t.tags) ? t.tags.join(', ') : (t.tags || '')
 }
 
-async function saveAgent() {
-  saving.value = true
-  const payload = {
-    name: form.name.trim(), avatar: form.avatar, category: form.category,
-    modelName: routedModel.value || form.modelName, temperature: form.temperature, status: form.status,
-    systemPrompt: form.systemPrompt.trim(), description: form.description.trim(),
-    tags: form.tagsText ? form.tagsText.split(/[,，]/).map((t) => t.trim()).filter(Boolean) : []
+const assistantCopyTarget = ref(null)
+const assistantAgentForm = ref(false)
+watch(agentModalOpen, (open) => { if (!open) assistantAgentForm.value = false })
+
+async function focusSavedAgent(saved) {
+  if (!saved?.id) return
+  keyword.value = saved.name || ''
+  category.value = '全部'
+  statusFilter.value = ''
+  scopeFilter.value = 'all'
+  page.value = 1
+  await loadAgents()
+  await nextTick()
+  spotlightAgentResult(saved.id)
+}
+
+async function confirmAssistantCopy() {
+  const saved = await copyAgent(assistantCopyTarget.value)
+  if (!saved) return
+  assistantCopyTarget.value = null
+  await focusSavedAgent(saved)
+}
+
+async function prepareAgentForm(effect) {
+  if (agentModalOpen.value || assistantCopyTarget.value || saving.value || copying.value) {
+    showToast('请先完成或关闭当前智能体表单', 'warning')
+    return false
   }
-  const res = form.id ? await http.put(`/api/agents/${form.id}`, payload) : await http.post('/api/agents', payload)
-  saving.value = false
-  if (res.success) {
+  if (!(await switchTabForCopilot('agents'))) return false
+  if (effect.operation === 'agent_create') {
+    openCreate()
+  } else {
+    const result = await http.get('/api/agents/' + encodeURIComponent(effect.agentId))
+    if (!result?.success || result.data?.id !== effect.agentId || !dashboardActive
+        || currentTab.value !== 'agents' || agentModalOpen.value || assistantCopyTarget.value) return false
+    if (effect.operation === 'agent_copy') {
+      assistantCopyTarget.value = result.data
+      finishCopilotHud('请确认要复制的智能体')
+      return true
+    }
+    if (effect.operation !== 'agent_edit' || !canManageAgent(result.data)) return false
+    openEdit(result.data)
+  }
+  const fields = effect.formData || {}
+  for (const name of ['name', 'category', 'description', 'systemPrompt', 'status']) {
+    if (typeof fields[name] === 'string') form[name] = fields[name]
+  }
+  if (typeof fields.temperature === 'number' && fields.temperature >= 0 && fields.temperature <= 2) {
+    form.temperature = fields.temperature
+  }
+  if (Array.isArray(fields.tags)) form.tagsText = fields.tags.filter(tag => typeof tag === 'string').join(', ')
+  assistantAgentForm.value = true
+  finishCopilotHud('智能体表单已打开，请核对后保存')
+  return true
+}
+
+async function saveAgent() {
+  if (saving.value) return
+  saving.value = true
+  try {
+    const payload = {
+      name: form.name.trim(), avatar: form.avatar, category: form.category,
+      temperature: form.temperature, status: form.status,
+      systemPrompt: form.systemPrompt.trim(), description: form.description.trim(),
+      tags: form.tagsText ? form.tagsText.split(/[,，]/).map((t) => t.trim()).filter(Boolean) : []
+    }
+    let res
+    if (form.id) {
+      const path = '/api/agents/' + encodeURIComponent(form.id)
+      const latest = await http.get(path)
+      if (!latest?.success || latest.data?.id !== form.id) {
+        showToast(latest?.message || '无法读取智能体的最新配置，请稍后再试', 'error')
+        return
+      }
+      res = await http.put(path, { ...latest.data, ...payload })
+    } else {
+      res = await http.post('/api/agents', { ...payload, modelName: routedModel.value || form.modelName })
+    }
+    if (!res?.success) {
+      showToast(res?.message || '保存失败', 'error')
+      return
+    }
+    const fromAssistant = assistantAgentForm.value
     showToast(res.message || '保存成功', 'success')
     agentModalOpen.value = false
-    refresh()
-  } else {
-    showToast(res.message || '保存失败', 'error')
+    if (fromAssistant) {
+      await focusSavedAgent(res.data)
+      loadStats()
+    } else refresh()
+  } finally {
+    saving.value = false
   }
 }
 
@@ -1762,7 +1847,8 @@ async function copyAgent(agent) {
     const res = await http.post(`/api/agents/${agent.id}/copy`)
     if (res.success) {
       showToast(`已成功复制智能体「${res.data?.name || agent.name}」，已存入您的个人专属资产`, 'success')
-      refresh()
+      if (!assistantCopyTarget.value) refresh()
+      return res.data
     } else {
       showToast(res.message || '复制智能体失败', 'error')
     }
@@ -1884,6 +1970,7 @@ function spotlightAgentResult(agentId) {
       return
     }
   }
+  if (agentId) return
   const firstCard = document.querySelector('.agent-grid .agent-card, .agent-table tbody tr')
   if (firstCard) {
     spotlightElement(firstCard, { durationMs: 2200, variant: 'flash' })
@@ -1913,12 +2000,13 @@ async function handleAssistantUiEffect(effect) {
       finishCopilotHud(effect.label || '已切换到概览页')
       return
     }
-    if (destTab === 'gateway') {
-      if (!isSuperAdmin.value) return
-      if (!isGatewayTab.value) await switchTabForCopilot(lastGatewayTab())
-      await gatewayPanelRef.value?.refreshAll?.()
-      finishCopilotHud(effect.label || '已切换到模型网关')
-      return
+    if (destTab === 'gateway' || GATEWAY_TABS.includes(destTab)) {
+      const tab = destTab === 'gateway' ? lastGatewayTab() : destTab
+      if (!(await switchTabForCopilot(tab))) return false
+      await nextTick()
+      await gatewayPanelRef.value?.refreshSection?.(tab.slice(GATEWAY_TAB_PREFIX.length))
+      finishCopilotHud('已打开模型网关页面')
+      return true
     }
     if (destTab === 'knowledge' || destTab === 'knowledge-dify') {
       if (destTab === 'knowledge-dify') difyNavVisible.value = true
@@ -1942,7 +2030,7 @@ async function handleAssistantUiEffect(effect) {
       finishCopilotHud(effect.label || '已打开知识库列表')
       return
     }
-    if (['agents', 'templates', 'skills', 'tools', 'users', 'security'].includes(destTab)) {
+    if (['agents', 'templates', 'skills', 'tools', 'users', 'roles', 'assistant-eval', 'security'].includes(destTab)) {
       const follow = effect.keyword
         ? { kind: 'search', target: destTab, keyword: effect.keyword, subTab: effect.subTab, label: effect.label }
         : (effect.subTab
@@ -1968,6 +2056,27 @@ async function handleAssistantUiEffect(effect) {
     finishCopilotHud(effect.label || '已同步智能体变更')
     return
   }
+
+  if (effect.kind === 'console_form' && target === 'overview') {
+    const range = effect.formData?.range
+    if (!['today', '7days', '30days'].includes(range)) return false
+    await switchTabForCopilot('overview')
+    timeRange.value = range
+    await loadStats()
+    finishCopilotHud('已更新概览时间范围')
+    return true
+  }
+  if (effect.kind === 'console_form' && target === 'roles') {
+    if (!(await switchTabForCopilot('roles'))) return false
+    await rolesPanelRef.value?.loadRoles?.()
+    finishCopilotHud('已打开角色权限矩阵')
+    return true
+  }
+  if (effect.kind === 'console_form' && target === 'assistant-eval') {
+    if (!(await switchTabForCopilot('assistant-eval'))) return false
+    return evalPanelRef.value?.applyAssistantUiEffect?.(effect)
+  }
+  if (target === 'agents' && effect.kind === 'console_form') return prepareAgentForm(effect)
 
   if (target === 'agents') {
     await switchTabForCopilot('agents')
@@ -1997,59 +2106,16 @@ async function handleAssistantUiEffect(effect) {
       return
     }
     if (effect.kind === 'resource_created') {
-      const fd = effect.formData || {}
-      showCopilotHud('AI 助手正在点击「新建智能体」…', 'running', 12000)
-      await pressElement('.dashboard-header-bar .btn-create-agent', 340)
-      emptyForm()
-      templatePickerRef.value?.reset()
-      agentModalOpen.value = true
-      await nextTick()
-      await sleep(240)
-      try {
-        const dlg = '.modal-backdrop.open .modal-dialog'
-        if (fd.name) {
-          showCopilotHud(`AI 助手正在填写智能体名称「${fd.name}」…`, 'running', 12000)
-          await animateFieldType('agent-name', (v) => { form.name = v }, document.querySelector(`${dlg} input[required]`), fd.name, 420)
-        }
-        if (fd.category) {
-          showCopilotHud(`AI 助手正在选择业务分类「${fd.category}」…`, 'running', 12000)
-          await highlightFieldStep(`${dlg} select`, () => { form.category = fd.category })
-        }
-        if (fd.temperature != null) {
-          await highlightFieldStep(`${dlg} input[type="range"]`, () => { form.temperature = Number(fd.temperature) })
-        }
-        if (fd.status) {
-          await highlightFieldStep(`${dlg} select:last-of-type`, () => { form.status = fd.status })
-        }
-        if (fd.systemPrompt) {
-          showCopilotHud('AI 助手正在写入系统提示词…', 'running', 12000)
-          await animateFieldType('agent-prompt', (v) => { form.systemPrompt = v }, document.querySelector(`${dlg} textarea`), fd.systemPrompt, 750)
-        }
-        if (fd.description) {
-          const inputs = document.querySelectorAll(`${dlg} input.form-control-styled`)
-          const descInput = inputs[inputs.length - 2]
-          await animateFieldType('agent-desc', (v) => { form.description = v }, descInput, fd.description, 360)
-        }
-        if (Array.isArray(fd.tags) && fd.tags.length) {
-          const inputs = document.querySelectorAll(`${dlg} input.form-control-styled`)
-          const tagsInput = inputs[inputs.length - 1]
-          await animateFieldType('agent-tags', (v) => { form.tagsText = v }, tagsInput, fd.tags.join(', '), 320)
-        }
-        showCopilotHud('AI 助手正在保存新智能体…', 'running', 10000)
-        await pressElement(`${dlg} .modal-footer .btn-create-agent`, 400)
-      } finally {
-        agentModalOpen.value = false
+      const id = effect.resourceId
+      const result = id ? await http.get('/api/agents/' + encodeURIComponent(id)) : null
+      if (!result?.success || result.data?.id !== id || !dashboardActive || currentTab.value !== 'agents') {
+        showCopilotHud('智能体已创建，暂未加载到对应记录', 'error', 3800)
+        return false
       }
-      keyword.value = ''
-      category.value = '全部'
-      statusFilter.value = ''
-      scopeFilter.value = 'all'
-      page.value = 1
-      await Promise.all([loadAgents(), loadStats()])
-      await nextTick()
-      spotlightAgentResult(effect.resourceId || effect.agentId)
-      finishCopilotHud(fd.name ? `已新建智能体「${fd.name}」` : '已新建智能体并刷新列表')
-      return
+      await focusSavedAgent(result.data)
+      loadStats()
+      finishCopilotHud('已创建并定位智能体')
+      return true
     }
     if (effect.kind === 'agent_status_updated' && effect.agentId) {
       const cardEl = document.querySelector(`[data-agent-id="${CSS.escape(String(effect.agentId))}"]`)
@@ -2071,51 +2137,60 @@ async function handleAssistantUiEffect(effect) {
     return
   }
 
-  if (target === 'knowledge') {
-    const kbTab = currentTab.value === 'knowledge-dify' ? 'knowledge-dify' : 'knowledge'
+  if (target === 'knowledge' || target === 'knowledge-dify') {
+    let kbTab = target === 'knowledge-dify' || currentTab.value === 'knowledge-dify' ? 'knowledge-dify' : 'knowledge'
+    let kb = null
+    if (effect.kbId && effect.kind !== 'resource_deleted') {
+      const response = await http.get('/api/knowledge-bases/' + encodeURIComponent(effect.kbId))
+      if (!response?.success || !response.data) {
+        showToast('找不到目标知识库或无权查看', 'error')
+        return false
+      }
+      kb = response.data
+    }
+    const provider = kb?.provider || effect.formData?.provider
+    if (provider) kbTab = provider === 'DIFY' ? 'knowledge-dify' : 'knowledge'
+    if (kbTab === 'knowledge-dify') difyNavVisible.value = true
     await switchTabForCopilot(kbTab)
-    await kbPanelOf(kbTab)?.applyAssistantUiEffect?.(effect)
-    return
+    await nextTick()
+    return kbPanelOf(kbTab)?.applyAssistantUiEffect?.({ ...effect, knowledgeBase: kb })
   }
 
   if (target === 'templates') {
+    if (isViewer.value && effect.kind === 'console_form' && effect.operation !== 'template_focus') return false
     await switchTabForCopilot('templates')
-    await templatesPanelRef.value?.applyAssistantUiEffect?.(effect)
-    return
+    return templatesPanelRef.value?.applyAssistantUiEffect?.(effect)
   }
 
   if (target === 'skills') {
     await switchTabForCopilot('skills')
-    await skillsPanelRef.value?.applyAssistantUiEffect?.(effect)
-    return
+    return skillsPanelRef.value?.applyAssistantUiEffect?.(effect)
   }
 
   if (target === 'tools') {
     await switchTabForCopilot('tools')
-    await toolsPanelRef.value?.applyAssistantUiEffect?.(effect)
-    return
+    return toolsPanelRef.value?.applyAssistantUiEffect?.(effect)
   }
 
   if (target === 'users') {
     if (!(await switchTabForCopilot('users'))) return
-    await usersPanelRef.value?.applyAssistantUiEffect?.(effect)
-    return
+    return usersPanelRef.value?.applyAssistantUiEffect?.(effect)
   }
 
   if (target === 'security') {
     await switchTabForCopilot('security')
-    await securityPanelRef.value?.applyAssistantUiEffect?.(effect)
-    return
+    return securityPanelRef.value?.applyAssistantUiEffect?.(effect)
   }
 
   if (target === 'gateway') {
-    if (!isSuperAdmin.value) return
-    if (!isGatewayTab.value) {
-      await switchTabForCopilot(lastGatewayTab())
-    }
-    await gatewayPanelRef.value?.refreshAll?.()
+    const tab = GATEWAY_TABS.includes(effect.dashboardTab) ? effect.dashboardTab
+      : isGatewayTab.value ? currentTab.value : lastGatewayTab()
+    if (!(await switchTabForCopilot(tab))) return false
     await nextTick()
-    finishCopilotHud(effect.label || '模型网关配置已刷新')
+    if (effect.kind === 'console_form') return gatewayPanelRef.value?.applyAssistantUiEffect?.(effect)
+    await gatewayPanelRef.value?.refreshSection?.(tab.slice(GATEWAY_TAB_PREFIX.length))
+    finishCopilotHud('已刷新对应的模型网关页面')
+    return true
   }
 }
 
@@ -2134,10 +2209,7 @@ onMounted(() => {
 
   loadDifyNavVisibility()
   enterDashboard()
-  const pending = consumePendingUiEffect((e) => e.target && e.target !== 'agent_debug')
-  if (pending) {
-    nextTick(() => handleAssistantUiEffect(pending))
-  }
+  nextTick(() => applyPendingUiEffects((e) => e.target && e.target !== 'agent_debug', handleAssistantUiEffect))
 })
 
 onUnmounted(() => {
@@ -2164,10 +2236,7 @@ onActivated(() => {
   } else if (currentTab.value === 'tools') {
     toolsPanelRef.value?.loadTools?.()
   }
-  const pending = consumePendingUiEffect((e) => e.target && e.target !== 'agent_debug')
-  if (pending) {
-    nextTick(() => handleAssistantUiEffect(pending))
-  }
+  nextTick(() => applyPendingUiEffects((e) => e.target && e.target !== 'agent_debug', handleAssistantUiEffect))
 })
 
 onDeactivated(() => {
